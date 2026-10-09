@@ -1,0 +1,35 @@
+body {
+  margin: 0;
+  background: #101727;
+  color: #e7eef6;
+  font:
+    15px system-ui,
+    sans-serif;
+}
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+h1 {
+  font-size: 24px;
+  margin: 0 0 8px;
+}
+p {
+  color: #a9b6cb;
+  margin: 0 0 16px;
+}
+#world-view {
+  height: min(65vh, 650px);
+  border: 1px solid #45536b;
+}
+#world-view canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#metrics {
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}
