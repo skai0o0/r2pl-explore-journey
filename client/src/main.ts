@@ -37,6 +37,8 @@ for (let z = 0; z < WORLD_HEIGHT; z++) {
 
 const host = document.querySelector<HTMLElement>("#world-view")!;
 const output = document.querySelector<HTMLElement>("#metrics")!;
+const benchmarkButton =
+  document.querySelector<HTMLButtonElement>("#texture-benchmark")!;
 const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: "low-power",
@@ -67,6 +69,23 @@ local.position.set(170 - 500, 170 - 500, 1);
 const frameTimes: number[] = [];
 let priorFrame = 0;
 let totalFrames = 0;
+let textureBenchmark:
+  | { phase: "baseline" | "upload"; baseline: number[]; upload: number[] }
+  | undefined;
+let textureBenchmarkResult: Record<string, number | string> | undefined;
+benchmarkButton.addEventListener("click", () => {
+  textureBenchmark = { phase: "baseline", baseline: [], upload: [] };
+  textureBenchmarkResult = undefined;
+  benchmarkButton.disabled = true;
+});
+
+function summary(values: number[]): { p50: number; p95: number } {
+  const sorted = [...values].sort((a, b) => a - b);
+  return {
+    p50: sorted[Math.ceil(sorted.length * 0.5) - 1] ?? 0,
+    p95: sorted[Math.ceil(sorted.length * 0.95) - 1] ?? 0,
+  };
+}
 
 function paint(): void {
   const now = performance.now();
@@ -81,6 +100,11 @@ function paint(): void {
   const fullWidth = renderer.domElement.width;
   const fullHeight = renderer.domElement.height;
   const half = Math.floor(fullWidth / 2);
+  if (textureBenchmark?.phase === "upload") {
+    pixels[0] = (pixels[0] ?? 0) ^ 1; // one changed pixel still reuploads the full DataTexture
+    texture.needsUpdate = true;
+  }
+  const renderStarted = performance.now();
   renderer.setViewport(0, 0, half, fullHeight);
   renderer.setScissor(0, 0, half, fullHeight);
   renderer.render(scene, overview);
@@ -89,6 +113,31 @@ function paint(): void {
   renderer.setScissor(half, 0, fullWidth - half, fullHeight);
   renderer.render(scene, local);
   const drawCalls = overviewCalls + renderer.info.render.calls;
+  if (textureBenchmark) {
+    renderer.getContext().finish(); // measure completed rendering for both phases
+    const elapsed = performance.now() - renderStarted;
+    textureBenchmark[textureBenchmark.phase].push(elapsed);
+    if (
+      textureBenchmark.phase === "baseline" &&
+      textureBenchmark.baseline.length === 30
+    )
+      textureBenchmark.phase = "upload";
+    else if (textureBenchmark.upload.length === 30) {
+      const baseline = summary(textureBenchmark.baseline),
+        upload = summary(textureBenchmark.upload);
+      textureBenchmarkResult = {
+        samplesPerPhase: 30,
+        baselineP50Ms: baseline.p50,
+        baselineP95Ms: baseline.p95,
+        fullUploadP50Ms: upload.p50,
+        fullUploadP95Ms: upload.p95,
+        uploadedBytesPerFrame: pixels.byteLength,
+        changedPixelsPerFrame: 1,
+      };
+      textureBenchmark = undefined;
+      benchmarkButton.disabled = false;
+    }
+  }
   totalFrames++;
   if (totalFrames % 60 === 0) {
     const sorted = [...frameTimes].sort((a, b) => a - b);
@@ -106,6 +155,8 @@ function paint(): void {
       texturePayloadBytes: pixels.byteLength,
       gpuMemoryBytes: "not exposed by WebGL",
       heapBytes: heap ?? "not exposed by browser",
+      textureBenchmark:
+        textureBenchmarkResult ?? "run with the benchmark button",
     };
     output.textContent = JSON.stringify(metrics, null, 2);
     Object.assign(window, { __r2plFixtureMetrics: metrics });

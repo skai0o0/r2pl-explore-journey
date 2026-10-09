@@ -1,28 +1,54 @@
-# V2 protocol contract — M1 world format, later network proposal
+# V2 binary contracts: world v1 and M2 realtime v1
 
-This document defines semantic and binary boundaries. The exact command opcodes and envelope byte offsets will be assigned in M2 with golden byte fixtures; no V1 frame is wire-compatible by assumption. World chunk payload format v1 below is frozen for M1 review.
+## World format v1 (unchanged from M1)
 
-## Addressing and binary world format v1
+- Coordinates: `x,z` are integers 0–999. `tileIndex=z*1000+x`. Chunk coordinates are `floor(x/64),floor(z/64)` (0–15); local index is `(z%64)*64+(x%64)`. Sector coordinates are `floor(chunkX/4),floor(chunkZ/4)` (0–3).
+- A knowledge chunk is 4096 row-major unsigned 16-bit masks, exactly 8192 little-endian bytes. Bit `b` is school slot `b`, 0–15. It says presence only. Edge padding must be zero. The bottom-right chunk has 40×40 real cells.
+- A school fog chunk is 512 bytes. Local bit `i` is byte `i>>3`, bit `i&7`; set means discovered. Edge padding must be zero. Knowledge and fog have separate meanings.
+- M1 records carry world format 1, chunk coordinates, unsigned 64-bit revision and CRC-32/ISO-HDLC payload checksum. School assignments come only from an immutable campaign registry. The proposed V1 school names are **not** executable V2 data.
 
-- Map: width=height=1000; integer `x,z` from 0 through 999; `tileIndex=z*1000+x` from 0 through 999999. Never accept fractional, NaN or out-of-range coordinates.
-- `chunkX=floor(x/64)`, `chunkZ=floor(z/64)` in 0..15. `local=(z%64)*64+(x%64)` in 0..4095. Sector coordinates are `floor(chunkX/4), floor(chunkZ/4)` in 0..3.
-- Knowledge chunk payload is exactly 8192 bytes: 4096 unsigned 16-bit masks in row-major local order, **little endian**. Out-of-world slots on edge chunks are zero on encode and required zero on decode; the bottom-right chunk contains 40×40 real cells.
-- Mask bit `b` equals `1 << b`, b in 0..15. A bit means that school currently holds knowledge, with no strength, timestamp, ownership priority, timer, challenge or fog meaning. Slot mapping comes from the campaign registry, not list order.
-- Fog chunk payload is exactly 512 bytes per school and chunk, bit `local & 7` in byte `local >> 3`. A set bit means discovered. Edge padding must be zero. A school receives only its authorized fog and any separately approved public visibility data.
-- Each M1 chunk record has `formatVersion=1`, coordinates, `revision` and CRC-32/ISO-HDLC checksum over its payload. Fog records also have a school slot. Revision is a validated unsigned 64-bit `bigint` in memory and never wraps. These are in-memory records, not a finalized network envelope or database row layout. Network revision fields will be unsigned 64-bit integers; JSON boundaries must reject values above `Number.MAX_SAFE_INTEGER` or encode them as decimal strings.
+## M2 transport envelope
 
-## Gameplay envelope
+All multibyte fields are little endian. CRC is CRC-32/ISO-HDLC over every preceding frame byte. Incoming frames are at most **1024 bytes**, including envelope. Unknown version, kind, length, nonzero reserved bytes or bad CRC fails closed. A Colyseus `m2` binary message contains exactly one frame.
 
-Every binary command has protocol version, command opcode, campaign/session context, 128-bit action idempotency key, rule version, payload length and bounded payload. The server derives actor and school from the authenticated session. Client-supplied identity, balance, reward, school or admin role fields are ignored or rejected. Production command size budget is **1 KiB** until measured otherwise; oversized or unknown-version commands fail closed.
+| Offset | Bytes | Meaning |
+|---:|---:|---|
+| 0 | 2 | ASCII `R2` (`52 32`) |
+| 2 | 1 | Protocol version `01` |
+| 3 | 1 | Kind |
+| 4 | 2 | Payload byte length |
+| 6 | 2 | Reserved zero |
+| 8 | length | Kind-specific payload |
+| 8+length | 4 | CRC32 of offsets 0 through 7+length |
 
-Action results carry the same action key, status (`committed`, `rejected`, or `pending`), stable reason code, committed rule version and relevant world revision/ledger references. `pending` means no success guarantee. A duplicate command with the same canonical payload returns the original committed result. Reuse of a key with different payload returns `IDEMPOTENCY_CONFLICT`. No successful result is sent before PostgreSQL commit.
+| Kind | Code | Payload, in byte order |
+|---|---:|---|
+| EXPLORE | 1 | 16-byte action key; `u32 tileIndex`; `u16 ruleVersion=0`. **Synthetic, ephemeral test rule only.** |
+| SUBSCRIBE | 2 | `u8 count` (0–64); `count × u16 chunkId`, unique 0–255. Replaces full subscription set. |
+| RESYNC | 3 | `u16 chunkId`; requires current subscription. |
+| PRODUCTION_MUTATION | 4 | Reserved; always `PRODUCTION_DISABLED` until M3 durable path. |
+| HELLO | 16 | `u8 synthetic schoolSlot`; `u8 viewFormat=1`. Identity is server derived. |
+| ACK | 17 | 16-byte key; `u8 status`; `u8 reason`; `u16 chunkId`; `u64 school-view revision`. |
+| SNAPSHOT | 18 | `u16 chunkId`; `u64 school-view revision`; 8192 projected mask bytes; 512 own-school fog bytes. Total frame **8726 bytes**. |
+| DELTA | 19 | `u16 chunkId`; `u64 baseRevision`; `u64 nextRevision`; `u16 localIndex`; `u16 projected mask`; `u8 discovered`. Exactly one record; total frame **35 bytes**. |
+| ERROR | 20 | `u8 reason`. No private state in error text. |
 
-Snapshots carry protocol/world format, campaign and chunk coordinates, revision, payload length and checksum. Deltas carry base and next revision, a bounded record count and records of local index plus new mask or approved visible projection. A client applies a delta only when its local revision exactly equals `baseRevision`; duplicate/old deltas are ignored, gaps trigger resync. Decode validates length, bounds, chunk membership, reserved bytes and checksum before touching state. Snapshot/delta payloads must be visibility filtered; raw all-school masks are not automatically public.
+ACK statuses: 1 `TEST_APPLIED`, 2 `TEST_NO_CHANGE`, 3 `REJECTED`. There is intentionally **no durable committed-success status** in M2. Reason codes: 0 none, 1 invalid frame, 2 invalid command, 3 rate limited, 4 idempotency conflict, 5 queue full, 6 not subscribed, 7 production disabled, 8 internal. ACK is private to the actor. M2 keys are 128 bit; the ephemeral store scopes them to actor within the single synthetic campaign. M3 must add campaign to the durable key and atomically store results with world and ledger changes.
 
-The initial subscription handshake fences a revision before the snapshot, registers delivery for later updates and replays or buffers intervening changes. Reconnect authenticates again, re-establishes the viewport, and resumes by revision when retained deltas are available; otherwise it gets a new snapshot. Action acknowledgements are independent of broadcast delivery.
+The server projects only the authenticated school bit and that school's fog. It sends no other school bit, metadata or public overview. Revisions are per school and chunk, so activity hidden from a school does not advance its view revision. On subscription, a snapshot is queued before subsequent deltas; stale queued snapshots/deltas are discarded when the subscription generation changes. Client applies a delta only when `baseRevision` equals its stored revision and `nextRevision=baseRevision+1`; duplicates are ignored and gaps request RESYNC. Reconnect authenticates again and obtains fresh snapshots. M2 does not replay missed deltas or retain state across server restart.
 
-## Limits and compatibility
+## Golden frames
 
-Proposed M2 frame budgets: gameplay command ≤1 KiB, a chunk snapshot ≤16 KiB including envelope, a delta ≤64 KiB, at most 256 subscribed chunks per connection (normally far fewer). These are design limits to verify under benchmarks. Outbound per-client queues have a measured finite cap; overflow requests resync or disconnects. Compression is optional after measuring CPU and bytes, never required for correctness.
+These lowercase hex strings include the CRC. Their tests are in `tests/m2-protocol.test.ts`.
 
-Protocol and world format versions are independent. A breaking field or interpretation change increments the relevant version and adds decoder compatibility or a migration. Golden fixtures cover little-endian bytes, bit 15, edge padding, malformed lengths, duplicate records, revision gaps and old clients. Administrative publishing uses a separately authenticated and audited API, not student command opcodes.
+| Frame | Exact hex |
+|---|---|
+| EXPLORE tile 999999, key `00..0f`, rule 0 | `5232010116000000000102030405060708090a0b0c0d0e0f3f420f0000004cefb947` |
+| SUBSCRIBE chunks 0,255 | `5232010205000000020000ff008388b8f8` |
+| RESYNC chunk 255 | `5232010302000000ff002d90027d` |
+| ACK test-applied, chunk 255, view revision 1, key `00..0f` | `523201111c000000000102030405060708090a0b0c0d0e0f0100ff0001000000000000002f52b3db` |
+| DELTA chunk 255, revision 0→1, local 2599, bit 15, discovered | `5232011317000000ff0000000000000000000100000000000000270a008001f2b0f57c` |
+
+## Limits and next version
+
+M2 accepts at most 64 chunks per connection, holds at most 128 outbound frames or 1 MiB per connection, and disconnects a slow client on overflow. A per-session token bucket starts at 20 frames and refills at 10/s. These are **M2 test limits**, not approved production quotas. M1's earlier 256-subscription proposal was narrowed to 64 for bounded snapshot fanout. World and network format versions advance independently. M3 must define durable command envelope, campaign/rule identity, transaction-backed idempotency and committed ACK semantics without reusing the M2 test status.

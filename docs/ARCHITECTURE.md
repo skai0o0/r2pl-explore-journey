@@ -1,4 +1,4 @@
-# R2PL Game V2 architecture — accepted baseline, M1 implementation
+# R2PL Game V2 architecture — accepted baseline, M2 implementation
 
 ## Boundary and dependency direction
 
@@ -22,7 +22,7 @@ The campaign has coordinates `x,z ∈ [0,999]`, row-major tile index `z*1000+x`,
 
 The dense uint16 array stores only current school presence. Sparse records store per-school knowledge strength/timestamps and other dynamic state. Per-school fog is a separate bitset; discovery persistence and visibility rules are separate from knowledge decay. The database records the stable campaign school-slot registry. World format changes require a new version and migration; slot reassignment is forbidden while any saved mask uses it.
 
-The M1 `SectorAuthority` contract exposes `readChunk` and inert `setPresence` within a sector boundary. Its replaceable in-process router owns 16 logical sectors. It has no network command queue, persistence or production concurrency guarantee. M2/M3 must extend the authority with ordered commands, subscriptions, recovery and transaction integration. Multi-sector actions will need deterministic sector ordering and one database transaction or an explicit saga with idempotent compensation. Future process ownership uses a durable epoch/fencing token checked by every commit, not just a Redis lock.
+The M1 `SectorAuthority` contract exposes `readChunk` and inert `setPresence` within a sector boundary. Its replaceable in-process router owns 16 logical sectors. M2 adds ordered in-process queues and subscriptions around it, without persistence or a production concurrency guarantee. M3 must integrate durable transactions and recovery. Multi-sector actions will need deterministic sector ordering and one database transaction or an explicit saga with idempotent compensation. Future process ownership uses a durable epoch/fencing token checked by every commit, not just a Redis lock.
 
 ## Command and commit path
 
@@ -49,3 +49,13 @@ Initial deployment is one modular monolith process with PostgreSQL. Separate out
 3. Shared knowledge and fog can expose hidden schools if raw masks are sent without visibility filtering.
 4. Per-action chunk rewrites may amplify writes and contend on hotspot rows; deferred snapshots require replayable durable mutations and bounded recovery. ADR-011 is open until M3 measurements.
 5. Initial viewport and overview strategies need browser/GPU and outbound-byte measurements before choosing cache residency.
+
+## Implemented M2 realtime boundary
+
+`GatewayRoom` is the thin Colyseus transport adapter. `SyntheticAuth` maps explicit test tokens to fixture identities. `RealtimeCore` owns command dispatch, bounded subscriptions, private acknowledgements, idempotency and synthetic action simulation. `SectorQueues` serializes mutation work per one of the 16 logical sectors through the replaceable M1 router. `SyntheticVisibilityProjection` constructs school-specific snapshots; `OutboundQueue` orders frames and enforces per-client frame/byte limits. `ProjectionReplica` in `shared/` verifies and applies only contiguous authorized views. `metrics.ts` records counters and phase histograms. See `PROTOCOL.md` for exact v1 wire bytes.
+
+M2's `EXPLORE` sets that school's presence bit and reveals its fog for the target tile. It charges nothing, grants nothing, returns only `TEST_APPLIED` or `TEST_NO_CHANGE`, and lives solely in RAM. The production mutation opcode fails closed. In-memory action keys deduplicate per actor for this single fixture campaign; M3 must scope durable keys by campaign, actor and key. No production authentication or gameplay authorization is implied by synthetic tokens. The public `WorldState` reference is a fixture/testing boundary; production services must not mutate it outside the authority path because M2 view revisions are maintained by `RealtimeCore`.
+
+Each session holds an entire subscribed chunk set (maximum 64). New snapshots enter its FIFO outbound queue before later deltas; subscription generations invalidate queued frames when the set changes. View revisions are per school/chunk, keeping opponent activity out of a school's revision stream. The client requests a snapshot on gaps. Rejoin obtains current snapshots because M2 has no durable replay. Slow clients are disconnected when either the in-process queue or socket buffer exceeds its bound. M2 observed convergence under the recorded balanced and hotspot loads, but 1,000-client hotspot fanout caused high client-side ack latency; see `REALTIME_CAPACITY.md`.
+
+The M1 visual fixture remains. A temporary fixture control measured the cost of changing one pixel while reuploading the complete 4 MB texture; findings and candidate partial-update paths are in `M2_REPORT.md`. No renderer replacement or gameplay UI is part of M2.

@@ -14,6 +14,7 @@
     "build:client": "vite build client --outDir ../dist/client --emptyOutDir",
     "build": "npm run typecheck && npm run build:client",
     "bench:world": "node --expose-gc --experimental-strip-types scripts/bench-world.ts",
+    "bench:realtime": "node --experimental-strip-types scripts/bench-realtime.ts",
     "report:size": "node scripts/report-size.mjs"
   },
   "dependencies": {

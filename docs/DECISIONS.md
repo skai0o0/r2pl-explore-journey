@@ -1,6 +1,6 @@
 # Decisions and approval ledger
 
-Status on 2026-10-09: **M0 architecture baseline accepted and M1 authorized, with a generic registry condition**. A `proposed` gameplay decision is not a production rule. Master Plan v1.0 fixes the technology and consistency constraints. `OWNER_REQUIREMENTS.md` remains the latest documented gameplay proposal; gameplay parameters stay pending where noted in `SPEC_CONFLICTS.md`.
+Status on 2026-10-09: **M0 architecture baseline and M1 accepted; M2 authorized and implemented for review, with a generic registry condition**. A `proposed` gameplay decision is not a production rule. Master Plan v1.0 fixes the technology and consistency constraints. `OWNER_REQUIREMENTS.md` remains the latest documented gameplay proposal; gameplay parameters stay pending where noted in `SPEC_CONFLICTS.md`.
 
 | ID | Status | Decision and reason | Revisit trigger |
 |---|---|---|---|
@@ -8,13 +8,14 @@ Status on 2026-10-09: **M0 architecture baseline accepted and M1 authorized, wit
 | ADR-002 | Plan-mandated | Server owns all shared state, identity, resources, reward outcomes and permissions. Client prediction is visual only. | Never silently weaken |
 | ADR-003 | **Approved for M1** | 1000×1000 row-major tiles; `tileIndex=z*1000+x`; uint16 school-presence mask; 64×64 padded little-endian binary chunks; sparse per-school knowledge metadata and separate one-bit per-school fog. See `PROTOCOL.md`. | Format capacity or map geometry changes |
 | ADR-004 | **Approved for M1** | 16×16 chunks, 4×4 logical sectors of 4×4 chunks. Replaceable in-process `SectorAuthority`. Future distributed writers require a durable lease/fencing token checked at commit. | Measured single-process bottleneck |
-| ADR-005 | Proposed details | One authenticated Colyseus connection per player in normal operation; viewport subscriptions, revisioned snapshots/deltas, bounded frames, resync, action-specific acknowledgements. No tile Schema objects. | Transport benchmark or security review |
+| ADR-005 | M2 test implementation; production policy pending | Colyseus gateway with synthetic identity, full-set viewport subscriptions (64 chunks maximum), per-school revisioned snapshots/deltas, bounded outbound queues, resync and private action ACKs. One-connection-per-player is not enforced by synthetic tests. No tile Schema objects. | Production auth/session and hotspot fanout review |
 | ADR-006 | Plan-mandated; milestone gate clarified | PostgreSQL commit and idempotency outcome precede a committed-success acknowledgement. M2 uses a clearly marked ephemeral test adapter; production mutating commands fail closed until M3 supplies the durable transaction path. A queued/received response is never called success. | M3 transactional design review |
 | ADR-007 | Proposed details | Three.js local instancing/batched buffers, with separate overview strategy and viewport budget. Evaluate V1 50×50 render chunks independently of 64×64 logical data chunks. | Browser GPU measurements |
 | ADR-008 | Proposed | Use explicit SQL migrations and a narrow repository interface; no ORM initially. This keeps transaction and locking behavior visible. | A demonstrated need for an ORM plus ADR |
 | ADR-009 | **Generic 16-slot registry approved for M1; production roster proposed** | Saved assignments cannot change; additional unused slots may be onboarded. V1 names/bit mapping 0–7 below remain proposed, with 8–15 reserved for production. M1 code contains no production roster. School IDs are never derived from array order or email domains. | Owner registry decision before production campaign data |
 | ADR-010 | Proposed | Gameplay rules are versioned configuration records. Unapproved costs, decay, landmark thresholds, and probabilities block affected gameplay commands. No runtime default may quietly become a campaign rule. | Owner approves a rule version |
 | ADR-011 | **Candidate; final choice deferred to M3** | Durable world mutation records, economy entries, idempotency outcomes and outbox events must become committed together. Compare full-chunk rewrite, append-only mutation log with materialized snapshots, and a measured hybrid. Benchmark write amplification, chunk-row contention, WAL volume, snapshot lag and recovery time before choosing. See below. | M3 PostgreSQL benchmarks and crash/recovery tests |
+| ADR-012 | M2 test-only protocol choice | Versioned `R2` little-endian envelope with CRC32; school/chunk view revisions, 64-chunk subscription cap, 128-frame/1-MiB outbound cap, synthetic-only ACK statuses. Earlier 256-chunk proposal narrowed for bounded fanout. Production quotas and durable ACK contract remain M3 decisions. | M3 transaction protocol and M2 capacity review |
 
 ## M1 approval record and remaining roster decision
 

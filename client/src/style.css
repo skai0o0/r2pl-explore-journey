@@ -23,6 +23,14 @@ p {
   height: min(65vh, 650px);
   border: 1px solid #45536b;
 }
+button {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #273b59;
+  border: 1px solid #657895;
+  color: #e7eef6;
+  cursor: pointer;
+}
 #world-view canvas {
   width: 100%;
   height: 100%;

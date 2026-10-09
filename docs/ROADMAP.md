@@ -1,13 +1,13 @@
-# Milestone state and M1 backlog
+# Milestone state and backlog
 
 ## Gate status, 2026-10-09
 
 | Milestone | State | Gate |
 |---|---|---|
 | M0 Specification Freeze and Architecture Audit | **Accepted architecture baseline** | Correction pass reviewed; proposed production school mapping remains pending |
-| M1 Million-Cell World Foundation | **Implementation complete; owner review pending** | See `M1_REPORT.md`; do not start M2 automatically |
-| M2 Realtime Core | Not started | Requires M1; ephemeral test-only commands until M3 durability |
-| M3 Durable Persistence and Economy | Not started | Real PostgreSQL concurrency/restart gate |
+| M1 Million-Cell World Foundation | **Accepted** | Owner accepted `M1_REPORT.md` and authorized M2 |
+| M2 Realtime Core | **Implementation complete; owner review pending** | See `M2_REPORT.md`; synthetic test commands only; stop before M3 |
+| M3 Durable Persistence and Economy | **Not authorized** | Requires owner review of M2; real PostgreSQL concurrency/restart gate |
 | M4 Playable Slice | Not started | Needs approved exploration, competition and Landmark rules |
 | M5 Running Integration | Not started | Needs external team's contract |
 | M6 Full Gameplay and LiveOps | Not started | Needs reward, gift, admin and event decisions |
@@ -43,7 +43,7 @@ Run both **balanced** (actions spread across sectors) and **hotspot** (at least 
 
 | Milestone | Proposed progressive load | Required report and gate |
 |---|---|---|
-| M2, ephemeral test adapter | 10 → 100 → 500 connected clients; 20 → 100 → 250 test commands/s, then a short 3× burst at each stable stage | Measure decode/validation/router/sector queue/execute/ack p50/p95/p99, max and p95 queue depth, fanout recipients/bytes per action and per client, subscription filtering/resync. Verify convergence, duplicate/reorder handling and queue recovery within 30 seconds after burst. No durability claim. |
+| M2, ephemeral test adapter | **Completed:** 100 → 500 → 1,000 connected clients; 20 → 100 → 250 scheduled test commands/s in balanced and 70% hotspot runs. **Deferred:** separate 3× bursts. | All six runs converged without observed lost updates. The 1,000-client hotspot missed target throughput and had 2.17 s client ack p95; see `REALTIME_CAPACITY.md`. Server/generator separation, bursts and fanout profiling remain open before capacity claims. No durability claim. |
 | M3, real PostgreSQL | 100 → 500 → 1,000 clients; 50 → 250 → 500 durable actions/s, scaled down if correctness fails | Measure commit/lock wait p50/p95/p99, deadlocks/retries, WAL and bytes written per action, chunk-row contention, materializer lag and recovery time for each ADR-011 candidate. Verify zero lost committed acks and duplicate effects under crash/retry. |
 | M4, browser slice | 100 → 1,000 connected clients with real browsers sampled at overview and hotspot; use approved gameplay rates | Add browser frame time, GPU/heap, bundle/download sizes and end-to-end convergence. Preserve M3 correctness under playable actions. |
 | M7, launch capacity | 1,000 → 5,000 → 10,000 clients; sustained 1,000 actions/s and 3–5× bursts when prior stages pass | Balanced/hotspot stress plus failover; p95 committed ack <300 ms, visible convergence <500 ms in defined environment; publish actual limit and bottleneck. |
