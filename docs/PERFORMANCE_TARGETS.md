@@ -1,4 +1,4 @@
-# Performance and code budgets — M1 baseline, M2 evidence and later targets
+# Performance and code budgets — M1/M2 baseline, M2.5 evidence and later targets
 
 Targets are test obligations, not measured V2 properties. Publish workload, hardware, software versions, client viewport, school count, traffic distribution and sample counts with every result.
 
@@ -34,3 +34,9 @@ M2 uses an ephemeral adapter: its measurements validate command processing and c
 ### M2 measured gate and remaining work
 
 `REALTIME_CAPACITY.md` and `docs/benchmarks/M2_*.json` record six 100/500/1,000-client balanced/hotspot runs. All converged with zero observed resyncs/errors and no unbounded sector queue; the 1,000-client hotspot achieved 180.8 rather than scheduled 250 actions/s and client ack p95 rose to 2171 ms. That is a failed **capacity** stage despite a passed **convergence/visibility** stage. The five-second single-host generator cannot establish sustained server capacity. A 3× burst was not run: first isolate generator/server and investigate hotspot fanout. Do not advance a capacity claim from this result; repeat burst, socket-buffer and visible-convergence measurements before any 5,000-client stage.
+
+### M2.5 isolated measurements and M3 database gate
+
+`REALTIME_PERFORMANCE_INVESTIGATION.md` records a separate game-server process and generator process on one desktop. At 1,000 clients and 250 requested actions/s for 20 seconds, balanced and hotspot scenarios sustained the requested rate with exact final authorized projection equality. Hotspot scan ACK p95 was 38.4 ms, compared with 4.7 ms balanced; the hotspot delivered 1,182,338 recipient deltas. A 750-actions/s five-second balanced burst converged, while both hotspot scan and indexed bursts missed over 200 ACKs by the bounded 20-second wait. Indexed fanout remained optional because its one matched sustained improvement was modest and unreplicated. A 20-ms ordered batching model predicts fewer frames but is not an implemented or measured wire optimization. These runs do not establish separate-host or 10,000-client capacity.
+
+M3 measures actual PostgreSQL transaction p50/p95/p99, chunk-head lock wait p50/p95/p99, read/write phases, WAL bytes per applied action, checkpoint bytes, log row count, materialization time, recovery read time and deadlock change for both full-chunk and mutation-log fixtures under balanced and hot-chunk workloads. Measure 200 actions first, then raise to 1,000 only if correctness and database timeouts permit. Record database host/version, client host, pool size, transaction concurrency and any shared-database WAL contamination. The physical strategy remains open until these real database measurements and crash/retry tests pass. CI's disposable PostgreSQL service is a correctness gate; a short CI run does not establish production latency or capacity.

@@ -1,0 +1,5 @@
+# V2 remote and CI owner setup
+
+The V2 repository is local only. Its `main` history begins with the accepted M1 baseline and contains no V1 repository files. `.github/workflows/ci.yml` runs clean installation, strict TypeScript compilation, lint, tests, client build and size reporting on Ubuntu and Windows with Node 24. A separate Ubuntu job starts an isolated PostgreSQL 16 service with synthetic credentials, applies the M3 migration and runs integration tests.
+
+Owner configuration required: provide the target GitHub account/organization, repository name, visibility and permission to create or attach the remote. Add the V2 remote with a normal `git remote add origin <owner-provided-url>` and push `main` without force. Then inspect the first GitHub Actions run. The CI PostgreSQL service contains only test fixtures; no external credential or V1 database is used. The Ubuntu/Windows general jobs report the PostgreSQL test as skipped because they have no database. Owner-provided disposable database access remains necessary for representative contention, WAL and latency benchmarking outside CI. No V1 remote should be reused.

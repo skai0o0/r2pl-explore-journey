@@ -31,6 +31,52 @@ const registry = () =>
     { id: "fixture-b", slot: 15 },
   ]);
 
+test("indexed fanout preserves subscription and school isolation", async () => {
+  const core = new RealtimeCore(new WorldState(registry()), {
+    fanoutMode: "indexed",
+  });
+  const sent: Record<string, Uint8Array[]> = { a: [], b: [], c: [] };
+  for (const [id, schoolSlot] of [
+    ["a", 0],
+    ["b", 0],
+    ["c", 15],
+  ] as const)
+    core.addSession(
+      id,
+      { actorId: id, schoolSlot },
+      {
+        send: (bytes) => {
+          sent[id]!.push(bytes);
+        },
+        close: () => {},
+      },
+    );
+  const id = chunkId(0, 0);
+  for (const peer of ["a", "b", "c"])
+    await core.handle(peer, encodeSubscribe([id]));
+  await flush();
+  await core.handle("b", encodeSubscribe([]));
+  await core.handle(
+    "a",
+    encodeExplore({ key: key(77), tileIndex: tileIndex(2, 2), ruleVersion: 0 }),
+  );
+  await flush();
+  assert.equal(
+    sent.a!.filter((bytes) => decodeFrame(bytes).kind === M2_KIND.DELTA).length,
+    1,
+  );
+  assert.equal(
+    sent.b!.filter((bytes) => decodeFrame(bytes).kind === M2_KIND.DELTA).length,
+    0,
+  );
+  assert.equal(
+    sent.c!.filter((bytes) => decodeFrame(bytes).kind === M2_KIND.DELTA).length,
+    0,
+  );
+  core.removeSession("a");
+  assert.equal(core.connected, 2);
+});
+
 test("synthetic authentication binds school server-side and rejects unknown tokens", () => {
   const auth = new SyntheticAuth(registry(), [
     { token: "fixture-secret", actorId: "actor", schoolSlot: 15 },

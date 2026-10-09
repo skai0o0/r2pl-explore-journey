@@ -1,14 +1,15 @@
 # Milestone state and backlog
 
-## Gate status, 2026-10-09
+## Gate status, 2026-10-10
 
 | Milestone | State | Gate |
 |---|---|---|
 | M0 Specification Freeze and Architecture Audit | **Accepted architecture baseline** | Correction pass reviewed; proposed production school mapping remains pending |
 | M1 Million-Cell World Foundation | **Accepted** | Owner accepted `M1_REPORT.md` and authorized M2 |
-| M2 Realtime Core | **Implementation complete; owner review pending** | See `M2_REPORT.md`; synthetic test commands only; stop before M3 |
-| M3 Durable Persistence and Economy | **Not authorized** | Requires owner review of M2; real PostgreSQL concurrency/restart gate |
-| M4 Playable Slice | Not started | Needs approved exploration, competition and Landmark rules |
+| M2 Realtime Core | **Conditionally accepted** | Realtime correctness accepted; higher-capacity claims withheld after the 1,000-client hotspot result |
+| M2.5 Realtime Performance Investigation | **Authorized; isolated-process report prepared** | Sustained balanced/hotspot and burst evidence in `REALTIME_PERFORMANCE_INVESTIGATION.md`; repeat and separate-host work remain capacity risks before M4 approval |
+| M3 Durable Persistence and Economy | **Authorized; implementation in progress** | Explicit PostgreSQL migration and fixture transaction prepared; disposable database integration, contention and ADR-011 gate pending |
+| M4 Playable Slice | **Not authorized** | Requires owner review of M3 durability and M2.5 hotspot evidence, plus approved exploration, competition and Landmark rules |
 | M5 Running Integration | Not started | Needs external team's contract |
 | M6 Full Gameplay and LiveOps | Not started | Needs reward, gift, admin and event decisions |
 | M7 Scaling and Launch | Not started | Needs measured capacity and recovery |
@@ -43,7 +44,8 @@ Run both **balanced** (actions spread across sectors) and **hotspot** (at least 
 
 | Milestone | Proposed progressive load | Required report and gate |
 |---|---|---|
-| M2, ephemeral test adapter | **Completed:** 100 → 500 → 1,000 connected clients; 20 → 100 → 250 scheduled test commands/s in balanced and 70% hotspot runs. **Deferred:** separate 3× bursts. | All six runs converged without observed lost updates. The 1,000-client hotspot missed target throughput and had 2.17 s client ack p95; see `REALTIME_CAPACITY.md`. Server/generator separation, bursts and fanout profiling remain open before capacity claims. No durability claim. |
-| M3, real PostgreSQL | 100 → 500 → 1,000 clients; 50 → 250 → 500 durable actions/s, scaled down if correctness fails | Measure commit/lock wait p50/p95/p99, deadlocks/retries, WAL and bytes written per action, chunk-row contention, materializer lag and recovery time for each ADR-011 candidate. Verify zero lost committed acks and duplicate effects under crash/retry. |
+| M2, ephemeral test adapter | **Completed:** 100 → 500 → 1,000 connected clients; 20 → 100 → 250 scheduled test commands/s in balanced and 70% hotspot runs. | All six runs converged without observed lost updates. The original same-process 1,000-client hotspot missed target throughput and had 2.17 s client ACK p95; see `REALTIME_CAPACITY.md`. No durability claim. |
+| M2.5, isolated realtime measurement | **Measured:** separate server/generator processes, 1,000-client 20-second balanced and hotspot at 250 actions/s, 5-second 3× bursts. | Balanced and hotspot sustained workloads converged at the requested rate; balanced 3× burst converged; hotspot 3× bursts timed out. Indexed fanout showed a modest single-pair benefit but no stable capacity increase. See `REALTIME_PERFORMANCE_INVESTIGATION.md`. Separate-host and replicated results remain before higher-capacity approval. |
+| M3, real PostgreSQL | Fixture comparison: 200 then up to 1,000 durable actions at controlled concurrency and balanced/hot-chunk patterns; 100 → 500 → 1,000 client integration stage only after the transaction baseline is proven | Measure commit/lock wait p50/p95/p99, deadlocks/retries, WAL and bytes written per action, chunk-row contention, materializer lag and recovery time for both ADR-011 candidates. Verify zero lost committed ACKs and duplicate effects under crash/retry. Do not describe fixture transaction throughput as client capacity. |
 | M4, browser slice | 100 → 1,000 connected clients with real browsers sampled at overview and hotspot; use approved gameplay rates | Add browser frame time, GPU/heap, bundle/download sizes and end-to-end convergence. Preserve M3 correctness under playable actions. |
 | M7, launch capacity | 1,000 → 5,000 → 10,000 clients; sustained 1,000 actions/s and 3–5× bursts when prior stages pass | Balanced/hotspot stress plus failover; p95 committed ack <300 ms, visible convergence <500 ms in defined environment; publish actual limit and bottleneck. |

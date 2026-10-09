@@ -1,0 +1,217 @@
+{
+  "source": "C:\\Users\\Nem\\Desktop\\explore-journey\\docs\\benchmarks\\profiles\\CPU.20261009.235544.7440.0.001.cpuprofile",
+  "samples": 5201,
+  "totalSampledMs": 8365,
+  "top": [
+    {
+      "function": "writev",
+      "url": "",
+      "line": 0,
+      "selfMs": 3242,
+      "sharePercent": 38.75
+    },
+    {
+      "function": "(idle)",
+      "url": "",
+      "line": 0,
+      "selfMs": 1819,
+      "sharePercent": 21.75
+    },
+    {
+      "function": "enqueue",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/OutboundQueue.ts",
+      "line": 49,
+      "selfMs": 277,
+      "sharePercent": 3.31
+    },
+    {
+      "function": "#drain",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/OutboundQueue.ts",
+      "line": 88,
+      "selfMs": 240,
+      "sharePercent": 2.87
+    },
+    {
+      "function": "writevGeneric",
+      "url": "node:internal/stream_base_commons",
+      "line": 121,
+      "selfMs": 156,
+      "sharePercent": 1.87
+    },
+    {
+      "function": "runMicrotasks",
+      "url": "",
+      "line": 0,
+      "selfMs": 93,
+      "sharePercent": 1.11
+    },
+    {
+      "function": "(program)",
+      "url": "",
+      "line": 0,
+      "selfMs": 88,
+      "sharePercent": 1.05
+    },
+    {
+      "function": "#drain",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/OutboundQueue.ts",
+      "line": 88,
+      "selfMs": 84,
+      "sharePercent": 1
+    },
+    {
+      "function": "",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/RealtimeCore.ts",
+      "line": 303,
+      "selfMs": 81,
+      "sharePercent": 0.97
+    },
+    {
+      "function": "raw",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/core/build/Protocol.mjs",
+      "line": 115,
+      "selfMs": 80,
+      "sharePercent": 0.96
+    },
+    {
+      "function": "createWriteWrap",
+      "url": "node:internal/stream_base_commons",
+      "line": 108,
+      "selfMs": 69,
+      "sharePercent": 0.83
+    },
+    {
+      "function": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "selfMs": 68,
+      "sharePercent": 0.82
+    },
+    {
+      "function": "send",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/node_modules/ws/lib/sender.js",
+      "line": 351,
+      "selfMs": 68,
+      "sharePercent": 0.81
+    },
+    {
+      "function": "clearBuffer",
+      "url": "node:internal/streams/writable",
+      "line": 742,
+      "selfMs": 66,
+      "sharePercent": 0.79
+    },
+    {
+      "function": "writev",
+      "url": "",
+      "line": 0,
+      "selfMs": 54,
+      "sharePercent": 0.65
+    },
+    {
+      "function": "",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/OutboundQueue.ts",
+      "line": 73,
+      "selfMs": 47,
+      "sharePercent": 0.56
+    },
+    {
+      "function": "",
+      "url": "",
+      "line": 0,
+      "selfMs": 43,
+      "sharePercent": 0.51
+    },
+    {
+      "function": "Writable.uncork",
+      "url": "node:internal/streams/writable",
+      "line": 518,
+      "selfMs": 37,
+      "sharePercent": 0.44
+    },
+    {
+      "function": "",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/SectorQueue.ts",
+      "line": 27,
+      "selfMs": 36,
+      "sharePercent": 0.43
+    },
+    {
+      "function": "snapshot",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/metrics.ts",
+      "line": 32,
+      "selfMs": 34,
+      "sharePercent": 0.41
+    },
+    {
+      "function": "_write",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/node_modules/ws/lib/receiver.js",
+      "line": 96,
+      "selfMs": 31,
+      "sharePercent": 0.37
+    },
+    {
+      "function": "",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/RealtimeCore.ts",
+      "line": 345,
+      "selfMs": 30,
+      "sharePercent": 0.36
+    },
+    {
+      "function": "writev",
+      "url": "",
+      "line": 0,
+      "selfMs": 28,
+      "sharePercent": 0.34
+    },
+    {
+      "function": "Socket._writeGeneric",
+      "url": "node:net",
+      "line": 1140,
+      "selfMs": 27,
+      "sharePercent": 0.32
+    },
+    {
+      "function": "snapshot",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/VisibilityProjection.ts",
+      "line": 22,
+      "selfMs": 25,
+      "sharePercent": 0.29
+    },
+    {
+      "function": "now",
+      "url": "",
+      "line": 0,
+      "selfMs": 22,
+      "sharePercent": 0.26
+    },
+    {
+      "function": "snapshot",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/VisibilityProjection.ts",
+      "line": 22,
+      "selfMs": 21,
+      "sharePercent": 0.25
+    },
+    {
+      "function": "debug",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/node_modules/debug/src/common.js",
+      "line": 66,
+      "selfMs": 21,
+      "sharePercent": 0.25
+    },
+    {
+      "function": "NodeError",
+      "url": "node:internal/errors",
+      "line": 500,
+      "selfMs": 21,
+      "sharePercent": 0.26
+    },
+    {
+      "function": "frame",
+      "url": "file:///C:/Users/Nem/Desktop/explore-journey/node_modules/ws/lib/sender.js",
+      "line": 79,
+      "selfMs": 20,
+      "sharePercent": 0.24
+    }
+  ]
+}

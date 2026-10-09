@@ -48,6 +48,10 @@ export class OutboundQueue {
 
   enqueue(bytes: Uint8Array, valid?: () => boolean): boolean {
     if (this.#closed) return false;
+    this.#metrics.observe(
+      "socket_buffered_bytes",
+      this.#sink.bufferedBytes?.() ?? 0,
+    );
     if (
       this.#items.length >= this.#maxFrames ||
       this.#bytes + bytes.byteLength > this.#maxBytes ||

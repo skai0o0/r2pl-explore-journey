@@ -1,6 +1,8 @@
+import { type ChildProcess, fork } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { cpus, totalmem } from "node:os";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import { type Room as ClientRoom, ColyseusSDK } from "@colyseus/sdk";
 import { createSyntheticServer } from "../server/realtime/bootstrap.ts";
 import {
@@ -30,6 +32,9 @@ const clients = Number(option("clients", "100"));
 const mode = option("mode", "balanced");
 const durationSeconds = Number(option("duration", "6"));
 const rate = Number(option("rate", "20"));
+const isolated = option("isolated", "false") === "true";
+const fanoutMode = option("fanout", "scan");
+const profile = option("profile", "false") === "true";
 if (
   !Number.isInteger(clients) ||
   clients < 1 ||
@@ -38,7 +43,8 @@ if (
   !Number.isFinite(durationSeconds) ||
   durationSeconds <= 0 ||
   !Number.isFinite(rate) ||
-  rate <= 0
+  rate <= 0 ||
+  !["scan", "indexed"].includes(fanoutMode)
 )
   throw new Error("Invalid benchmark arguments");
 
@@ -68,12 +74,46 @@ const actionKey = (n: number) => {
   return key;
 };
 
+function waitChild(
+  child: ChildProcess,
+  type: string,
+  request?: unknown,
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.off("message", onMessage);
+      reject(new Error(`Isolated server ${type} timeout`));
+    }, 20_000);
+    const onMessage = (message: unknown) => {
+      if (
+        !message ||
+        typeof message !== "object" ||
+        !("type" in message) ||
+        message.type !== type
+      )
+        return;
+      clearTimeout(timer);
+      child.off("message", onMessage);
+      resolve(message as Record<string, unknown>);
+    };
+    child.on("message", onMessage);
+    if (request) child.send(request);
+  });
+}
+
 class LoadPeer {
   readonly room: ClientRoom;
   readonly slot: number;
   readonly chunk: number;
   readonly replica: ProjectionReplica;
   readonly timings: number[] = [];
+  readonly #measureVisibility: boolean;
+  readonly #deltaArrivals = new Map<string, number>();
+  readonly #ownActions: {
+    chunkId: number;
+    revision: bigint;
+    sentAt: number;
+  }[] = [];
   readonly #pending = new Map<
     string,
     {
@@ -88,11 +128,17 @@ class LoadPeer {
   errors = 0;
   snapshotReady = false;
 
-  constructor(room: ClientRoom, slot: number, chunk: number) {
+  constructor(
+    room: ClientRoom,
+    slot: number,
+    chunk: number,
+    measureVisibility = false,
+  ) {
     this.room = room;
     this.slot = slot;
     this.chunk = chunk;
     this.replica = new ProjectionReplica(slot);
+    this.#measureVisibility = measureVisibility;
     room.onMessage("m2", (raw: Uint8Array) => {
       const bytes = Uint8Array.from(raw);
       this.bytesReceived += bytes.byteLength;
@@ -104,6 +150,11 @@ class LoadPeer {
         this.snapshotReady = true;
       } else if (frame.kind === M2_KIND.DELTA) {
         const delta = decodeDelta(frame.payload);
+        if (this.#measureVisibility)
+          this.#deltaArrivals.set(
+            `${delta.chunkId}:${delta.nextRevision}`,
+            performance.now(),
+          );
         if (this.replica.applyDelta(delta) === "resync") {
           this.resyncs++;
           this.room.sendBytes("m2", encodeResync(delta.chunkId));
@@ -113,6 +164,16 @@ class LoadPeer {
         const pending = this.#pending.get(Buffer.from(ack.key).toString("hex"));
         if (pending) {
           this.timings.push(performance.now() - pending.sentAt);
+          if (
+            this.#measureVisibility &&
+            ack.status === ACK_STATUS.TEST_APPLIED &&
+            ack.chunkId === this.chunk
+          )
+            this.#ownActions.push({
+              chunkId: ack.chunkId,
+              revision: ack.viewRevision,
+              sentAt: pending.sentAt,
+            });
           this.#pending.delete(Buffer.from(ack.key).toString("hex"));
           pending.resolve(ack);
         }
@@ -138,6 +199,19 @@ class LoadPeer {
       pending.reject(new Error("Benchmark ended before ack"));
     this.#pending.clear();
   }
+
+  visibleTimings(): { measured: number[]; missing: number } {
+    const measured: number[] = [];
+    let missing = 0;
+    for (const action of this.#ownActions) {
+      const arrival = this.#deltaArrivals.get(
+        `${action.chunkId}:${action.revision}`,
+      );
+      if (arrival === undefined) missing++;
+      else measured.push(arrival - action.sentAt);
+    }
+    return { measured, missing };
+  }
 }
 
 const registry = new SchoolRegistry([
@@ -149,7 +223,28 @@ const fixtures = Array.from({ length: clients }, (_, i) => ({
   actorId: `load-actor-${i}`,
   schoolSlot: i % 2 ? 15 : 0,
 }));
-const server = createSyntheticServer(registry, fixtures);
+if (profile) await mkdir("docs/benchmarks/profiles", { recursive: true });
+const server = isolated
+  ? undefined
+  : createSyntheticServer(registry, fixtures, {
+      fanoutMode: fanoutMode as "scan" | "indexed",
+    });
+const child = isolated
+  ? fork(
+      fileURLToPath(new URL("./bench-realtime-server.ts", import.meta.url)),
+      [String(clients), fanoutMode],
+      {
+        execArgv: [
+          "--experimental-strip-types",
+          ...(profile
+            ? ["--cpu-prof", "--cpu-prof-dir=docs/benchmarks/profiles"]
+            : []),
+        ],
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+      },
+    )
+  : undefined;
+child?.stderr?.on("data", (data: Buffer) => process.stderr.write(data));
 const peers: LoadPeer[] = [];
 const lag = monitorEventLoopDelay({ resolution: 20 });
 lag.enable();
@@ -159,16 +254,24 @@ let connectionSeconds = 0,
   actionSeconds = 0,
   disconnectSeconds = 0;
 let result: Record<string, unknown> | undefined;
+let failure: string | undefined;
 try {
-  await server.server.listen(0, "127.0.0.1");
-  const address = server.transport.server?.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing loopback port");
-  const sdk = new ColyseusSDK(`ws://127.0.0.1:${address.port}`);
+  let port: number;
+  if (server) {
+    await server.server.listen(0, "127.0.0.1");
+    const address = server.transport.server?.address();
+    if (!address || typeof address === "string")
+      throw new Error("Missing loopback port");
+    port = address.port;
+  } else if (child) {
+    const ready = await waitChild(child, "ready");
+    port = ready.port as number;
+  } else throw new Error("Missing fixture server");
+  const sdk = new ColyseusSDK(`ws://127.0.0.1:${port}`);
   const connectStarted = performance.now();
   const firstRoom = await sdk.joinOrCreate("m2", { token: fixtures[0]!.token });
   peers.push(
-    new LoadPeer(firstRoom, fixtures[0]!.schoolSlot, targetChunks[0]!),
+    new LoadPeer(firstRoom, fixtures[0]!.schoolSlot, targetChunks[0]!, true),
   );
   for (let start = 1; start < clients; start += 25) {
     const batch = fixtures.slice(start, Math.min(clients, start + 25));
@@ -183,7 +286,9 @@ try {
         mode === "hotspot" && index % 10 < 7
           ? targetChunks[0]!
           : targetChunks[index % 16]!;
-      peers.push(new LoadPeer(room, fixtures[index]!.schoolSlot, chunk));
+      peers.push(
+        new LoadPeer(room, fixtures[index]!.schoolSlot, chunk, index < 20),
+      );
     });
   }
   connectionSeconds = (performance.now() - connectStarted) / 1000;
@@ -230,24 +335,49 @@ try {
   if (outcomes.some((ack) => ack.status === ACK_STATUS.REJECTED))
     throw new Error("Rejected synthetic action under load");
 
+  const pairs = [
+    ...new Map(
+      peers.map((peer) => [
+        `${peer.slot}:${peer.chunk}`,
+        { slot: peer.slot, chunk: peer.chunk },
+      ]),
+    ).values(),
+  ];
+  let isolatedSummary: Record<string, unknown> | undefined;
+  const projected = new Map<string, { mask: Buffer; fog: Buffer }>();
+  if (child) {
+    isolatedSummary = await waitChild(child, "summary", {
+      type: "summary",
+      pairs,
+    });
+    for (const item of isolatedSummary.projections as {
+      slot: number;
+      chunk: number;
+      mask: string;
+      fog: string;
+    }[])
+      projected.set(`${item.slot}:${item.chunk}`, {
+        mask: Buffer.from(item.mask, "base64"),
+        fog: Buffer.from(item.fog, "base64"),
+      });
+  }
   const converged = () =>
     peers.every((peer) => {
       const { chunkX, chunkZ } = chunkCoordinatesForId(peer.chunk);
+      const expected = projected.get(`${peer.slot}:${peer.chunk}`);
       for (let local = 0; local < 4096; local++) {
         const tile =
           (chunkZ * CHUNK_SIZE + Math.floor(local / CHUNK_SIZE)) * WORLD_WIDTH +
           chunkX * CHUNK_SIZE +
           (local % CHUNK_SIZE);
-        if (
-          peer.replica.maskAt(peer.chunk, local) !==
-          (server.core.world.maskAt(tile) & schoolBit(peer.slot))
-        )
-          return false;
-        if (
-          peer.replica.isDiscovered(peer.chunk, local) !==
-          server.core.world.isRevealed(tile, peer.slot)
-        )
-          return false;
+        const mask = expected
+          ? expected.mask.readUInt16LE(local * 2)
+          : server!.core.world.maskAt(tile) & schoolBit(peer.slot);
+        const fog = expected
+          ? !!(expected.fog[local >> 3]! & (1 << (local & 7)))
+          : server!.core.world.isRevealed(tile, peer.slot);
+        if (peer.replica.maskAt(peer.chunk, local) !== mask) return false;
+        if (peer.replica.isDiscovered(peer.chunk, local) !== fog) return false;
       }
       return true;
     });
@@ -258,8 +388,16 @@ try {
   if (!converged())
     throw new Error("Client replicas diverged from authoritative projection");
 
+  if (child)
+    isolatedSummary = await waitChild(child, "summary", {
+      type: "summary",
+      pairs: [],
+    });
+
   const memory = process.memoryUsage();
   const cpu = process.cpuUsage(cpuBefore);
+  const visible = peers.slice(0, 20).map((peer) => peer.visibleTimings());
+  const visibleMeasured = visible.flatMap((entry) => entry.measured);
   result = {
     environment: {
       node: process.version,
@@ -267,7 +405,10 @@ try {
       cpu: cpus()[0]?.model,
       logicalCpus: cpus().length,
       ramBytes: totalmem(),
-      generator: "same Node process and host as server",
+      generator: isolated
+        ? "separate Node process, same host as server"
+        : "same Node process and host as server",
+      fanoutMode,
     },
     workload: {
       clients,
@@ -298,7 +439,15 @@ try {
       actionSeconds,
       acknowledgedActionsPerSecond: outcomes.length / actionSeconds,
       clientAckMs: percentile(peers.flatMap((peer) => peer.timings)),
-      server: server.core.metrics.snapshot().histograms,
+      sampledOwnDeltaVisibleMs: percentile(visibleMeasured),
+      sampledOwnDeltaMissing: visible.reduce(
+        (sum, entry) => sum + entry.missing,
+        0,
+      ),
+      server:
+        server?.core.metrics.snapshot().histograms ??
+        (isolatedSummary?.metrics as { histograms: unknown } | undefined)
+          ?.histograms,
     },
     traffic: {
       receivedBytesPerClient: percentile(
@@ -307,7 +456,10 @@ try {
       receivedFramesPerClient: percentile(
         peers.map((peer) => peer.framesReceived),
       ),
-      serverCounters: server.core.metrics.snapshot().counters,
+      serverCounters:
+        server?.core.metrics.snapshot().counters ??
+        (isolatedSummary?.metrics as { counters: unknown } | undefined)
+          ?.counters,
     },
     resources: {
       cpuUserMs: cpu.user / 1000,
@@ -316,29 +468,78 @@ try {
       heapUsedBytes: memory.heapUsed,
       arrayBufferBytes: memory.arrayBuffers,
       eventLoopLagP95Ms: lag.percentile(95) / 1e6,
+      ...(isolated
+        ? {
+            server: isolatedSummary?.resources,
+            generator: {
+              cpuUserMs: cpu.user / 1000,
+              cpuSystemMs: cpu.system / 1000,
+              memory,
+            },
+          }
+        : {}),
     },
     limitations: [
-      "Single-host loopback and same-process load generator; not a production CCU claim",
+      isolated
+        ? "Single-host loopback with separate Node processes; CPU still shares host"
+        : "Single-host loopback and same-process load generator; not a production CCU claim",
       "M2 state and idempotency are ephemeral; no database or durable acknowledgements",
       "M2 payload byte counts exclude Colyseus/WebSocket framing overhead",
     ],
   };
+} catch (error) {
+  failure = error instanceof Error ? error.message : String(error);
+  result = {
+    environment: {
+      node: process.version,
+      generator: isolated ? "separate process" : "same process",
+      fanoutMode,
+    },
+    workload: {
+      clients,
+      mode,
+      durationSeconds,
+      requestedActionsPerSecond: rate,
+    },
+    failure,
+    partial: {
+      connected: peers.length,
+      acknowledged: peers.reduce((sum, peer) => sum + peer.timings.length, 0),
+      clientErrors: peers.reduce((sum, peer) => sum + peer.errors, 0),
+      resyncs: peers.reduce((sum, peer) => sum + peer.resyncs, 0),
+      clientAckMs: percentile(peers.flatMap((peer) => peer.timings)),
+      generatorCpu: process.cpuUsage(cpuBefore),
+    },
+  };
 } finally {
   const disconnectStarted = performance.now();
-  for (let start = 0; start < peers.length; start += 50)
-    await Promise.allSettled(
-      peers.slice(start, start + 50).map((peer) => peer.room.leave()),
-    );
+  if (!failure)
+    for (let start = 0; start < peers.length; start += 50)
+      await Promise.allSettled(
+        peers.slice(start, start + 50).map((peer) => peer.room.leave()),
+      );
   disconnectSeconds = (performance.now() - disconnectStarted) / 1000;
-  await server.server.gracefullyShutdown(false);
+  if (server) await server.server.gracefullyShutdown(false);
+  if (child) {
+    child.send({ type: "stop" });
+    await Promise.race([
+      new Promise<void>((resolve) => child.once("exit", () => resolve())),
+      sleep(3000).then(() => {
+        child.kill();
+      }),
+    ]);
+  }
   lag.disable();
   for (const peer of peers) peer.rejectPending();
 }
 if (result) {
   result.disconnectSeconds = disconnectSeconds;
   result.totalWallSeconds = (performance.now() - runStarted) / 1000;
-  const path = `docs/benchmarks/M2_${clients}_${mode}.json`;
+  const path = isolated
+    ? `docs/benchmarks/M25_${clients}_${mode}_${fanoutMode}_${durationSeconds}s_${rate}r${failure ? "_failed" : ""}.json`
+    : `docs/benchmarks/M2_${clients}_${mode}.json`;
   await mkdir("docs/benchmarks", { recursive: true });
   await writeFile(path, `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify({ path, ...result }, null, 2));
 }
+if (failure) process.exit(1);

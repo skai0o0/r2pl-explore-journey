@@ -54,6 +54,7 @@ export interface RealtimeCoreOptions {
   readonly maxSectorQueueDepth?: number;
   readonly maxOutboundFrames?: number;
   readonly maxOutboundBytes?: number;
+  readonly fanoutMode?: "scan" | "indexed";
 }
 
 /** M2-only deterministic in-memory simulator behind a versioned binary boundary. */
@@ -67,6 +68,8 @@ export class RealtimeCore {
   readonly #idempotency = new IdempotencyStore();
   readonly #sessions = new Map<string, Session>();
   readonly #viewRevisions = new Map<string, bigint>();
+  readonly #subscriberIndex = new Map<string, Set<Session>>();
+  readonly #fanoutMode: "scan" | "indexed";
   readonly #maxOutboundFrames: number;
   readonly #maxOutboundBytes: number;
 
@@ -82,6 +85,7 @@ export class RealtimeCore {
     this.#projection = new SyntheticVisibilityProjection(world);
     this.#maxOutboundFrames = options.maxOutboundFrames ?? 128;
     this.#maxOutboundBytes = options.maxOutboundBytes ?? 1_048_576;
+    this.#fanoutMode = options.fanoutMode ?? "scan";
   }
 
   get connected(): number {
@@ -126,6 +130,7 @@ export class RealtimeCore {
   removeSession(sessionId: string): void {
     const session = this.#sessions.get(sessionId);
     if (!session) return;
+    for (const id of session.subscriptions.keys()) this.#unindex(session, id);
     session.subscriptions.clear();
     session.outbound.close("left");
     this.#sessions.delete(sessionId);
@@ -196,14 +201,31 @@ export class RealtimeCore {
   #subscribe(session: Session, ids: readonly number[]): void {
     const wanted = new Set(ids);
     for (const id of session.subscriptions.keys())
-      if (!wanted.has(id)) session.subscriptions.delete(id);
+      if (!wanted.has(id)) {
+        session.subscriptions.delete(id);
+        this.#unindex(session, id);
+      }
     for (const id of ids) {
       if (session.subscriptions.has(id)) continue;
       const generation = ++session.generation;
       session.subscriptions.set(id, generation);
+      const indexKey = `${session.identity.schoolSlot}:${id}`;
+      let subscribers = this.#subscriberIndex.get(indexKey);
+      if (!subscribers) {
+        subscribers = new Set();
+        this.#subscriberIndex.set(indexKey, subscribers);
+      }
+      subscribers.add(session);
       this.#sendSnapshot(session, id, generation);
     }
     this.metrics.count("subscription_changes");
+  }
+
+  #unindex(session: Session, id: number): void {
+    const indexKey = `${session.identity.schoolSlot}:${id}`;
+    const subscribers = this.#subscriberIndex.get(indexKey);
+    subscribers?.delete(session);
+    if (subscribers?.size === 0) this.#subscriberIndex.delete(indexKey);
   }
 
   #resync(session: Session, id: number): void {
@@ -291,6 +313,7 @@ export class RealtimeCore {
           revision++;
           this.#viewRevisions.set(`${slot}:${id}`, revision);
           const { x, z } = tileCoordinates(command.tileIndex);
+          const encodeStart = performance.now();
           const delta = encodeDelta({
             chunkId: id,
             baseRevision,
@@ -299,8 +322,20 @@ export class RealtimeCore {
             mask: this.world.maskAt(command.tileIndex) & schoolBit(slot),
             discovered: this.world.isRevealed(command.tileIndex, slot),
           });
+          this.metrics.observe(
+            "delta_encode_ms",
+            performance.now() - encodeStart,
+          );
+          const fanoutStart = performance.now();
+          const indexKey = `${slot}:${id}`;
+          const candidates =
+            this.#fanoutMode === "indexed"
+              ? (this.#subscriberIndex.get(indexKey) ?? [])
+              : this.#sessions.values();
           let recipients = 0;
-          for (const peer of this.#sessions.values()) {
+          let inspected = 0;
+          for (const peer of candidates) {
+            inspected++;
             if (peer.identity.schoolSlot !== slot) continue;
             const generation = peer.subscriptions.get(id);
             if (
@@ -312,6 +347,11 @@ export class RealtimeCore {
             )
               recipients++;
           }
+          this.metrics.observe("fanout_candidates", inspected);
+          this.metrics.observe(
+            "fanout_enqueue_ms",
+            performance.now() - fanoutStart,
+          );
           this.metrics.count("fanout_recipients", recipients);
           this.metrics.count("actions_applied");
         } else this.metrics.count("actions_no_change");

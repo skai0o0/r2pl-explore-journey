@@ -4,8 +4,8 @@
 
 - This directory is the greenfield V2 workspace. `land-rush-prototype/` is a read-only V1 reference. Never edit, reset, clean, or commit inside it.
 - The owner-provided `writing-block.md` is the Master Implementation Plan v1.0. `docs/OWNER_REQUIREMENTS.md` preserves the original Product Owner gameplay concept as a proposal, not approved production rules. For V2, approved decisions in `docs/DECISIONS.md` and approved rules in `docs/GAME_SPEC.md` govern implementation. Record discrepancies in `docs/SPEC_CONFLICTS.md`; do not infer approval from the owner proposal, V1 code or tests.
-- M0 architecture baseline and M1 Million-Cell World Foundation were accepted. M2 Colyseus Realtime Core was authorized on 2026-10-09. Stop after M2 for owner review; do not start M3. Do not create production gameplay rules, install a production stack, or migrate V1 code.
-- M1/M2 use a generic immutable 16-slot school registry and synthetic fixtures. The proposed V1 0–7 mapping remains pending owner confirmation and must not be persisted as production data. Keep original and revised probability tables traceable without normalization.
+- M0/M1 were accepted. M2 Realtime Core was conditionally accepted and M3 Durable Persistence & Economy plus M2.5 Realtime Performance Investigation were authorized on 2026-10-09. Stop after M3/M2.5 for owner review; do not start M4. Do not create unapproved gameplay rules or migrate V1 code.
+- M1/M2/M3 use a generic immutable 16-slot school registry and synthetic fixtures. The proposed V1 0–7 mapping remains pending owner confirmation and must not be persisted as production data. Keep original and revised probability tables traceable without normalization.
 - Keep the first V2 source layout compact: `client/`, `server/`, `shared/`, `database/`, `tests/`, `docs/`. Add nesting only for a real boundary.
 
 ## Coding contract for later milestones
@@ -21,4 +21,4 @@
 
 ## Definition of done
 
-Strict compilation, lint/format, relevant tests, documented schema/protocol/rule changes, no unauthorized gameplay change, measured performance where applicable, and a reviewable milestone report. Preserve the M3 owner review gate after M2.
+Strict compilation, lint/format, relevant tests, documented schema/protocol/rule changes, no unauthorized gameplay change, measured performance where applicable, and a reviewable milestone report. Preserve the M4 owner review gate after M3/M2.5.

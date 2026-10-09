@@ -1,0 +1,33 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "generator": "separate process",
+    "fanoutMode": "indexed"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 5,
+    "requestedActionsPerSecond": 750
+  },
+  "failure": "Ack timeout",
+  "partial": {
+    "connected": 1000,
+    "acknowledged": 3540,
+    "clientErrors": 0,
+    "resyncs": 0,
+    "clientAckMs": {
+      "count": 3540,
+      "p50": 2097.852,
+      "p95": 7686.339,
+      "p99": 8399.078,
+      "max": 8623.657
+    },
+    "generatorCpu": {
+      "user": 11891000,
+      "system": 2593000
+    }
+  },
+  "disconnectSeconds": 4.000000008090865e-7,
+  "totalWallSeconds": 26.317034
+}
