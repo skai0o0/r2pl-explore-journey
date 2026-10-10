@@ -149,13 +149,11 @@ function updateTile(): void {
 
   // Check public fixtures
   if (selected.x === 215 && selected.z === 235) {
-    ui.knowledge.textContent =
-      "Dawn Headquarters · Public sanctuary fixture";
+    ui.knowledge.textContent = "Dawn Headquarters · Public sanctuary fixture";
     ui.badge.textContent = "DAWN HQ";
     ui.badge.className = "badge-tag fixture";
   } else if (selected.x === 785 && selected.z === 765) {
-    ui.knowledge.textContent =
-      "Dusk Headquarters · Public sanctuary fixture";
+    ui.knowledge.textContent = "Dusk Headquarters · Public sanctuary fixture";
     ui.badge.textContent = "DUSK HQ";
     ui.badge.className = "badge-tag fixture";
   } else if (selected.x === 510 && selected.z === 485) {
@@ -172,8 +170,7 @@ function updateTile(): void {
     const isDiscovered = replica.isDiscovered(selected.chunk, selected.local);
     const isOwned =
       isDiscovered &&
-      (replica.maskAt(selected.chunk, selected.local) &
-        (1 << player.slot)) !==
+      (replica.maskAt(selected.chunk, selected.local) & (1 << player.slot)) !==
         0;
 
     if (isOwned) {
@@ -185,7 +182,7 @@ function updateTile(): void {
       ui.badge.className = "badge-tag owned";
       ui.explore.disabled = true;
       ui.explore.innerHTML =
-        '<span>✓</span> Already Explored <small>0 credits</small>';
+        "<span>✓</span> Already Explored <small>0 credits</small>";
       return;
     }
 
@@ -196,19 +193,18 @@ function updateTile(): void {
       ui.badge.className = "badge-tag scouted";
       ui.explore.disabled = !room;
       ui.explore.innerHTML =
-        '<span>✦</span> Establish Knowledge <small>1 test credit</small>';
+        "<span>✦</span> Establish Knowledge <small>1 test credit</small>";
       return;
     }
 
-    ui.knowledge.textContent =
-      "Unexplored territory · Shrouded in Fog of War";
+    ui.knowledge.textContent = "Unexplored territory · Shrouded in Fog of War";
     ui.badge.textContent = "FOGGED";
     ui.badge.className = "badge-tag fogged";
   }
 
   ui.explore.disabled = !room;
   ui.explore.innerHTML =
-    '<span>✦</span> Explore tile <small>1 test credit</small>';
+    "<span>✦</span> Explore tile <small>1 test credit</small>";
 }
 
 function updateHover(hovered?: PickedTile): void {
@@ -310,7 +306,7 @@ function handleFrame(raw: Uint8Array): void {
         const action = pending.get(keyHex(ack.key));
         if (!action) break;
         pending.delete(action.key);
-        world.setPending(undefined);
+        world.setPending(Array.from(pending.values()).at(-1)?.tile);
         updatePending();
         const place = `${action.tile.x}, ${action.tile.z}`;
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
@@ -320,8 +316,9 @@ function handleFrame(raw: Uint8Array): void {
           activity(`${place} already explored · no credit spent`, "normal");
         } else {
           const reasonCode =
-            Object.entries(REASON).find(([, value]) => value === ack.reason)?.[0] ??
-            String(ack.reason);
+            Object.entries(REASON).find(
+              ([, value]) => value === ack.reason,
+            )?.[0] ?? String(ack.reason);
           activity(`Exploration failed (${reasonCode})`, "error");
           world.playReject(action.tile.x, action.tile.z);
         }

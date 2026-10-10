@@ -313,7 +313,9 @@ button:disabled {
   min-height: 38px;
   min-width: 33px;
   font-size: 19px;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .map-tools button:hover {
@@ -430,7 +432,9 @@ button:disabled {
   font-weight: 800;
   font-size: 13px;
   box-shadow: 0 6px 20px rgba(69, 208, 151, 0.2);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .tile-panel button:active:not(:disabled) {
@@ -730,6 +734,14 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.tile-hover[hidden],
+.tile-selection[hidden],
+.tile-pending[hidden],
+.tile-reveal[hidden],
+.tile-reject[hidden] {
+  display: none;
 }
 
 .tile-reject.animating .reject-ring {

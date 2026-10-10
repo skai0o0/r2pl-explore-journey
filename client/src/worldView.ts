@@ -123,7 +123,7 @@ export class WorldView {
   readonly #rejectElement: HTMLElement;
   readonly #onPick: (tile: PickedTile) => void;
   readonly #onViewChange: () => void;
-  readonly #onHover?: (tile: PickedTile | undefined) => void;
+  readonly #onHover: ((tile: PickedTile | undefined) => void) | undefined;
 
   #schoolSlot = 0;
   #span = 275;
@@ -228,7 +228,7 @@ export class WorldView {
     this.#revealElement = document.createElement("div");
     this.#revealElement.className = "tile-reveal";
     this.#revealElement.innerHTML =
-      '<span class="reveal-ring"></span><span class="reveal-spark">✦</span><span class="reveal-tag">+1 KNOWLEDGE</span>';
+      '<span class="reveal-ring"></span><span class="reveal-spark">✦</span><span class="reveal-tag">KNOWLEDGE REVEALED</span>';
     this.#revealElement.hidden = true;
     host.append(this.#revealElement);
 
