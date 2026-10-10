@@ -129,6 +129,8 @@ function updateTile(): void {
     ui.badge.textContent = "IDLE";
     ui.badge.className = "badge-tag";
     ui.explore.disabled = true;
+    ui.explore.innerHTML =
+      "<span>✦</span> Explore tile <small>1 test credit</small>";
     return;
   }
 
@@ -381,10 +383,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
   world.setSchool(player.slot);
-  ui.tile.textContent = "— / —";
-  ui.knowledge.textContent = "Select a tile on the map";
-  ui.badge.textContent = "IDLE";
-  ui.badge.className = "badge-tag";
+  updateTile();
   status("Connecting…", false);
   void refreshProfile();
   try {

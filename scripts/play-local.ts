@@ -5,6 +5,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { createDurableSyntheticServer } from "../server/realtime/durableBootstrap.ts";
+import { evaluateDevExplore } from "../shared/gameplay/devRules.ts";
 import { SchoolRegistry } from "../shared/world/registry.ts";
 
 const databaseUrl = process.env.R2PL_TEST_DATABASE_URL;
@@ -95,6 +96,9 @@ const realtime = await createDurableSyntheticServer(
   registry,
   fixtures,
   1n,
+  {},
+  undefined,
+  evaluateDevExplore,
 );
 await realtime.server.listen(2567, "127.0.0.1");
 

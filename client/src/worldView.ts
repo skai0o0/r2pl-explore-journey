@@ -254,6 +254,9 @@ export class WorldView {
 
   setSchool(slot: number): void {
     this.#schoolSlot = slot;
+    this.#selected = undefined;
+    this.#hovered = undefined;
+    this.#pendingTile = undefined;
     for (const layer of this.#chunkLayers.values()) {
       this.#scene.remove(layer.mesh);
       layer.texture.dispose();
