@@ -1,0 +1,280 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "postgres": "16.15",
+    "fsync": "on",
+    "fullPageWrites": "on",
+    "synchronousCommit": "on (forced per mutation transaction)",
+    "platform": "win32",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "generator": "same host/process as DB client; disposable test database",
+    "databaseProcessSampling": "Windows Get-Process postgres CPU/RSS/private bytes before and after each phase; RSS sums may double-count shared pages"
+  },
+  "results": [
+    {
+      "strategy": "full_chunk",
+      "mode": "balanced",
+      "count": 1000,
+      "concurrency": 32,
+      "seconds": 0.8498867999999999,
+      "attemptedActionsPerSecond": 1176.6272873046153,
+      "appliedActionsPerSecond": 1176.6272873046153,
+      "appliedOperations": 1000,
+      "failedOperations": 0,
+      "failureExamples": [],
+      "retryAttempts": 0,
+      "transactionMs": {
+        "p50": 19.951,
+        "p95": 33.002,
+        "p99": 98.967
+      },
+      "headLockWaitMs": {
+        "p50": 2.998,
+        "p95": 12.394,
+        "p99": 16.618
+      },
+      "worldReadMs": {
+        "p50": 2.311,
+        "p95": 4.708,
+        "p99": 8.323
+      },
+      "worldWriteMs": {
+        "p50": 1.828,
+        "p95": 3.81,
+        "p99": 6.41
+      },
+      "walBytes": 3085672,
+      "walBytesPerAction": 3085.672,
+      "checkpointBytesBeforeMaterialize": 139264,
+      "mutationRows": 0,
+      "ledgerRows": 1000,
+      "outboxRows": 1000,
+      "materializeMs": 0.0003000000001520675,
+      "checkpointWalBytes": 0,
+      "recoveryReplayMs": 7.335299999999734,
+      "recoveryCheckpointMs": 7.430499999999483,
+      "databaseProcess": {
+        "before": {
+          "count": 38,
+          "cpuSeconds": 1.484375,
+          "rssBytes": 596340736,
+          "privateBytes": 164282368
+        },
+        "afterActions": {
+          "count": 38,
+          "cpuSeconds": 4.421875,
+          "rssBytes": 784031744,
+          "privateBytes": 200818688
+        },
+        "afterCheckpoint": {
+          "count": 38,
+          "cpuSeconds": 4.421875,
+          "rssBytes": 785272832,
+          "privateBytes": 200855552
+        },
+        "actionCpuSeconds": 2.9375,
+        "checkpointCpuSeconds": 0
+      },
+      "deadlocks": 0
+    },
+    {
+      "strategy": "full_chunk",
+      "mode": "hotspot",
+      "count": 1000,
+      "concurrency": 32,
+      "seconds": 2.377246600000001,
+      "attemptedActionsPerSecond": 420.6547187826452,
+      "appliedActionsPerSecond": 420.6547187826452,
+      "appliedOperations": 1000,
+      "failedOperations": 0,
+      "failureExamples": [],
+      "retryAttempts": 0,
+      "transactionMs": {
+        "p50": 42.593,
+        "p95": 76.138,
+        "p99": 87.261
+      },
+      "headLockWaitMs": {
+        "p50": 32.559,
+        "p95": 65.9,
+        "p99": 75.827
+      },
+      "worldReadMs": {
+        "p50": 0.551,
+        "p95": 0.883,
+        "p99": 1.276
+      },
+      "worldWriteMs": {
+        "p50": 0.463,
+        "p95": 0.715,
+        "p99": 0.913
+      },
+      "walBytes": 3048664,
+      "walBytesPerAction": 3048.664,
+      "checkpointBytesBeforeMaterialize": 8704,
+      "mutationRows": 0,
+      "ledgerRows": 1000,
+      "outboxRows": 1000,
+      "materializeMs": 0.0007000000005064066,
+      "checkpointWalBytes": 0,
+      "recoveryReplayMs": 1.437900000000809,
+      "recoveryCheckpointMs": 1.6841999999996915,
+      "databaseProcess": {
+        "before": {
+          "count": 38,
+          "cpuSeconds": 4.46875,
+          "rssBytes": 786735104,
+          "privateBytes": 201564160
+        },
+        "afterActions": {
+          "count": 38,
+          "cpuSeconds": 7.328125,
+          "rssBytes": 814567424,
+          "privateBytes": 201633792
+        },
+        "afterCheckpoint": {
+          "count": 38,
+          "cpuSeconds": 7.34375,
+          "rssBytes": 815943680,
+          "privateBytes": 201633792
+        },
+        "actionCpuSeconds": 2.859375,
+        "checkpointCpuSeconds": 0.015625
+      },
+      "deadlocks": 0
+    },
+    {
+      "strategy": "mutation_log",
+      "mode": "balanced",
+      "count": 1000,
+      "concurrency": 32,
+      "seconds": 1.5428796999999994,
+      "attemptedActionsPerSecond": 648.1386721207107,
+      "appliedActionsPerSecond": 648.1386721207107,
+      "appliedOperations": 1000,
+      "failedOperations": 0,
+      "failureExamples": [],
+      "retryAttempts": 0,
+      "transactionMs": {
+        "p50": 40.707,
+        "p95": 53.193,
+        "p99": 69.946
+      },
+      "headLockWaitMs": {
+        "p50": 2.858,
+        "p95": 20.943,
+        "p99": 24.838
+      },
+      "worldReadMs": {
+        "p50": 6.294,
+        "p95": 9.328,
+        "p99": 16.894
+      },
+      "worldWriteMs": {
+        "p50": 2.429,
+        "p95": 4.429,
+        "p99": 7.657
+      },
+      "walBytes": 2710224,
+      "walBytesPerAction": 2710.224,
+      "checkpointBytesBeforeMaterialize": 139264,
+      "mutationRows": 1000,
+      "ledgerRows": 1000,
+      "outboxRows": 1000,
+      "materializeMs": 44.994200000001,
+      "checkpointWalBytes": 19704,
+      "recoveryReplayMs": 19.497800000001007,
+      "recoveryCheckpointMs": 13.176899999998568,
+      "databaseProcess": {
+        "before": {
+          "count": 38,
+          "cpuSeconds": 7.4375,
+          "rssBytes": 817152000,
+          "privateBytes": 202309632
+        },
+        "afterActions": {
+          "count": 38,
+          "cpuSeconds": 11.140625,
+          "rssBytes": 872071168,
+          "privateBytes": 203911168
+        },
+        "afterCheckpoint": {
+          "count": 38,
+          "cpuSeconds": 11.1875,
+          "rssBytes": 872939520,
+          "privateBytes": 203911168
+        },
+        "actionCpuSeconds": 3.703125,
+        "checkpointCpuSeconds": 0.046875
+      },
+      "deadlocks": 0
+    },
+    {
+      "strategy": "mutation_log",
+      "mode": "hotspot",
+      "count": 1000,
+      "concurrency": 32,
+      "seconds": 5.4631411000000005,
+      "attemptedActionsPerSecond": 183.04487870540262,
+      "appliedActionsPerSecond": 183.04487870540262,
+      "appliedOperations": 1000,
+      "failedOperations": 0,
+      "failureExamples": [],
+      "retryAttempts": 0,
+      "transactionMs": {
+        "p50": 93.205,
+        "p95": 195.701,
+        "p99": 221.3
+      },
+      "headLockWaitMs": {
+        "p50": 70.213,
+        "p95": 168.168,
+        "p99": 194.972
+      },
+      "worldReadMs": {
+        "p50": 2.147,
+        "p95": 3.381,
+        "p99": 3.982
+      },
+      "worldWriteMs": {
+        "p50": 0.593,
+        "p95": 1.011,
+        "p99": 1.377
+      },
+      "walBytes": 2694152,
+      "walBytesPerAction": 2694.152,
+      "checkpointBytesBeforeMaterialize": 8704,
+      "mutationRows": 1000,
+      "ledgerRows": 1000,
+      "outboxRows": 1000,
+      "materializeMs": 4.886800000000221,
+      "checkpointWalBytes": 5608,
+      "recoveryReplayMs": 3.0608999999967637,
+      "recoveryCheckpointMs": 1.9102999999995518,
+      "databaseProcess": {
+        "before": {
+          "count": 38,
+          "cpuSeconds": 11.296875,
+          "rssBytes": 873283584,
+          "privateBytes": 203980800
+        },
+        "afterActions": {
+          "count": 38,
+          "cpuSeconds": 16.3125,
+          "rssBytes": 907894784,
+          "privateBytes": 203980800
+        },
+        "afterCheckpoint": {
+          "count": 38,
+          "cpuSeconds": 16.328125,
+          "rssBytes": 909402112,
+          "privateBytes": 203980800
+        },
+        "actionCpuSeconds": 5.015625,
+        "checkpointCpuSeconds": 0.015625
+      },
+      "deadlocks": 0
+    }
+  ]
+}

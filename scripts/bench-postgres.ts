@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
@@ -13,6 +14,11 @@ import { tileIndex } from "../shared/world/coordinates.ts";
 
 const url = process.env.R2PL_TEST_DATABASE_URL;
 if (!url) throw new Error("R2PL_TEST_DATABASE_URL is required");
+const tag =
+  process.argv.find((arg) => arg.startsWith("--tag="))?.split("=")[1] ??
+  "local";
+if (!/^[a-z0-9_-]{1,40}$/i.test(tag)) throw new Error("Invalid benchmark tag");
+const reverse = process.argv.includes("--reverse");
 const count = Number(
   process.argv.find((arg) => arg.startsWith("--count="))?.split("=")[1] ?? 200,
 );
@@ -38,6 +44,29 @@ const pool = new Pool({
 const percentile = (values: number[], part: number) => {
   const sorted = [...values].sort((a, b) => a - b);
   return Number((sorted[Math.ceil(sorted.length * part) - 1] ?? 0).toFixed(3));
+};
+interface DatabaseProcessSample {
+  count: number;
+  cpuSeconds: number;
+  rssBytes: number;
+  privateBytes: number;
+}
+const sampleDatabaseProcesses = (): DatabaseProcessSample | null => {
+  if (process.platform !== "win32") return null;
+  const command =
+    "$p=Get-Process -Name postgres -ErrorAction SilentlyContinue; [pscustomobject]@{count=@($p).Count;cpuSeconds=($p | Measure-Object -Property CPU -Sum).Sum;rssBytes=($p | Measure-Object -Property WorkingSet64 -Sum).Sum;privateBytes=($p | Measure-Object -Property PrivateMemorySize64 -Sum).Sum} | ConvertTo-Json -Compress";
+  const raw = execFileSync(
+    "powershell.exe",
+    ["-NoProfile", "-Command", command],
+    { encoding: "utf8" },
+  );
+  const sample = JSON.parse(raw) as DatabaseProcessSample;
+  return {
+    count: Number(sample.count),
+    cpuSeconds: Number(sample.cpuSeconds ?? 0),
+    rssBytes: Number(sample.rssBytes ?? 0),
+    privateBytes: Number(sample.privateBytes ?? 0),
+  };
 };
 const actionKey = (n: number) => {
   const bytes = new Uint8Array(16);
@@ -94,18 +123,30 @@ const cleanup = async (campaignId: string) => {
 
 const results: unknown[] = [];
 try {
-  const version = (await pool.query<{ version: string }>("SHOW server_version"))
-    .rows[0]?.version;
+  const version = (
+    await pool.query<{ server_version: string }>("SHOW server_version")
+  ).rows[0]?.server_version;
   const fsync = (await pool.query<{ fsync: string }>("SHOW fsync")).rows[0]
     ?.fsync;
   const fullPageWrites = (
     await pool.query<{ full_page_writes: string }>("SHOW full_page_writes")
   ).rows[0]?.full_page_writes;
-  for (const strategy of [
-    "full_chunk",
-    "mutation_log",
-  ] as const satisfies readonly WriteStrategy[]) {
-    for (const mode of ["balanced", "hotspot"] as const) {
+  const warmClients = await Promise.all(
+    Array.from({ length: concurrency }, () => pool.connect()),
+  );
+  try {
+    await Promise.all(warmClients.map((client) => client.query("SELECT 1")));
+  } finally {
+    for (const client of warmClients) client.release();
+  }
+  const strategies: WriteStrategy[] = reverse
+    ? ["mutation_log", "full_chunk"]
+    : ["full_chunk", "mutation_log"];
+  const modes = reverse
+    ? (["hotspot", "balanced"] as const)
+    : (["balanced", "hotspot"] as const);
+  for (const strategy of strategies) {
+    for (const mode of modes) {
       const campaignId = randomUUID();
       const actors = Array.from({ length: concurrency }, () => randomUUID());
       try {
@@ -122,6 +163,7 @@ try {
             "INSERT INTO wallet_accounts(campaign_id,actor_id,resource,opening_balance,balance) VALUES($1,$2,'fixture-credit',$3,$3)",
             [campaignId, actor, count],
           );
+        const beforeProcesses = sampleDatabaseProcesses();
         const beforeWal = await wal();
         const beforeDeadlocks = await deadlocks();
         const service = new M3TestMutationService(pool);
@@ -129,9 +171,11 @@ try {
           lockWaits: number[] = [],
           reads: number[] = [],
           writes: number[] = [];
+        const failureExamples: string[] = [];
+        let failedOperations = 0;
         const started = performance.now();
         for (let start = 0; start < count; start += concurrency) {
-          const batch = await Promise.all(
+          const batch = await Promise.allSettled(
             Array.from(
               { length: Math.min(concurrency, count - start) },
               async (_, i) => {
@@ -153,15 +197,29 @@ try {
             ),
           );
           for (const item of batch) {
-            if (item.result.status !== "test_applied")
-              throw new Error("Benchmark mutation was not applied");
-            latencies.push(item.metrics.transactionMs);
-            lockWaits.push(item.metrics.headLockWaitMs);
-            reads.push(item.metrics.worldReadMs);
-            writes.push(item.metrics.worldWriteMs);
+            if (
+              item.status === "rejected" ||
+              item.value.result.status !== "test_applied"
+            ) {
+              failedOperations++;
+              if (failureExamples.length < 5)
+                failureExamples.push(
+                  item.status === "rejected"
+                    ? item.reason instanceof Error
+                      ? item.reason.message.slice(0, 200)
+                      : String(item.reason).slice(0, 200)
+                    : item.value.result.status,
+                );
+              continue;
+            }
+            latencies.push(item.value.metrics.transactionMs);
+            lockWaits.push(item.value.metrics.headLockWaitMs);
+            reads.push(item.value.metrics.worldReadMs);
+            writes.push(item.value.metrics.worldWriteMs);
           }
         }
         const elapsed = performance.now() - started;
+        const afterActionProcesses = sampleDatabaseProcesses();
         const afterWal = await wal();
         const walBytes =
           beforeWal && afterWal
@@ -210,11 +268,14 @@ try {
                 (_, sector) => Math.floor(sector / 4) * 64 + (sector % 4) * 4,
               );
         const recoveryReplayMs = await recoveryRead(campaignId, ids);
+        const beforeCheckpointWal = await wal();
         const materializeStarted = performance.now();
         if (strategy === "mutation_log") {
           for (const id of ids) await materializeChunk(pool, campaignId, id);
         }
         const materializeMs = performance.now() - materializeStarted;
+        const afterCheckpointWal = await wal();
+        const afterCheckpointProcesses = sampleDatabaseProcesses();
         const recoveryCheckpointMs = await recoveryRead(campaignId, ids);
         results.push({
           strategy,
@@ -222,7 +283,12 @@ try {
           count,
           concurrency,
           seconds: elapsed / 1000,
-          actionsPerSecond: count / (elapsed / 1000),
+          attemptedActionsPerSecond: count / (elapsed / 1000),
+          appliedActionsPerSecond: latencies.length / (elapsed / 1000),
+          appliedOperations: latencies.length,
+          failedOperations,
+          failureExamples,
+          retryAttempts: 0,
           transactionMs: {
             p50: percentile(latencies, 0.5),
             p95: percentile(latencies, 0.95),
@@ -244,7 +310,10 @@ try {
             p99: percentile(writes, 0.99),
           },
           walBytes,
-          walBytesPerAction: walBytes === null ? null : walBytes / count,
+          walBytesPerAction:
+            walBytes === null || latencies.length === 0
+              ? null
+              : walBytes / latencies.length,
           checkpointBytesBeforeMaterialize: Number(
             checkpoint.rows[0]?.bytes ?? 0,
           ),
@@ -252,8 +321,33 @@ try {
           ledgerRows,
           outboxRows,
           materializeMs,
+          checkpointWalBytes:
+            beforeCheckpointWal && afterCheckpointWal
+              ? Number(
+                  (
+                    await pool.query<{ bytes: string }>(
+                      "SELECT pg_wal_lsn_diff($1::pg_lsn,$2::pg_lsn)::text AS bytes",
+                      [afterCheckpointWal, beforeCheckpointWal],
+                    )
+                  ).rows[0]?.bytes,
+                )
+              : null,
           recoveryReplayMs,
           recoveryCheckpointMs,
+          databaseProcess: {
+            before: beforeProcesses,
+            afterActions: afterActionProcesses,
+            afterCheckpoint: afterCheckpointProcesses,
+            actionCpuSeconds:
+              beforeProcesses && afterActionProcesses
+                ? afterActionProcesses.cpuSeconds - beforeProcesses.cpuSeconds
+                : null,
+            checkpointCpuSeconds:
+              afterActionProcesses && afterCheckpointProcesses
+                ? afterCheckpointProcesses.cpuSeconds -
+                  afterActionProcesses.cpuSeconds
+                : null,
+          },
           deadlocks: (await deadlocks()) - beforeDeadlocks,
         });
       } finally {
@@ -272,12 +366,15 @@ try {
       cpu: cpus()[0]?.model,
       logicalCpus: cpus().length,
       generator: "same host/process as DB client; disposable test database",
+      reversedOrder: reverse,
+      databaseProcessSampling:
+        "Windows Get-Process postgres CPU/RSS/private bytes before and after each phase; RSS sums may double-count shared pages",
     },
     results,
   };
   await mkdir("docs/benchmarks", { recursive: true });
   await writeFile(
-    "docs/benchmarks/M3_postgres.json",
+    `docs/benchmarks/M3_postgres_${tag}_${count}c${concurrency}.json`,
     `${JSON.stringify(report, null, 2)}\n`,
   );
   console.log(JSON.stringify(report, null, 2));

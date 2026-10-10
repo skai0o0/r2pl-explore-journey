@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Pool } from "pg";
@@ -196,15 +197,32 @@ test("PostgreSQL M3 atomicity, retries, materialization and restart", {
       const relay = new OutboxRelay(pool);
       const firstClaim = (await relay.claim(campaignId, 1))[0]!;
       assert.equal(firstClaim.attempts, 1);
+      const deliveredIds = [firstClaim.id]; // publication occurred, ACK to relay was lost
       await relay.release(firstClaim.id, firstClaim.leaseToken);
       const secondClaim = (await relay.claim(campaignId, 1))[0]!;
       assert.equal(secondClaim.id, firstClaim.id);
       assert.equal(secondClaim.attempts, 2);
+      deliveredIds.push(secondClaim.id);
+      assert.deepEqual(deliveredIds, [firstClaim.id, firstClaim.id]);
+      assert.deepEqual(secondClaim.payload, firstClaim.payload);
       await assert.rejects(
         relay.markDelivered(firstClaim.id, firstClaim.leaseToken),
         /Outbox lease/,
       );
       await relay.markDelivered(secondClaim.id, secondClaim.leaseToken);
+      const expiringClaim = (await relay.claim(campaignId, 1))[0]!;
+      await pool.query(
+        "UPDATE outbox_events SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1",
+        [expiringClaim.id],
+      );
+      const reclaimed = (await relay.claim(campaignId, 1))[0]!;
+      assert.equal(reclaimed.id, expiringClaim.id);
+      assert.equal(reclaimed.attempts, expiringClaim.attempts + 1);
+      await assert.rejects(
+        relay.markDelivered(expiringClaim.id, expiringClaim.leaseToken),
+        /Outbox lease/,
+      );
+      await relay.markDelivered(reclaimed.id, reclaimed.leaseToken);
       const client = await pool.connect();
       try {
         const chunk = await readAuthoritativeChunk(client, campaignId, 0, 0);
@@ -286,6 +304,105 @@ test("PostgreSQL M3 atomicity, retries, materialization and restart", {
       } finally {
         client2.release();
       }
+      if (strategy === "mutation_log") {
+        const blocker = await pool.connect();
+        await blocker.query("BEGIN");
+        try {
+          await blocker.query(
+            "SELECT revision FROM world_chunk_heads WHERE campaign_id=$1 AND chunk_id=0 FOR UPDATE",
+            [campaignId],
+          );
+          const concurrent = Promise.all([
+            materializeChunk(pool, campaignId, 0),
+            ...Array.from({ length: 10 }, (_, i) =>
+              service.apply({
+                ...first,
+                key: key(600 + i),
+                tileIndex: tileIndex(50 + i, 20),
+                cost: 1n,
+              }),
+            ),
+          ]);
+          await delay(50);
+          await blocker.query("COMMIT");
+          const [checkpointRace, ...writes] = await concurrent;
+          assert(checkpointRace && "to" in checkpointRace);
+          assert(checkpointRace.to >= 32n && checkpointRace.to <= 42n);
+          assert(
+            writes.every(
+              (write) =>
+                "result" in write && write.result.status === "test_applied",
+            ),
+          );
+        } catch (error) {
+          await blocker.query("ROLLBACK");
+          throw error;
+        } finally {
+          blocker.release();
+        }
+      }
+      const beforeCheckpoint = await pool.connect();
+      let expectedMask: Buffer;
+      let expectedFog: Buffer;
+      let expectedRevision: bigint;
+      try {
+        const recovered = await readAuthoritativeChunk(
+          beforeCheckpoint,
+          campaignId,
+          0,
+          0,
+        );
+        expectedMask = recovered.mask;
+        expectedFog = recovered.fog;
+        expectedRevision = recovered.revision;
+      } finally {
+        beforeCheckpoint.release();
+      }
+      assert.equal(expectedRevision, strategy === "mutation_log" ? 42n : 32n);
+      if (strategy === "mutation_log") {
+        const done = await materializeChunk(pool, campaignId, 0);
+        assert.equal(done.to, 42n);
+        const afterCheckpoint = await pool.connect();
+        try {
+          const recovered = await readAuthoritativeChunk(
+            afterCheckpoint,
+            campaignId,
+            0,
+            0,
+          );
+          assert(recovered.mask.equals(expectedMask));
+          assert(recovered.fog.equals(expectedFog));
+        } finally {
+          afterCheckpoint.release();
+        }
+      }
+      const childRecovery = await execFileAsync(
+        process.execPath,
+        [
+          "--experimental-strip-types",
+          fileURLToPath(
+            new URL("../scripts/m3-recover-child.ts", import.meta.url),
+          ),
+          campaignId,
+          "0",
+          "0",
+        ],
+        { env: process.env },
+      );
+      const restarted = JSON.parse(childRecovery.stdout) as {
+        revision: string;
+        maskSha256: string;
+        fogSha256: string;
+      };
+      assert.equal(restarted.revision, expectedRevision.toString());
+      assert.equal(
+        restarted.maskSha256,
+        createHash("sha256").update(expectedMask).digest("hex"),
+      );
+      assert.equal(
+        restarted.fogSha256,
+        createHash("sha256").update(expectedFog).digest("hex"),
+      );
     }
   } finally {
     for (const campaignId of campaigns) {

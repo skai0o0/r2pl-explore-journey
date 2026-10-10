@@ -1,40 +1,69 @@
-# M3 Durable Persistence & Economy — validation record
+# M3 Durable Persistence & Economy — PostgreSQL validation
 
-**Status on 2026-10-10: implementation prepared; M3 acceptance gate open.** A disposable PostgreSQL connection has been requested from the owner and has not yet been configured. The PostgreSQL integration test and ADR-011 benchmarks have therefore not run. No production gameplay command is enabled, and no durable-success capacity claim is made.
+**Status, 2026-10-10:** M3's synthetic durability contract passed local PostgreSQL 16 validation. ADR-011 selects full-chunk transactional writes for the M3 baseline, subject to owner review. Production gameplay mutations remain disabled; M4 is unauthorized.
 
-## Implemented scope
+## Environment and isolation
 
-- `database/migrations/001_m3_foundation.sql` creates a private `r2pl_v2` schema with campaigns, immutable school slots, nonnegative fixture wallets, command idempotency records, chunk heads/checkpoints, per-school fog, durable mutation records, a signed ledger and outbox. Binary mask/fog lengths and CRC32 values are constrained or checked. No production school roster or gameplay rule is seeded.
-- `scripts/migrate-m3.ts` applies the migration under a transaction and advisory lock using `R2PL_TEST_DATABASE_URL`, and checks its SHA-256 on repeat runs. The integration test invokes this exact command. It never auto-connects to the V1 project.
-- `M3TestMutationService` performs a fixture world effect, fixture-credit debit, ledger entry, idempotency result and outbox event in one PostgreSQL transaction with `synchronous_commit=on`. It returns a committed success only after `COMMIT`. The same campaign/actor/key and payload replays its saved result; a changed payload conflicts. It has explicit fault hooks for precommit rollback and postcommit lost-ACK retry.
-- Both ADR-011 candidates are implemented behind the same fixture contract: a full 8192-byte chunk plus 512-byte fog write, and an append-only ordered mutation with checkpoint materialization. `readAuthoritativeChunk` replays committed mutations from a verified checkpoint and rejects gaps. `materializeChunk` verifies CRC32 and advances mask/fog checkpoint data in one transaction.
-- The outbox relay claims pending rows with a finite tokened lease and `SKIP LOCKED`. A stale worker cannot release or mark a newer claim. Delivery uses a stable event ID and remains at least once; consumers must deduplicate. No external publisher is attached.
-- CI is prepared with a disposable PostgreSQL 16 service on Ubuntu. The Git remote remains unconfigured pending owner details.
+Docker, WSL and an installed PostgreSQL server were unavailable. PostgreSQL **16.15** Windows binaries were unpacked from EDB's archive into the Git-ignored .m3-local-db/ directory. The test cluster used UTF-8, data checksums, fsync=on, full_page_writes=on, and synchronous_commit=on; it bound only to 127.0.0.1:55432 and was not registered as a Windows service. R2PL_TEST_DATABASE_URL targeted its empty r2pl_test database. The V1 Supabase project was never connected or modified.
 
-## Validation status
+Client, load generator and database shared one Windows desktop: Intel i5-13400F, 16 logical CPUs, Node 24.19.0. These short synthetic fixture runs measure this transaction implementation and database, **not** 1,000-client network capacity or a production hardware limit. The database was otherwise isolated; WAL byte differences are still database-wide counters and may include background activity.
 
-| Gate | Current evidence | State |
-|---|---|---|
-| TypeScript strict compilation | `npm run typecheck` passed locally | Pass |
-| Lint and format | `npm run lint` passed locally | Pass |
-| M1/M2/M2.5 regression | `npm test`: 19 passed, 0 failed, PostgreSQL M3 test skipped without `R2PL_TEST_DATABASE_URL` | Pass for non-DB scope |
-| PostgreSQL migration and integration | Migration runner and test written; no disposable DB connection yet | **Pending** |
-| Precommit rollback and postcommit retry after process restart | Integration assertions written, including concurrent same-key retry | **Pending real DB run** |
-| Wallet/ledger/world/outbox reconciliation | Integration assertions written for both strategies, hot-chunk concurrency, cross-school fog | **Pending real DB run** |
-| ADR-011 WAL, chunk lock, transaction, materialization and recovery comparison | `scripts/bench-postgres.ts` records balanced/hotspot 200-action stages, with optional higher count | **Pending real DB run and decision** |
-| Source/dependency review | 25 first-party source files, 98,579 bytes; 6 test files, 42,302 bytes; 9 scripts, 42,722 bytes. Client bundle remains 535,489 bytes raw / 133,880 bytes gzip. `pg` and `@types/pg` are the only M3 packages added | Pass, repeat before acceptance |
+## Implementation and correctness
 
-The fixture benchmark uses one client host/process and one database connection pool, with 16 concurrent commands by default. Its results will describe transaction behavior in that environment, not 1,000-client end-to-end capacity. WAL counters are database-wide and must be labeled accordingly if the disposable database hosts other traffic.
+The private r2pl_v2 migration creates versioned campaigns, immutable 16-slot school assignments, fixture wallets and ledger, idempotency records with payload hashes, chunk heads and checksummed mask/fog checkpoints, ordered mutation records and a token-leased outbox. The migration runner executes in one transaction under an advisory lock and checks its SHA-256 on repeat runs. No production roster, cost, reward or visibility rule is seeded.
 
-## ADR-011 decision gate
+M3TestMutationService performs the fixture world effect, wallet debit, ledger entry, saved command result and outbox event in one transaction with synchronous_commit=on. A committed-success result is returned only after COMMIT. Identical retries return the saved result; a changed payload with the same key conflicts. The M2 production mutation path remains fail-closed and is not wired to this fixture service.
 
-ADR-011 is **not selected**. Compare both strategies on the same database and fixture workload using transaction p50/p95/p99, chunk-head lock wait, read/write phases, WAL bytes per action, checkpoint bytes, log growth, materialization duration, recovery read time and deadlocks. Hotspot serial contention is expected for either strategy because both lock a chunk head. The choice must preserve atomic wallet/world/idempotency/outbox commit and exact recovery after restart; a smaller WAL result alone is insufficient.
+The full suite passed: **20 tests, 0 failures, 0 skips**. The PostgreSQL integration case ran in about 1.9 seconds. It covered:
 
-## Known issues and remaining work
+| Required invariant | Observed result |
+|---|---|
+| Migration initialization and repeatability | First and second invocation succeeded; migration checksum matched. |
+| Atomic effect, debit, ledger, result and outbox | Reconciliation and row counts matched for both write strategies. |
+| Concurrent same wallet/tile/chunk | Same-tile calls returned no-change after the first effect; 30 distinct same-chunk effects serialized without loss. |
+| Idempotent retries and conflicting payload | 12 concurrent repeats returned the original revision/balance; changed payload raised IdempotencyConflict. |
+| Precommit failure and lost postcommit ACK | Precommit fault rolled back wallet and claim; postcommit fault was replayed from a new Node process with the same result. |
+| Exact world recovery and school fog | A new Node process reconstructed the same revision and SHA-256 mask/fog bytes; slot 15 could not see slot 0's unrelated discoveries. |
+| Concurrent checkpoint and recovery | A held chunk lock released materialization and ten competing writes; final revision 42 and complete mask/fog survived a further checkpoint and fresh-process read. |
+| Outbox lease and duplicate publication | Release and expiry both allowed reclaim with a new token; stale tokens could not mark delivery; a simulated lost relay ACK produced the same event ID/payload twice for consumer deduplication. |
 
-- Obtain a disposable PostgreSQL connection, run migration, integration tests and measured benchmarks, then update this report and ADR-011 with a benchmark-supported decision. Do not use the V1 production Supabase project.
-- Run at least one larger contention stage if the 200-action baseline passes; inspect lock timeout, pool saturation and checkpoint lag. Report the database environment and any benchmark failures.
-- M3's transaction is an explicit synthetic fixture. Approved gameplay costs, C-08 production visibility, production authentication and rules remain unresolved, so no production action is wired to it.
-- The separate M2.5 report records a hotspot burst failure and leaves higher-capacity claims open. M4 requires owner review of both M3 durable correctness and that realtime explanation.
+The outbox is intentionally at least once. It has no external publisher in M3; downstream consumers must deduplicate its stable event ID.
 
-**Readiness:** M3 is not ready for acceptance and M4 is not authorized.
+## ADR-011 benchmark
+
+Both candidates ran against the same PostgreSQL instance and the same explicit fixture cost, tile sequence, school and wallet logic. Balanced traffic covered 16 sectors; hotspot traffic targeted one chunk. The benchmark prewarmed its connection pool. It ran **200 actions at 16 concurrent requests**, then **1,000 actions at 32 and 64 concurrent requests**. Each 1,000-action stage was repeated in reversed strategy/workload order. All 20 measured cases applied every requested operation, with **0 failed operations, 0 retries and 0 new deadlocks**.
+
+The table gives ranges across the two independent 1,000-action orders. Transaction p95 and head-lock p95 are in milliseconds; WAL is approximate bytes per applied action. The 200-action baseline is in the JSON artifact.
+
+| Concurrency / workload | Strategy | Applied actions/s | Transaction p95 | Head-lock p95 | WAL/action |
+|---|---|---:|---:|---:|---:|
+| 32 / balanced | Full chunk | 683–1,177 | 33–54 | 12–19 | 3,061–3,086 |
+| 32 / balanced | Mutation log | 599–648 | 53–83 | 21–23 | 2,685–2,710 |
+| 32 / hotspot | Full chunk | 268–421 | 76–121 | 66–98 | 3,049–3,054 |
+| 32 / hotspot | Mutation log | 183–221 | 158–196 | 133–168 | 2,694–2,794 |
+| 64 / balanced | Full chunk | 565–667 | 121–136 | 58–62 | 3,189–3,207 |
+| 64 / balanced | Mutation log | 546–612 | 109–124 | 57–66 | 2,814–2,829 |
+| 64 / hotspot | Full chunk | 165–243 | 258–482 | 210–401 | 3,180–3,653 |
+| 64 / hotspot | Mutation log | 182–195 | 340–354 | 292–310 | 2,706–2,818 |
+
+In 1,000-action balanced cases, log checkpoint materialization cost **34–48 ms** plus **17–20 KB WAL** across 16 chunks. In hotspot cases it cost **5–13 ms** plus **2–8 KB WAL** for one chunk. Before materialization, recovery reads took **18–30 ms** balanced and **3–5 ms** hotspot for the log, versus **7–22 ms** and **1–2 ms** for full chunks. After materialization, log recovery was usually close to the full-chunk read. A log also retains 1,000 mutation rows and needs materializer scheduling, lag monitoring, replay validation and retention policy. Full-chunk writes need no derived checkpoint process.
+
+Windows process samples showed roughly **106 MB**, **192–196 MB**, and **363–369 MB** of aggregate PostgreSQL private bytes at 16, 32 and 64 connection levels. Database action CPU samples ranged from about **0.5–0.9 CPU-seconds** at 200 actions to **2.9–6.2 CPU-seconds** at 1,000 actions, depending on order and contention. These are before/after process sums, not isolated per-query CPU; RSS sums can double-count shared pages. Every raw artifact includes p50/p95/p99 latency, read/write phases, WAL, checkpoint cost, recovery times, process CPU/memory, deadlocks and failures:
+
+- docs/benchmarks/M3_postgres_baseline_200c16.json
+- docs/benchmarks/M3_postgres_larger32_1000c32.json
+- docs/benchmarks/M3_postgres_reverse32_1000c32.json
+- docs/benchmarks/M3_postgres_larger64_1000c64.json
+- docs/benchmarks/M3_postgres_reverse64_1000c64.json
+
+## ADR-011 decision and limits
+
+**Select full-chunk transactional writes for the M3 baseline.** Both strategies passed atomicity and recovery tests. The mutation log saved roughly 10–20% WAL in most larger runs, but did not consistently improve throughput or latency under chunk contention. Full chunks avoid an operational checkpoint/replay dependency and yielded faster direct recovery. The choice is based on correctness, lock behavior, write pressure, recovery and operational complexity together. Keep the mutation-log implementation as a test candidate; revisit only after representative denser worlds, sustained load and database-host measurements justify the added complexity.
+
+The hot chunk remains a serialization limit in either strategy: at 64 concurrent requests, transaction p95 reached 258–482 ms for full chunks and 340–354 ms for the log. This benchmark does not establish a production ACK target, because no production auth, rules, network clients or publisher were included. The short run also cannot establish long-term WAL, vacuum, storage growth or failover behavior.
+
+## Source, CI and readiness
+
+The V2 CI workflow includes an Ubuntu PostgreSQL 16 service with synthetic credentials. Its remote run awaits owner-provided GitHub repository details. A clean npm install from the lockfile, strict compile, lint, client build and all 20 tests passed locally. The source-size report measured **25 first-party source files / 98,579 bytes**, **6 test files / 46,445 bytes**, and **10 scripts / 47,770 bytes**. The unchanged client bundle is **535,489 bytes raw / 133,880 bytes gzip**. pg and @types/pg are the only M3 package additions.
+
+**M3 technical recommendation:** accept the durable synthetic transaction foundation and ADR-011 full-chunk choice for M3. Production gameplay actions must wait for approved identity, visibility and game rules, plus the owner review gate. **M4 remains unauthorized.**
