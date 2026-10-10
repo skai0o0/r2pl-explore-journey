@@ -26,22 +26,25 @@
         <div class="resource-cost">−<span id="explore-cost">1</span><small>per new tile</small></div>
       </section>
       <nav class="map-tools glass" aria-label="Map navigation">
-        <button id="home-button" type="button" title="My headquarters">⌂ <span>My HQ</span></button>
-        <button id="landmark-button" type="button" title="Landmark placeholder">◆ <span>Landmark</span></button>
-        <button id="overview-button" type="button" title="World overview">▦ <span>Overview</span></button>
+        <button id="home-button" type="button" title="My headquarters (H)">⌂ <span>My HQ</span></button>
+        <button id="landmark-button" type="button" title="Landmark placeholder (L)">◆ <span>Landmark</span></button>
+        <button id="overview-button" type="button" title="World overview (O)">▦ <span>Overview</span></button>
         <span class="tool-divider"></span>
-        <button id="zoom-in" type="button" title="Zoom in">＋</button>
-        <button id="zoom-out" type="button" title="Zoom out">−</button>
+        <button id="zoom-in" type="button" title="Zoom in (+)">＋</button>
+        <button id="zoom-out" type="button" title="Zoom out (-)">−</button>
       </nav>
       <section class="tile-panel glass" aria-label="Selected tile and exploration">
-        <p class="eyebrow">SELECTED TILE <span class="tile-crosshair">⌖</span></p>
+        <div class="tile-panel-header">
+          <p class="eyebrow">SELECTED TILE <span class="tile-crosshair">⌖</span></p>
+          <span id="tile-badge" class="badge-tag">FOGGED</span>
+        </div>
         <h2 id="tile-coordinates">— / —</h2>
         <p id="tile-knowledge">Select a tile on the map</p>
         <button id="explore-button" type="button" disabled><span>✦</span> Explore tile <small>1 test credit</small></button>
         <p id="action-status" data-kind="normal">Click or tap a tile to explore</p>
       </section>
       <section class="activity-panel glass" aria-label="Recent actions"><p class="eyebrow">EXPEDITION LOG <span><b id="pending-count">0</b> pending</span></p><ul id="activity-list"></ul></section>
-      <footer class="status-strip glass"><span>DRAG TO PAN · SCROLL TO ZOOM · CLICK TO EXPLORE</span><span><b id="viewport-count">0</b> local chunks · server-authoritative fog</span></footer>
+      <footer class="status-strip glass"><span class="strip-hint">DRAG TO PAN · SCROLL TO ZOOM · CLICK TO EXPLORE</span><span id="strip-hover" class="strip-hover">CURSOR: — / —</span><span><b id="viewport-count">0</b> local chunks · server-authoritative fog</span></footer>
       <div class="fixture-banner">DEVELOPMENT FIXTURE · Synthetic credits and exploration rule v0 · No rewards or official school mapping</div>
     </main>
     <script type="module" src="/src/main.ts"></script>
