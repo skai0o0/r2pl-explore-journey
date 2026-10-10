@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
 import type { Snapshot } from "../../shared/protocol/m2.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
@@ -66,13 +67,17 @@ export class M35FixtureAuthority {
     campaignId: string,
     explicitFixtureCost: bigint,
     faultHooks: FaultHooks = {},
+    devExplore?: EvaluateDevExplore,
   ) {
     if (explicitFixtureCost < 0n)
       throw new RangeError("Invalid explicit fixture cost");
     this.#pool = pool;
     this.#campaignId = campaignId;
     this.#cost = explicitFixtureCost;
-    this.#mutations = new M3TestMutationService(pool, { realtimeViews: true });
+    this.#mutations = new M3TestMutationService(pool, {
+      realtimeViews: true,
+      ...(devExplore ? { devExplore } : {}),
+    });
     this.#relay = new OutboxRelay(pool);
     this.#faultHooks = faultHooks;
   }

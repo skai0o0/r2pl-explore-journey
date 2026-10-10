@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Pool, PoolClient } from "pg";
+import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
   decodeFogChunk,
@@ -179,9 +180,17 @@ export async function readAuthoritativeChunk(
 export class M3TestMutationService {
   readonly #pool: Pool;
   readonly #realtimeViews: boolean;
-  constructor(pool: Pool, options: { readonly realtimeViews?: boolean } = {}) {
+  readonly #devExplore: EvaluateDevExplore | undefined;
+  constructor(
+    pool: Pool,
+    options: {
+      readonly realtimeViews?: boolean;
+      readonly devExplore?: EvaluateDevExplore;
+    } = {},
+  ) {
     this.#pool = pool;
     this.#realtimeViews = options.realtimeViews ?? false;
+    this.#devExplore = options.devExplore;
   }
 
   async apply(
@@ -314,11 +323,45 @@ export class M3TestMutationService {
         if (!view.rows[0]) throw new Error("Missing school view revision");
         viewRevision = BigInt(view.rows[0].view_revision);
       }
+      const knownBySchool =
+        (maskAt(chunk.mask, local) & schoolBit(command.schoolSlot)) !== 0;
+      const discoveredBySchool = revealed(chunk.fog, local);
+      const alreadyExplored = knownBySchool && discoveredBySchool;
+      let devDecision: ReturnType<EvaluateDevExplore> | undefined;
+      if (this.#devExplore) {
+        const lockedWallet = await client.query<{ balance: string }>(
+          "SELECT balance FROM wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' FOR UPDATE",
+          [command.campaignId, command.actorId],
+        );
+        const lockedBalance = BigInt(lockedWallet.rows[0]?.balance ?? "0");
+        devDecision = this.#devExplore(
+          {
+            tileIndex: command.tileIndex,
+            schoolSlot: command.schoolSlot,
+            knownBySchool,
+            discoveredBySchool,
+            balance: lockedBalance,
+          },
+          {
+            ruleVersion: 0,
+            resource: "fixture-credit",
+            cost: command.cost,
+          },
+        );
+        if (
+          (alreadyExplored && devDecision.kind !== "no_change") ||
+          (!alreadyExplored && devDecision.kind === "no_change") ||
+          (devDecision.kind === "apply" &&
+            (devDecision.debit !== command.cost ||
+              lockedBalance < command.cost)) ||
+          (devDecision.kind === "reject" && lockedBalance >= command.cost)
+        )
+          throw new Error(
+            "Development rule disagrees with durable fixture contract",
+          );
+      }
       let result: M3TestResult;
-      if (
-        maskAt(chunk.mask, local) & schoolBit(command.schoolSlot) &&
-        revealed(chunk.fog, local)
-      ) {
+      if (alreadyExplored) {
         const wallet = await client.query<{ balance: string }>(
           "SELECT balance FROM wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
           [command.campaignId, command.actorId],
@@ -334,10 +377,13 @@ export class M3TestMutationService {
             : {}),
         };
       } else {
-        const wallet = await client.query<{ balance: string }>(
-          "UPDATE wallet_accounts SET balance=balance-$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' AND balance >= $3 RETURNING balance",
-          [command.campaignId, command.actorId, command.cost.toString()],
-        );
+        const wallet =
+          devDecision?.kind === "reject"
+            ? { rows: [] as { balance: string }[] }
+            : await client.query<{ balance: string }>(
+                "UPDATE wallet_accounts SET balance=balance-$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' AND balance >= $3 RETURNING balance",
+                [command.campaignId, command.actorId, command.cost.toString()],
+              );
         if (!wallet.rows[0]) {
           const current = await client.query<{ balance: string }>(
             "SELECT balance FROM wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
