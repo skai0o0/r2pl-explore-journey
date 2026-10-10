@@ -1,166 +1,317 @@
-import * as THREE from "three";
+import { ColyseusSDK, type Room } from "@colyseus/sdk";
+import {
+  ACK_STATUS,
+  decodeAck,
+  decodeDelta,
+  decodeError,
+  decodeFrame,
+  decodeSnapshot,
+  encodeExplore,
+  encodeResync,
+  encodeSubscribe,
+  M2_KIND,
+  REASON,
+} from "../../shared/protocol/m2.ts";
+import { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import { type PickedTile, WorldView } from "./worldView.ts";
 import "./style.css";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "../../shared/world/constants.ts";
-import { tileIndex } from "../../shared/world/coordinates.ts";
-import { SchoolRegistry } from "../../shared/world/registry.ts";
-import { WorldState } from "../../shared/world/world.ts";
 
-// Visual fixture only. These identifiers are synthetic and have no campaign meaning.
-const world = new WorldState(
-  new SchoolRegistry([
-    { id: "fixture-a", slot: 0 },
-    { id: "fixture-b", slot: 15 },
-  ]),
+const players = [
+  { token: "dawn-one", label: "Dawn · Explorer 1", slot: 0 },
+  { token: "dawn-two", label: "Dawn · Explorer 2", slot: 0 },
+  { token: "dusk-one", label: "Dusk · Explorer 1", slot: 15 },
+  { token: "dusk-two", label: "Dusk · Explorer 2", slot: 15 },
+] as const;
+type Player = (typeof players)[number];
+interface Profile {
+  name: string;
+  schoolName: string;
+  schoolSlot: number;
+  balance: string;
+  cost: string;
+  fixtureOnly: true;
+}
+interface PendingAction {
+  key: string;
+  frame: Uint8Array;
+  tile: PickedTile;
+  token: string;
+}
+const get = <T extends HTMLElement>(id: string): T => {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`Missing game UI element: ${id}`);
+  return element as T;
+};
+const ui = {
+  connection: get<HTMLElement>("connection-status"),
+  school: get<HTMLElement>("school-name"),
+  player: get<HTMLElement>("player-name"),
+  balance: get<HTMLElement>("balance"),
+  cost: get<HTMLElement>("explore-cost"),
+  pending: get<HTMLElement>("pending-count"),
+  viewport: get<HTMLElement>("viewport-count"),
+  tile: get<HTMLElement>("tile-coordinates"),
+  knowledge: get<HTMLElement>("tile-knowledge"),
+  action: get<HTMLElement>("action-status"),
+  activity: get<HTMLElement>("activity-list"),
+  explore: get<HTMLButtonElement>("explore-button"),
+  select: get<HTMLSelectElement>("player-select"),
+  retry: get<HTMLButtonElement>("retry-button"),
+};
+const sdk = new ColyseusSDK(`ws://${location.hostname}:2567`);
+let player: Player =
+  players.find(
+    (item) => item.token === sessionStorage.getItem("r2pl-fixture-player"),
+  ) ?? players[0]!;
+let replica = new ProjectionReplica(player.slot);
+let room: Room | undefined;
+let selected: PickedTile | undefined;
+let generation = 0;
+let subscribeTimer: number | undefined;
+let balanceTimer: number | undefined;
+let reconnectTimer: number | undefined;
+let subscribed = "";
+const pending = new Map<string, PendingAction>();
+
+function activity(message: string, kind = "normal"): void {
+  const row = document.createElement("li");
+  row.className = kind;
+  row.textContent = `${new Date().toLocaleTimeString()}  ${message}`;
+  ui.activity.prepend(row);
+  while (ui.activity.children.length > 7)
+    ui.activity.lastElementChild?.remove();
+  ui.action.textContent = message;
+  ui.action.dataset.kind = kind;
+}
+function status(label: string, online: boolean): void {
+  ui.connection.textContent = label;
+  ui.connection.dataset.online = String(online);
+  ui.explore.disabled = !online || !selected;
+  ui.retry.hidden = online;
+}
+function keyHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+function updatePending(): void {
+  ui.pending.textContent = String(pending.size);
+}
+function updateTile(): void {
+  if (!selected) return;
+  ui.tile.textContent = `${selected.x.toString().padStart(3, "0")} / ${selected.z.toString().padStart(3, "0")}`;
+  ui.knowledge.textContent = replica.hasChunk(selected.chunk)
+    ? replica.isDiscovered(selected.chunk, selected.local)
+      ? "Known to your university"
+      : "Unexplored by your university"
+    : "Loading authorized knowledge…";
+  ui.explore.disabled = !room;
+}
+async function refreshProfile(token = player.token): Promise<void> {
+  try {
+    const response = await fetch("/api/fixture/me", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`Profile ${response.status}`);
+    const profile = (await response.json()) as Profile;
+    if (
+      token !== player.token ||
+      profile.schoolSlot !== player.slot ||
+      !profile.fixtureOnly
+    )
+      return;
+    ui.school.textContent = profile.schoolName;
+    ui.player.textContent = profile.name;
+    ui.balance.textContent = profile.balance;
+    ui.cost.textContent = profile.cost;
+    document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
+  } catch {
+    if (token === player.token)
+      activity("Balance temporarily unavailable", "error");
+  }
+}
+function refreshBalanceSoon(): void {
+  window.clearTimeout(balanceTimer);
+  balanceTimer = window.setTimeout(() => void refreshProfile(), 180);
+}
+const world = new WorldView(
+  get("world-view"),
+  (tile) => {
+    selected = tile;
+    updateTile();
+    explore();
+  },
+  () => scheduleSubscribe(),
 );
-for (let z = 100; z < 250; z++)
-  for (let x = 90; x < 310; x++) world.setPresence(tileIndex(x, z), 0, true);
-for (let z = 590; z < 790; z++)
-  for (let x = 570; x < 760; x++) world.setPresence(tileIndex(x, z), 15, true);
 
-const pixels = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT * 4);
-for (let z = 0; z < WORLD_HEIGHT; z++) {
-  for (let x = 0; x < WORLD_WIDTH; x++) {
-    const offset = tileIndex(x, z) * 4;
-    const mask = world.maskAt(tileIndex(x, z));
-    const color =
-      mask & 1
-        ? [65, 186, 157]
-        : mask & 0x8000
-          ? [236, 140, 104]
-          : [34, 46, 66];
-    pixels[offset] = color[0]!;
-    pixels[offset + 1] = color[1]!;
-    pixels[offset + 2] = color[2]!;
-    pixels[offset + 3] = 255;
+function scheduleSubscribe(): void {
+  window.clearTimeout(subscribeTimer);
+  subscribeTimer = window.setTimeout(subscribeNow, 300);
+}
+function subscribeNow(): void {
+  if (!room) return;
+  const ids = world.visibleChunkIds(selected?.chunk);
+  const signature = ids.join(",");
+  if (signature === subscribed) return;
+  subscribed = signature;
+  ui.viewport.textContent = String(ids.length);
+  room.sendBytes("m2", encodeSubscribe(ids));
+}
+function explore(): void {
+  if (!room || !selected) {
+    activity("Select a tile while connected", "error");
+    return;
+  }
+  const key = crypto.getRandomValues(new Uint8Array(16));
+  const action: PendingAction = {
+    key: keyHex(key),
+    frame: encodeExplore({ key, tileIndex: selected.index, ruleVersion: 0 }),
+    tile: selected,
+    token: player.token,
+  };
+  pending.set(action.key, action);
+  updatePending();
+  activity(
+    `Exploring ${selected.x}, ${selected.z} · awaiting durable commit`,
+    "pending",
+  );
+  room.sendBytes("m2", action.frame);
+}
+function handleFrame(raw: Uint8Array): void {
+  try {
+    const frame = decodeFrame(raw);
+    switch (frame.kind) {
+      case M2_KIND.ACK: {
+        const ack = decodeAck(frame.payload);
+        const action = pending.get(keyHex(ack.key));
+        if (!action) break;
+        pending.delete(action.key);
+        updatePending();
+        const place = `${action.tile.x}, ${action.tile.z}`;
+        if (ack.status === ACK_STATUS.TEST_APPLIED)
+          activity(`Explored ${place} · committed`, "success");
+        else if (ack.status === ACK_STATUS.TEST_NO_CHANGE)
+          activity(`${place} already explored · no credit spent`, "normal");
+        else
+          activity(
+            `Exploration failed (${Object.entries(REASON).find(([, value]) => value === ack.reason)?.[0] ?? ack.reason})`,
+            "error",
+          );
+        refreshBalanceSoon();
+        break;
+      }
+      case M2_KIND.SNAPSHOT: {
+        const snapshot = decodeSnapshot(frame.payload);
+        replica.applySnapshot(snapshot);
+        world.paintChunk(snapshot.chunkId, replica);
+        updateTile();
+        break;
+      }
+      case M2_KIND.DELTA: {
+        const delta = decodeDelta(frame.payload);
+        const result = replica.applyDelta(delta);
+        if (result === "resync")
+          room?.sendBytes("m2", encodeResync(delta.chunkId));
+        else if (result === "applied") {
+          world.paintTile(delta.chunkId, delta.localIndex, replica);
+          updateTile();
+          refreshBalanceSoon();
+        }
+        break;
+      }
+      case M2_KIND.ERROR:
+        activity(
+          `Server request rejected (${decodeError(frame.payload)})`,
+          "error",
+        );
+        break;
+    }
+  } catch (error) {
+    activity(
+      `View needs resynchronization: ${error instanceof Error ? error.message : String(error)}`,
+      "error",
+    );
+    for (const id of world.visibleChunkIds(selected?.chunk))
+      room?.sendBytes("m2", encodeResync(id));
+  }
+}
+async function connect(nextPlayer: Player): Promise<void> {
+  const attempt = ++generation;
+  window.clearTimeout(reconnectTimer);
+  if (player.token !== nextPlayer.token) {
+    ui.activity.replaceChildren();
+    ui.action.textContent = "Switching synthetic explorer…";
+    pending.clear();
+    updatePending();
+  }
+  const previous = room;
+  room = undefined;
+  subscribed = "";
+  if (previous) void previous.leave();
+  player = nextPlayer;
+  sessionStorage.setItem("r2pl-fixture-player", player.token);
+  replica = new ProjectionReplica(player.slot);
+  selected = undefined;
+  world.setSchool(player.slot);
+  ui.tile.textContent = "— / —";
+  ui.knowledge.textContent = "Select a tile on the map";
+  status("Connecting…", false);
+  void refreshProfile();
+  try {
+    const joined = await sdk.joinOrCreate("m2", { token: player.token });
+    if (attempt !== generation) {
+      void joined.leave();
+      return;
+    }
+    room = joined;
+    joined.onMessage("m2", (bytes: Uint8Array) => {
+      if (attempt === generation) handleFrame(bytes);
+    });
+    joined.onLeave(() => {
+      if (attempt !== generation) return;
+      room = undefined;
+      subscribed = "";
+      status("Disconnected · reconnecting", false);
+      reconnectTimer = window.setTimeout(() => void connect(player), 1200);
+    });
+    status("Connected · protocol v1", true);
+    activity(
+      `Entered ${player.slot === 0 ? "Dawn" : "Dusk"} University world`,
+      "success",
+    );
+    subscribeNow();
+    for (const action of pending.values())
+      if (action.token === player.token) joined.sendBytes("m2", action.frame);
+  } catch {
+    if (attempt !== generation) return;
+    status("Server unavailable", false);
+    activity("Could not enter world · use Reconnect", "error");
   }
 }
 
-const host = document.querySelector<HTMLElement>("#world-view")!;
-const output = document.querySelector<HTMLElement>("#metrics")!;
-const benchmarkButton =
-  document.querySelector<HTMLButtonElement>("#texture-benchmark")!;
-const renderer = new THREE.WebGLRenderer({
-  antialias: false,
-  powerPreference: "low-power",
+for (const option of players)
+  ui.select.add(new Option(option.label, option.token));
+ui.select.value = player.token;
+ui.select.addEventListener("change", () => {
+  const next = players.find((item) => item.token === ui.select.value);
+  if (next) void connect(next);
 });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setScissorTest(true);
-host.append(renderer.domElement);
-const texture = new THREE.DataTexture(
-  pixels,
-  WORLD_WIDTH,
-  WORLD_HEIGHT,
-  THREE.RGBAFormat,
-);
-texture.magFilter = THREE.NearestFilter;
-texture.minFilter = THREE.NearestFilter;
-texture.needsUpdate = true;
-const scene = new THREE.Scene();
-scene.add(
-  new THREE.Mesh(
-    new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
-    new THREE.MeshBasicMaterial({ map: texture }),
+ui.explore.addEventListener("click", explore);
+ui.retry.addEventListener("click", () => void connect(player));
+get("home-button").addEventListener("click", () =>
+  world.focus(
+    player.slot === 0 ? 215 : 785,
+    player.slot === 0 ? 235 : 765,
+    275,
   ),
 );
-const overview = new THREE.OrthographicCamera(-500, 500, 500, -500, 0.1, 10);
-overview.position.z = 1;
-const local = new THREE.OrthographicCamera(-65, 65, 65, -65, 0.1, 10);
-local.position.set(170 - 500, 170 - 500, 1);
-const frameTimes: number[] = [];
-let priorFrame = 0;
-let totalFrames = 0;
-let textureBenchmark:
-  | { phase: "baseline" | "upload"; baseline: number[]; upload: number[] }
-  | undefined;
-let textureBenchmarkResult: Record<string, number | string> | undefined;
-benchmarkButton.addEventListener("click", () => {
-  textureBenchmark = { phase: "baseline", baseline: [], upload: [] };
-  textureBenchmarkResult = undefined;
-  benchmarkButton.disabled = true;
-});
-
-function summary(values: number[]): { p50: number; p95: number } {
-  const sorted = [...values].sort((a, b) => a - b);
-  return {
-    p50: sorted[Math.ceil(sorted.length * 0.5) - 1] ?? 0,
-    p95: sorted[Math.ceil(sorted.length * 0.95) - 1] ?? 0,
-  };
-}
-
-function paint(): void {
-  const now = performance.now();
-  if (priorFrame) {
-    frameTimes.push(now - priorFrame);
-    if (frameTimes.length > 240) frameTimes.shift();
-  }
-  priorFrame = now;
-  const width = Math.max(2, host.clientWidth);
-  const height = Math.max(2, host.clientHeight);
-  renderer.setSize(width, height, false);
-  const fullWidth = renderer.domElement.width;
-  const fullHeight = renderer.domElement.height;
-  const half = Math.floor(fullWidth / 2);
-  if (textureBenchmark?.phase === "upload") {
-    pixels[0] = (pixels[0] ?? 0) ^ 1; // one changed pixel still reuploads the full DataTexture
-    texture.needsUpdate = true;
-  }
-  const renderStarted = performance.now();
-  renderer.setViewport(0, 0, half, fullHeight);
-  renderer.setScissor(0, 0, half, fullHeight);
-  renderer.render(scene, overview);
-  const overviewCalls = renderer.info.render.calls;
-  renderer.setViewport(half, 0, fullWidth - half, fullHeight);
-  renderer.setScissor(half, 0, fullWidth - half, fullHeight);
-  renderer.render(scene, local);
-  const drawCalls = overviewCalls + renderer.info.render.calls;
-  if (textureBenchmark) {
-    renderer.getContext().finish(); // measure completed rendering for both phases
-    const elapsed = performance.now() - renderStarted;
-    textureBenchmark[textureBenchmark.phase].push(elapsed);
-    if (
-      textureBenchmark.phase === "baseline" &&
-      textureBenchmark.baseline.length === 30
-    )
-      textureBenchmark.phase = "upload";
-    else if (textureBenchmark.upload.length === 30) {
-      const baseline = summary(textureBenchmark.baseline),
-        upload = summary(textureBenchmark.upload);
-      textureBenchmarkResult = {
-        samplesPerPhase: 30,
-        baselineP50Ms: baseline.p50,
-        baselineP95Ms: baseline.p95,
-        fullUploadP50Ms: upload.p50,
-        fullUploadP95Ms: upload.p95,
-        uploadedBytesPerFrame: pixels.byteLength,
-        changedPixelsPerFrame: 1,
-      };
-      textureBenchmark = undefined;
-      benchmarkButton.disabled = false;
-    }
-  }
-  totalFrames++;
-  if (totalFrames % 60 === 0) {
-    const sorted = [...frameTimes].sort((a, b) => a - b);
-    const heap = (
-      performance as Performance & { memory?: { usedJSHeapSize: number } }
-    ).memory?.usedJSHeapSize;
-    const metrics = {
-      fixture: "synthetic, 1,000,000 cells, slots 0 and 15",
-      frameCount: totalFrames,
-      frameMsP50: sorted[Math.floor(sorted.length * 0.5)]?.toFixed(2),
-      frameMsP95: sorted[Math.floor(sorted.length * 0.95)]?.toFixed(2),
-      drawCallsPerFrame: drawCalls,
-      geometryCount: renderer.info.memory.geometries,
-      textureCount: renderer.info.memory.textures,
-      texturePayloadBytes: pixels.byteLength,
-      gpuMemoryBytes: "not exposed by WebGL",
-      heapBytes: heap ?? "not exposed by browser",
-      textureBenchmark:
-        textureBenchmarkResult ?? "run with the benchmark button",
-    };
-    output.textContent = JSON.stringify(metrics, null, 2);
-    Object.assign(window, { __r2plFixtureMetrics: metrics });
-  }
-  requestAnimationFrame(paint);
-}
-requestAnimationFrame(paint);
+get("landmark-button").addEventListener("click", () =>
+  world.focus(510, 485, 240),
+);
+get("overview-button").addEventListener("click", () =>
+  world.focus(500, 500, 1000),
+);
+get("zoom-in").addEventListener("click", () => world.zoom(0.75));
+get("zoom-out").addEventListener("click", () => world.zoom(1.33));
+void connect(player);

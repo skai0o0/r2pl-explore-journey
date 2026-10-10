@@ -1,6 +1,6 @@
 # Decisions and approval ledger
 
-Status on 2026-10-10: **M0 and M1 accepted; M2 conditionally accepted; M2.5 and M2.6 accepted for their measured scopes; M3 technically accepted for the synthetic transaction foundation; M3.5 authorized**. Higher-capacity realtime readiness, protocol-v2 batching rollout and M4 remain unapproved. A `proposed` gameplay decision is not a production rule. Master Plan v1.0 fixes the technology and consistency constraints. `OWNER_REQUIREMENTS.md` remains the latest documented gameplay proposal; gameplay parameters stay pending where noted in `SPEC_CONFLICTS.md`.
+Status on 2026-10-10: **M0 and M1 accepted; M2 conditionally accepted; M2.5 and M2.6 accepted for their measured scopes; M3 technically accepted for the synthetic transaction foundation; M3.5 correctness accepted; M3.6 reviewed; M4-A development-only playable slice authorized**. Higher-capacity realtime readiness, protocol-v2 batching rollout, production gameplay, full M4 expansion and M5 remain unapproved. The M3.6 hotspot limitation is a production launch blocker, not an M4-A development blocker. A `proposed` gameplay decision is not a production rule. Master Plan v1.0 fixes the technology and consistency constraints. `OWNER_REQUIREMENTS.md` remains the latest documented gameplay proposal; gameplay parameters stay pending where noted in `SPEC_CONFLICTS.md`.
 
 | ID | Status | Decision and reason | Revisit trigger |
 |---|---|---|---|

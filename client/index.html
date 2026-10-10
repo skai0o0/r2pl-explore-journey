@@ -3,15 +3,46 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>R2PL V2 World Fixture</title>
+    <meta name="theme-color" content="#0b1a20" />
+    <title>R2PL — Explore the World</title>
   </head>
-  <body>
-    <main>
-      <h1>R2PL V2 — World Foundation Fixture</h1>
-      <p>Synthetic school slots only. The left view shows the full map; the right view shows a local area.</p>
-      <button id="texture-benchmark" type="button">Measure full texture upload</button>
-      <div id="world-view" role="img" aria-label="Synthetic world overview and local view"></div>
-      <pre id="metrics"></pre>
+  <body data-school="dawn">
+    <main class="game-shell">
+      <div id="world-view" role="application" aria-label="Interactive thousand by thousand tile world"></div>
+      <header class="top-bar glass">
+        <div class="brand"><div class="brand-mark">R<span>2</span></div><div><strong>R2PL</strong><small>WORLD EXPLORER <em>V2</em></small></div></div>
+        <div class="world-pill"><i></i> SYNTHETIC WORLD <span>1000 × 1000</span></div>
+        <div class="connection"><span id="connection-status" data-online="false">Connecting…</span><button id="retry-button" type="button" hidden>Reconnect</button></div>
+      </header>
+      <aside class="identity glass">
+        <p class="eyebrow">UNIVERSITY EXPEDITION</p>
+        <h1 id="school-name">Dawn University</h1>
+        <label for="player-select">Playing as</label>
+        <select id="player-select" aria-label="Choose synthetic explorer"></select>
+        <p class="identity-note">Two synthetic universities · four local test explorers</p>
+      </aside>
+      <section class="resources glass" aria-label="Test resources">
+        <div class="resource-icon">✦</div><div><p class="eyebrow">TEST-ONLY CREDITS</p><strong id="balance">—</strong><small id="player-name">Synthetic explorer</small></div>
+        <div class="resource-cost">−<span id="explore-cost">1</span><small>per new tile</small></div>
+      </section>
+      <nav class="map-tools glass" aria-label="Map navigation">
+        <button id="home-button" type="button" title="My headquarters">⌂ <span>My HQ</span></button>
+        <button id="landmark-button" type="button" title="Landmark placeholder">◆ <span>Landmark</span></button>
+        <button id="overview-button" type="button" title="World overview">▦ <span>Overview</span></button>
+        <span class="tool-divider"></span>
+        <button id="zoom-in" type="button" title="Zoom in">＋</button>
+        <button id="zoom-out" type="button" title="Zoom out">−</button>
+      </nav>
+      <section class="tile-panel glass" aria-label="Selected tile and exploration">
+        <p class="eyebrow">SELECTED TILE <span class="tile-crosshair">⌖</span></p>
+        <h2 id="tile-coordinates">— / —</h2>
+        <p id="tile-knowledge">Select a tile on the map</p>
+        <button id="explore-button" type="button" disabled><span>✦</span> Explore tile <small>1 test credit</small></button>
+        <p id="action-status" data-kind="normal">Click or tap a tile to explore</p>
+      </section>
+      <section class="activity-panel glass" aria-label="Recent actions"><p class="eyebrow">EXPEDITION LOG <span><b id="pending-count">0</b> pending</span></p><ul id="activity-list"></ul></section>
+      <footer class="status-strip glass"><span>DRAG TO PAN · SCROLL TO ZOOM · CLICK TO EXPLORE</span><span><b id="viewport-count">0</b> local chunks · server-authoritative fog</span></footer>
+      <div class="fixture-banner">DEVELOPMENT FIXTURE · Synthetic credits and exploration rule v0 · No rewards or official school mapping</div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

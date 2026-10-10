@@ -18,6 +18,7 @@
     "migrate:m3": "node --experimental-strip-types scripts/migrate-m3.ts",
     "migrate:m35": "node --experimental-strip-types scripts/migrate-m35.ts",
     "bench:postgres": "node --experimental-strip-types scripts/bench-postgres.ts",
+    "play:local": "npm run build:client && node --experimental-strip-types scripts/play-local.ts",
     "report:size": "node scripts/report-size.mjs"
   },
   "dependencies": {

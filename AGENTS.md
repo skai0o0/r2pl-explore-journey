@@ -4,7 +4,7 @@
 
 - This directory is the greenfield V2 workspace. `land-rush-prototype/` is a read-only V1 reference. Never edit, reset, clean, or commit inside it.
 - The owner-provided `writing-block.md` is the Master Implementation Plan v1.0. `docs/OWNER_REQUIREMENTS.md` preserves the original Product Owner gameplay concept as a proposal, not approved production rules. For V2, approved decisions in `docs/DECISIONS.md` and approved rules in `docs/GAME_SPEC.md` govern implementation. Record discrepancies in `docs/SPEC_CONFLICTS.md`; do not infer approval from the owner proposal, V1 code or tests.
-- M0/M1 were accepted. M2 Realtime Core was conditionally accepted; M2.5 and M2.6 were accepted for their measured scope; M3's synthetic durability foundation and ADR-011 full-chunk baseline were technically accepted on 2026-10-10. M3.5 End-to-End Integration Gate is authorized. Stop after M3.5 for owner review; do not start full M4. Do not create unapproved gameplay rules or migrate V1 code.
+- M0/M1 were accepted. M2 Realtime Core was conditionally accepted; M2.5 and M2.6 were accepted for their measured scope; M3's synthetic durability foundation and ADR-011 full-chunk baseline were technically accepted on 2026-10-10. M3.5 correctness was accepted and M3.6 reviewed. The owner authorized **M4-A, a development-only playable vertical slice**; stop after M4-A for owner feedback. Hotspot performance remains a production launch blocker, not a blocker for the local prototype. Do not start M5, create unapproved gameplay rules, or migrate V1 code.
 - M1/M2/M3 use a generic immutable 16-slot school registry and synthetic fixtures. The proposed V1 0–7 mapping remains pending owner confirmation and must not be persisted as production data. Keep original and revised probability tables traceable without normalization.
 - Keep the first V2 source layout compact: `client/`, `server/`, `shared/`, `database/`, `tests/`, `docs/`. Add nesting only for a real boundary.
 
@@ -21,7 +21,7 @@
 
 ## Definition of done
 
-Strict compilation, lint/format, relevant tests, documented schema/protocol/rule changes, no unauthorized gameplay change, measured performance where applicable, and a reviewable milestone report. Preserve the M4 owner review gate after M3.5.
+Strict compilation, lint/format, relevant tests, documented schema/protocol/rule changes, no unauthorized gameplay change, measured performance where applicable, and a reviewable milestone report. Preserve the owner review gate after M4-A.
 
 ## Multi-Agent Review policy — active for M3.5
 
