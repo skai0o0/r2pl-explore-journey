@@ -1,6 +1,12 @@
 # M4 product decision checklist — proposed for owner review
 
-**Status:** no item below is an approved production rule. M3.5 only uses synthetic identities, school slots and `fixture-credit`. The original owner concept in `OWNER_REQUIREMENTS.md`, observed V1 behavior and conflicts in `SPEC_CONFLICTS.md` remain traceable sources. Choose a rule version and provide examples before enabling each affected action.
+**Status:** no item below is an approved production rule. M3.5/M3.6 only use synthetic identities, school slots and `fixture-credit`; M3.6 did not pass the 1,000-client hotspot delivery gate. The original owner concept in `OWNER_REQUIREMENTS.md`, observed V1 behavior and conflicts in `SPEC_CONFLICTS.md` remain traceable sources. Choose a rule version and provide examples before enabling each affected action.
+
+## Minimum for a small synthetic playable slice
+
+A tightly scoped slice can allow a synthetic player to explore a tile, spend a synthetic resource and see an authorized school-filtered map update. It needs owner approval of **C-01** for the exact exploration charge and retry/no-change behavior, and **C-08** for visibility and discovery. It also needs an explicit fixture identity/rule version and synthetic layout with immutable generic slots; this does **not** approve or persist the official C-04 roster. If the owner wants only non-spending map interaction, that is a different fixture and must be specified rather than inferred from V1.
+
+Keep Landmark takeover/puzzles/buffs (**C-02/C-09**), shared Knowledge contests/decay (**C-03**) and official roster/map publication (**C-04**) disabled in that narrow slice. They become required approvals when the corresponding feature is included. The complete M4 product scope should be selected explicitly before implementation; this checklist does not authorize it.
 
 | Decision | Owner approval needed for a synthetic M4 vertical slice | Acceptance examples to supply |
 |---|---|---|
@@ -12,3 +18,5 @@
 | C-09 Landmark puzzles and buffs | Approved locations/clues/answers, accessibility, wrong-answer cooldown, Crystal award, buff types, duration, stacking and revocation. V1's buff pool is empty; owner concept does not specify effects. | Correct/wrong answer races; retry after commit; school ownership change during an active buff. |
 
 M4 scope can be narrowed to the decisions actually exercised in its first playable slice, provided unapproved commands fail closed. Production identity and school membership must be approved before any real campaign data or gameplay mutation. The external running API (M5) and physical rewards/gacha (M6) are **not prerequisites** for a synthetic M4 slice and remain disabled. Preserve both original and revised probability tables exactly; no automatic normalization.
+
+The owner must separately review M3.6's latency and backlog evidence before authorizing any M4 implementation. Gameplay approvals do not themselves establish realtime capacity. A small synthetic slice can be scoped to modest, measured traffic while the hotspot delivery strategy remains open; it must carry an explicit test environment and no production capacity claim.

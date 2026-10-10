@@ -1,0 +1,588 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "ramBytes": 34164097024,
+    "generator": "separate Node process, same host as server",
+    "fanoutMode": "indexed",
+    "durable": true,
+    "trial": "split1"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 10,
+    "targetActions": 2500,
+    "requestedActionsPerSecond": 250,
+    "hotspotSectorShare": 0.7,
+    "schools": 2,
+    "subscribedChunksPerClient": 1
+  },
+  "outcomes": {
+    "connected": 1000,
+    "acknowledged": 2500,
+    "applied": 2500,
+    "noChange": 0,
+    "converged": true,
+    "convergenceCheckMs": 628.0102999999981,
+    "resyncs": 0,
+    "clientErrors": 0,
+    "durableRetries": {
+      "duplicates": 10,
+      "conflicts": 10
+    }
+  },
+  "timings": {
+    "connectionSeconds": 0.8276592999999999,
+    "connectionRatePerSecond": 1208.226621751245,
+    "actionSeconds": 25.3477858,
+    "acknowledgedActionsPerSecond": 98.62794406286959,
+    "clientAckMs": {
+      "count": 2500,
+      "p50": 4070.895,
+      "p95": 14344.228,
+      "p99": 15163.201,
+      "max": 15364.244
+    },
+    "sampledOwnDeltaVisibleMs": {
+      "count": 54,
+      "p50": 6127.37,
+      "p95": 12382.523,
+      "p99": 12402.556,
+      "max": 12402.556
+    },
+    "commitToClientAckMs": {
+      "count": 2500,
+      "p50": 0.303,
+      "p95": 4.084,
+      "p99": 14.359,
+      "max": 31.12
+    },
+    "sampledCommitToClientVisibleMs": {
+      "count": 54,
+      "p50": 2.479,
+      "p95": 9.982,
+      "p99": 12.446,
+      "max": 12.446
+    },
+    "sampledOwnDeltaMissing": 0,
+    "server": {
+      "outbox_claim_query_ms": {
+        "count": 4187,
+        "p50": 1.4466999992728233,
+        "p95": 2.4871000051498413,
+        "p99": 4.113099999725819,
+        "max": 43.008799999952316
+      },
+      "outbox_claim_batch_size": {
+        "count": 4187,
+        "p50": 1,
+        "p95": 2,
+        "p99": 3,
+        "max": 45
+      },
+      "socket_buffered_bytes": {
+        "count": 100000,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "outbound_queue_depth": {
+        "count": 100000,
+        "p50": 1,
+        "p95": 1,
+        "p99": 1,
+        "max": 1
+      },
+      "sector_queue_depth": {
+        "count": 6016,
+        "p50": 1,
+        "p95": 881,
+        "p99": 1037,
+        "max": 1078
+      },
+      "sector_queue_wait_ms": {
+        "count": 6016,
+        "p50": 0.009099999999307329,
+        "p95": 12731.2819,
+        "p99": 14861.514599999999,
+        "max": 15351.326000000001
+      },
+      "sector_snapshot_queue_wait_ms": {
+        "count": 1000,
+        "p50": 193.1694,
+        "p95": 343.2751999999998,
+        "p99": 358.0999999999999,
+        "max": 362.2354
+      },
+      "sector_execute_ms": {
+        "count": 6016,
+        "p50": 6.891999999999825,
+        "p95": 21.105099999998856,
+        "p99": 34.81919999999991,
+        "max": 327.4484000000002
+      },
+      "sector_snapshot_execute_ms": {
+        "count": 1000,
+        "p50": 0.4821999999999207,
+        "p95": 1.437900000000127,
+        "p99": 95.24419999999986,
+        "max": 178.08920000000012
+      },
+      "sector_command_queue_wait_ms": {
+        "count": 2520,
+        "p50": 3947.9902999999995,
+        "p95": 14315.040899999998,
+        "p99": 15148.639200000001,
+        "max": 15351.326000000001
+      },
+      "sector_command_execute_ms": {
+        "count": 2520,
+        "p50": 14.017700000000332,
+        "p95": 27.036299999999756,
+        "p99": 45.072000000000116,
+        "max": 101.3157000000001
+      },
+      "durable_pool_wait_ms": {
+        "count": 2510,
+        "p50": 0.0897000000004482,
+        "p95": 0.1834999999991851,
+        "p99": 0.9966000000003987,
+        "max": 1.569099999998798
+      },
+      "durable_transaction_ms": {
+        "count": 2510,
+        "p50": 13.83429999999953,
+        "p95": 26.923499999998967,
+        "p99": 44.859300000000076,
+        "max": 101.20830000000024
+      },
+      "durable_chunk_lock_ms": {
+        "count": 2510,
+        "p50": 0.31300000000010186,
+        "p95": 7.89770000000135,
+        "p99": 9.728100000000268,
+        "max": 26.736399999997957
+      },
+      "commit_to_ack_enqueue_ms": {
+        "count": 2510,
+        "p50": 0.059000000001105946,
+        "p95": 0.10910000000149012,
+        "p99": 0.1945000000014261,
+        "max": 0.7302999999992608
+      },
+      "command_ack_ms": {
+        "count": 2510,
+        "p50": 4019.6926999999987,
+        "p95": 14343.4057,
+        "p99": 15161.5377,
+        "max": 15363.6958
+      },
+      "ack_delivery_ms": {
+        "count": 2520,
+        "p50": 0.10650000000168802,
+        "p95": 0.214799999997922,
+        "p99": 0.433100000000195,
+        "max": 4.101199999999153
+      },
+      "projection_decode_ms": {
+        "count": 2499,
+        "p50": 0.010200001299381256,
+        "p95": 0.018300004303455353,
+        "p99": 0.025599993765354156,
+        "max": 0.2038000002503395
+      },
+      "commit_to_claim_return_ms": {
+        "count": 2492,
+        "p50": 1.7382999956607819,
+        "p95": 9.38910000026226,
+        "p99": 156.9565999954939,
+        "max": 313.396899998188
+      },
+      "sector_relay_queue_wait_ms": {
+        "count": 2496,
+        "p50": 0.003200000000106229,
+        "p95": 0.007099999998899875,
+        "p99": 0.009299999997892883,
+        "max": 0.11629999999968277
+      },
+      "delta_encode_ms": {
+        "count": 2496,
+        "p50": 0.01069999999981519,
+        "p95": 0.01870000000053551,
+        "p99": 0.027399999999033753,
+        "max": 0.2716000000000349
+      },
+      "fanout_candidates": {
+        "count": 2496,
+        "p50": 300,
+        "p95": 412,
+        "p99": 412,
+        "max": 412
+      },
+      "fanout_enqueue_ms": {
+        "count": 2496,
+        "p50": 0.44989999999961583,
+        "p95": 0.7998000000006869,
+        "p99": 1.0785000000032596,
+        "max": 327.4336999999996
+      },
+      "commit_to_delta_enqueue_ms": {
+        "count": 2492,
+        "p50": 2.4560000002384186,
+        "p95": 12.052199997007847,
+        "p99": 234.89000000059605,
+        "max": 328.2162000015378
+      },
+      "sector_relay_execute_ms": {
+        "count": 2496,
+        "p50": 5.258400000002439,
+        "p95": 8.97650000000067,
+        "p99": 13.282500000001164,
+        "max": 327.4484000000002
+      },
+      "delta_delivery_ms": {
+        "count": 100000,
+        "p50": 3.4832000000001244,
+        "p95": 7.020800000000236,
+        "p99": 8.580800000000181,
+        "max": 16.30699999999979
+      },
+      "outbox_mark_delivered_ms": {
+        "count": 2496,
+        "p50": 0.8306000009179115,
+        "p95": 1.7410000041127205,
+        "p99": 4.483800001442432,
+        "max": 17.964299999177456
+      },
+      "outbox_claim_to_delivered_ms": {
+        "count": 2496,
+        "p50": 6.716299995779991,
+        "p95": 14.447500005364418,
+        "p99": 78.95729999989271,
+        "max": 328.1785999983549
+      }
+    }
+  },
+  "traffic": {
+    "receivedBytesPerClient": {
+      "count": 1000,
+      "p50": 43696,
+      "p95": 44945,
+      "p99": 44945,
+      "max": 45025
+    },
+    "receivedFramesPerClient": {
+      "count": 1000,
+      "p50": 752,
+      "p95": 1036,
+      "p99": 1036,
+      "max": 1038
+    },
+    "serverCounters": {
+      "relay_poll_triggers": 3770,
+      "outbox_claim_queries": 4187,
+      "outbox_events_claimed": 2500,
+      "connections": 1000,
+      "outbound_frames": 667979,
+      "outbound_bytes": 35208007,
+      "inbound_frames": 3520,
+      "snapshots_enqueued": 1362,
+      "subscription_changes": 1000,
+      "durable_commands": 2500,
+      "fanout_recipients": 663097,
+      "outbox_events_delivered": 2496,
+      "outbox_relay_errors": 11,
+      "durable_gap_snapshots": 362,
+      "durable_retries": 10,
+      "idempotency_conflicts": 10
+    }
+  },
+  "resources": {
+    "cpuUserMs": 14297,
+    "cpuSystemMs": 2953,
+    "rssBytes": 325787648,
+    "heapUsedBytes": 86173328,
+    "arrayBufferBytes": 21727726,
+    "eventLoopLagP95Ms": 24.150015,
+    "server": {
+      "cpuUserMs": 11703,
+      "cpuSystemMs": 9062,
+      "eventLoopLagP95Ms": 29.310975,
+      "memory": {
+        "rss": 235601920,
+        "heapTotal": 175521792,
+        "heapUsed": 61202328,
+        "external": 11807380,
+        "arrayBuffers": 992016
+      },
+      "logicalCpus": 16
+    },
+    "generator": {
+      "cpuUserMs": 14297,
+      "cpuSystemMs": 2953,
+      "memory": {
+        "rss": 325787648,
+        "heapTotal": 220205056,
+        "heapUsed": 86173328,
+        "external": 32804274,
+        "arrayBuffers": 21727726
+      }
+    }
+  },
+  "database": {
+    "walBytes": 10085960,
+    "deadlocks": 0,
+    "pendingOutbox": 4,
+    "poolMaxTotal": 16,
+    "poolMaxWaiting": 2,
+    "poolMaxBusy": 16
+  },
+  "correlatedTraces": [
+    {
+      "correlationId": "000000000000000000000000000000a5",
+      "gatewayReceiveMs": 59800828.3471,
+      "sectorQueueEnterMs": 59827710.9417,
+      "chunkId": 0,
+      "viewRevision": "1",
+      "poolAcquiredMs": 59827706.1609,
+      "commitMs": 59827710.0688,
+      "ackEnqueueMs": 59827710.2945,
+      "ackSinkSendResolvedMs": 59827710.4262,
+      "outboxClaimReturnedMs": 59800842.2834,
+      "projectionDecodedMs": 59800842.4627,
+      "deltaEnqueueMs": 59800842.7307,
+      "deltaSinkSendResolvedMs": 59800848.3439,
+      "clientSendMs": 59800828.1627,
+      "clientAckReceivedMs": 59800841.7969,
+      "clientDeltaReceivedMs": 59800843.7141
+    },
+    {
+      "correlationId": "010000000000000000000000000000a5",
+      "gatewayReceiveMs": 59800840.2397,
+      "sectorQueueEnterMs": 59827717.7689,
+      "chunkId": 0,
+      "viewRevision": "1",
+      "poolAcquiredMs": 59827715.0245,
+      "commitMs": 59827717.2467,
+      "ackEnqueueMs": 59827717.3409,
+      "ackSinkSendResolvedMs": 59827717.4328,
+      "outboxClaimReturnedMs": 59800858.2662,
+      "projectionDecodedMs": 59800858.2929,
+      "deltaEnqueueMs": 59800858.3337,
+      "deltaSinkSendResolvedMs": 59800862.249,
+      "clientSendMs": 59800840.0956,
+      "clientAckReceivedMs": 59800857.8432,
+      "clientDeltaReceivedMs": 59800859.04
+    },
+    {
+      "correlationId": "020000000000000000000000000000a5",
+      "gatewayReceiveMs": 59800840.3647,
+      "sectorQueueEnterMs": 59827721.2663,
+      "chunkId": 0,
+      "viewRevision": "2",
+      "poolAcquiredMs": 59827719.5765,
+      "commitMs": 59827720.8351,
+      "ackEnqueueMs": 59827720.8892,
+      "ackSinkSendResolvedMs": 59827720.9667,
+      "outboxClaimReturnedMs": 59800867.4277,
+      "projectionDecodedMs": 59800867.4546,
+      "deltaEnqueueMs": 59800867.4884,
+      "deltaSinkSendResolvedMs": 59800872.8561,
+      "clientSendMs": 59800840.2318,
+      "clientAckReceivedMs": 59800867.0474,
+      "clientDeltaReceivedMs": 59800868.4092
+    },
+    {
+      "correlationId": "030000000000000000000000000000a5",
+      "gatewayReceiveMs": 59800840.4034,
+      "sectorQueueEnterMs": 59827724.0046,
+      "chunkId": 0,
+      "viewRevision": "2",
+      "poolAcquiredMs": 59827722.8116,
+      "commitMs": 59827723.7564,
+      "ackEnqueueMs": 59827723.7938,
+      "ackSinkSendResolvedMs": 59827723.8422,
+      "outboxClaimReturnedMs": 59800887.2465,
+      "projectionDecodedMs": 59800887.2714,
+      "deltaEnqueueMs": 59800887.3037,
+      "deltaSinkSendResolvedMs": 59800891.2169,
+      "clientSendMs": 59800840.2634,
+      "clientAckReceivedMs": 59800885.5382,
+      "clientDeltaReceivedMs": 59800888.0445
+    },
+    {
+      "correlationId": "fa0000000000000000000000000000a5",
+      "gatewayReceiveMs": 59801827.818,
+      "sectorQueueEnterMs": 59802080.2198,
+      "chunkId": 0,
+      "viewRevision": "104",
+      "poolAcquiredMs": 59802080.2909,
+      "commitMs": 59802087.3193,
+      "ackEnqueueMs": 59802087.3776,
+      "ackSinkSendResolvedMs": 59802087.4534,
+      "outboxClaimReturnedMs": 59802087.7174,
+      "projectionDecodedMs": 59802087.7315,
+      "deltaEnqueueMs": 59802087.8874,
+      "deltaSinkSendResolvedMs": 59802091.8378,
+      "clientSendMs": 59801827.2426,
+      "clientAckReceivedMs": 59802095.9261,
+      "clientDeltaReceivedMs": 59802095.9358
+    },
+    {
+      "correlationId": "f40100000000000000000000000000a5",
+      "gatewayReceiveMs": 59802827.2676,
+      "sectorQueueEnterMs": 59804697.824,
+      "chunkId": 0,
+      "viewRevision": "207",
+      "poolAcquiredMs": 59804697.958,
+      "commitMs": 59804712.2063,
+      "ackEnqueueMs": 59804712.2697,
+      "ackSinkSendResolvedMs": 59804712.3804,
+      "outboxClaimReturnedMs": 59804713.4422,
+      "projectionDecodedMs": 59804713.4571,
+      "deltaEnqueueMs": 59804713.7725,
+      "deltaSinkSendResolvedMs": 59804720.4074,
+      "clientSendMs": 59802827.1464,
+      "clientAckReceivedMs": 59804712.4436,
+      "clientDeltaReceivedMs": 59804718.1438
+    },
+    {
+      "correlationId": "ee0200000000000000000000000000a5",
+      "gatewayReceiveMs": 59803827.4702,
+      "sectorQueueEnterMs": 59807920.9947,
+      "chunkId": 0,
+      "viewRevision": "310",
+      "poolAcquiredMs": 59807921.0963,
+      "commitMs": 59807936.6612,
+      "ackEnqueueMs": 59807936.7535,
+      "ackSinkSendResolvedMs": 59807936.9192,
+      "outboxClaimReturnedMs": 59807938.5277,
+      "projectionDecodedMs": 59807938.5509,
+      "deltaEnqueueMs": 59807939.1654,
+      "deltaSinkSendResolvedMs": 59807949.7681,
+      "clientSendMs": 59803827.2247,
+      "clientAckReceivedMs": 59807937.1878,
+      "clientDeltaReceivedMs": 59807950.9661
+    },
+    {
+      "correlationId": "e80300000000000000000000000000a5",
+      "gatewayReceiveMs": 59804845.3042,
+      "sectorQueueEnterMs": 59810931.8211,
+      "chunkId": 0,
+      "viewRevision": "413",
+      "poolAcquiredMs": 59810932.0892,
+      "commitMs": 59810954.5792,
+      "ackEnqueueMs": 59810954.6798,
+      "ackSinkSendResolvedMs": 59810954.9096,
+      "outboxClaimReturnedMs": 59810957.0855,
+      "projectionDecodedMs": 59810957.0933,
+      "deltaEnqueueMs": 59810957.1149,
+      "deltaSinkSendResolvedMs": 59810960.768,
+      "clientSendMs": 59804830.1989,
+      "clientAckReceivedMs": 59810955.0667,
+      "clientDeltaReceivedMs": 59810957.5736
+    },
+    {
+      "correlationId": "e20400000000000000000000000000a5",
+      "gatewayReceiveMs": 59805831.344,
+      "sectorQueueEnterMs": 59813449.1676,
+      "chunkId": 0,
+      "viewRevision": "517",
+      "poolAcquiredMs": 59813449.7599,
+      "commitMs": 59813466.9578,
+      "ackEnqueueMs": 59813467.011,
+      "ackSinkSendResolvedMs": 59813467.2754,
+      "outboxClaimReturnedMs": 59813468.717,
+      "projectionDecodedMs": 59813468.7347,
+      "deltaEnqueueMs": 59813468.9604,
+      "deltaSinkSendResolvedMs": 59813475.5228,
+      "clientSendMs": 59805827.6304,
+      "clientAckReceivedMs": 59813467.2271,
+      "clientDeltaReceivedMs": 59813471.7723
+    },
+    {
+      "correlationId": "dc0500000000000000000000000000a5",
+      "gatewayReceiveMs": 59806827.3525,
+      "sectorQueueEnterMs": 59815992.7748,
+      "chunkId": 0,
+      "viewRevision": "620",
+      "poolAcquiredMs": 59815992.9339,
+      "commitMs": 59816007.3003,
+      "ackEnqueueMs": 59816007.3787,
+      "ackSinkSendResolvedMs": 59816007.5119,
+      "outboxClaimReturnedMs": 59816009.1492,
+      "projectionDecodedMs": 59816009.17,
+      "deltaEnqueueMs": 59816009.5263,
+      "deltaSinkSendResolvedMs": 59816016.4985,
+      "clientSendMs": 59806827.2288,
+      "clientAckReceivedMs": 59816007.6188,
+      "clientDeltaReceivedMs": 59816014.1461
+    },
+    {
+      "correlationId": "d60600000000000000000000000000a5",
+      "gatewayReceiveMs": 59807830.051,
+      "sectorQueueEnterMs": 59818582.0736,
+      "chunkId": 0,
+      "viewRevision": "723",
+      "poolAcquiredMs": 59818582.2359,
+      "commitMs": 59818596.066,
+      "ackEnqueueMs": 59818596.1465,
+      "ackSinkSendResolvedMs": 59818596.2786,
+      "outboxClaimReturnedMs": 59818597.8825,
+      "projectionDecodedMs": 59818597.9023,
+      "deltaEnqueueMs": 59818598.3625,
+      "deltaSinkSendResolvedMs": 59818605.5089,
+      "clientSendMs": 59807827.4698,
+      "clientAckReceivedMs": 59818596.415,
+      "clientDeltaReceivedMs": 59818605.0134
+    },
+    {
+      "correlationId": "d00700000000000000000000000000a5",
+      "gatewayReceiveMs": 59808833.3158,
+      "sectorQueueEnterMs": 59821103.0514,
+      "chunkId": 0,
+      "viewRevision": "826",
+      "poolAcquiredMs": 59821103.1915,
+      "commitMs": 59821116.1443,
+      "ackEnqueueMs": 59821116.2128,
+      "ackSinkSendResolvedMs": 59821116.3304,
+      "outboxClaimReturnedMs": 59821118.2087,
+      "projectionDecodedMs": 59821118.2365,
+      "deltaEnqueueMs": 59821118.3129,
+      "deltaSinkSendResolvedMs": 59821125.7291,
+      "clientSendMs": 59808833.0677,
+      "clientAckReceivedMs": 59821116.4537,
+      "clientDeltaReceivedMs": 59821119.1878
+    },
+    {
+      "correlationId": "ca0800000000000000000000000000a5",
+      "gatewayReceiveMs": 59809835.6629,
+      "sectorQueueEnterMs": 59823739.3881,
+      "chunkId": 0,
+      "viewRevision": "929",
+      "poolAcquiredMs": 59823739.5284,
+      "commitMs": 59823753.808,
+      "ackEnqueueMs": 59823753.8709,
+      "ackSinkSendResolvedMs": 59823753.9943,
+      "outboxClaimReturnedMs": 59823755.7259,
+      "projectionDecodedMs": 59823755.7467,
+      "deltaEnqueueMs": 59823755.9714,
+      "deltaSinkSendResolvedMs": 59823762.9133,
+      "clientSendMs": 59809828.637,
+      "clientAckReceivedMs": 59823754.0904,
+      "clientDeltaReceivedMs": 59823758.7325
+    }
+  ],
+  "limitations": [
+    "Single-host loopback with separate Node processes; CPU still shares host",
+    "Synthetic M3.5 fixture cost and identity; not approved gameplay or production capacity",
+    "M2 payload byte counts exclude Colyseus/WebSocket framing overhead",
+    "Cross-process commit-to-receive timings use Node's same-host monotonic clock"
+  ],
+  "disconnectSeconds": 0.2205004999999983,
+  "totalWallSeconds": 28.9301977
+}

@@ -52,6 +52,22 @@ interface Session {
   lastRefill: number;
 }
 
+export interface CorrelatedActionTrace {
+  readonly correlationId: string;
+  readonly gatewayReceiveMs: number;
+  chunkId?: number;
+  viewRevision?: string;
+  sectorQueueEnterMs?: number;
+  poolAcquiredMs?: number;
+  commitMs?: number;
+  ackEnqueueMs?: number;
+  ackSinkSendResolvedMs?: number;
+  outboxClaimReturnedMs?: number;
+  projectionDecodedMs?: number;
+  deltaEnqueueMs?: number;
+  deltaSinkSendResolvedMs?: number;
+}
+
 /** Test-only v1 transport wired to the durable M3.5 fixture transaction. */
 export class DurableRealtimeCore {
   readonly metrics: RealtimeMetrics;
@@ -62,6 +78,8 @@ export class DurableRealtimeCore {
   readonly #subscribers = new Map<string, Set<Session>>();
   readonly #commitTimeline = new Map<string, number>();
   readonly #ackCommitTimeline = new Map<string, number>();
+  readonly #traces = new Map<string, CorrelatedActionTrace>();
+  readonly #traceCorrelationIds: ReadonlySet<string> | undefined;
   #relayTimer: NodeJS.Timeout | undefined;
 
   constructor(
@@ -72,11 +90,13 @@ export class DurableRealtimeCore {
       readonly maxSectorQueueDepth?: number;
       readonly maxOutboundFrames?: number;
       readonly maxOutboundBytes?: number;
+      readonly traceCorrelationIds?: ReadonlySet<string>;
     } = {},
   ) {
     this.#authority = authority;
     this.metrics = options.metrics ?? new RealtimeMetrics();
     this.#logger = options.logger ?? silentLogger;
+    this.#traceCorrelationIds = options.traceCorrelationIds;
     this.#queues = new SectorQueues(
       this.metrics,
       options.maxSectorQueueDepth ?? 4096,
@@ -100,6 +120,9 @@ export class DurableRealtimeCore {
   get ackCommitTimeline(): Readonly<Record<string, number>> {
     return Object.fromEntries(this.#ackCommitTimeline);
   }
+  get correlatedTraces(): readonly CorrelatedActionTrace[] {
+    return [...this.#traces.values()].map((trace) => ({ ...trace }));
+  }
 
   startRelay(intervalMs = 20): void {
     if (this.#relayTimer) throw new Error("Relay already started");
@@ -117,6 +140,7 @@ export class DurableRealtimeCore {
     return this.#authority.drain(
       (event) => this.#publish(event),
       () => this.#resyncAll(),
+      this.metrics,
     );
   }
 
@@ -127,14 +151,17 @@ export class DurableRealtimeCore {
         const generation = ++session.generation;
         session.subscriptions.set(id, generation);
         session.revisions.delete(id);
-        await this.#queues.enqueue(this.#sectorForChunk(id), () =>
-          this.#sendSnapshot(session, id, generation),
+        await this.#queues.enqueue(
+          this.#sectorForChunk(id),
+          () => this.#sendSnapshot(session, id, generation),
+          "snapshot",
         );
       }
     }
   }
 
   #pollRelay(): void {
+    this.metrics.count("relay_poll_triggers");
     void this.drainOutbox().catch(() => {
       this.metrics.count("outbox_relay_errors");
       this.#logger.log({ event: "m35_outbox_relay_error" });
@@ -183,6 +210,7 @@ export class DurableRealtimeCore {
     const session = this.#sessions.get(sessionId);
     if (!session || session.outbound.closed) return;
     const receivedAt = performance.now();
+    const receivedAtMono = Number(process.hrtime.bigint()) / 1e6;
     if (!this.#consumeToken(session)) {
       this.#error(session, REASON.RATE_LIMITED);
       return;
@@ -202,6 +230,7 @@ export class DurableRealtimeCore {
             session,
             decodeExplore(frame.payload),
             receivedAt,
+            receivedAtMono,
           );
           break;
         case M2_KIND.SUBSCRIBE:
@@ -257,8 +286,10 @@ export class DurableRealtimeCore {
       const subscribers = this.#subscribers.get(key) ?? new Set<Session>();
       subscribers.add(session);
       this.#subscribers.set(key, subscribers);
-      await this.#queues.enqueue(this.#sectorForChunk(id), () =>
-        this.#sendSnapshot(session, id, generation),
+      await this.#queues.enqueue(
+        this.#sectorForChunk(id),
+        () => this.#sendSnapshot(session, id, generation),
+        "snapshot",
       );
     }
     this.metrics.count("subscription_changes");
@@ -279,8 +310,10 @@ export class DurableRealtimeCore {
     const generation = ++session.generation;
     session.subscriptions.set(id, generation);
     session.revisions.delete(id);
-    await this.#queues.enqueue(this.#sectorForChunk(id), () =>
-      this.#sendSnapshot(session, id, generation),
+    await this.#queues.enqueue(
+      this.#sectorForChunk(id),
+      () => this.#sendSnapshot(session, id, generation),
+      "snapshot",
     );
     this.metrics.count("resync_requests");
   }
@@ -311,20 +344,43 @@ export class DurableRealtimeCore {
     session: Session,
     command: ExploreCommand,
     receivedAt: number,
+    receivedAtMono: number,
   ): Promise<void> {
     const { chunkX, chunkZ } = chunkCoordinatesForIndex(command.tileIndex);
     const id = chunkId(chunkX, chunkZ);
+    const keyHex = Buffer.from(command.key).toString("hex");
+    const firstObserved = !this.#traces.has(keyHex);
+    if (
+      this.#traces.size < 32 &&
+      firstObserved &&
+      (this.#traceCorrelationIds?.has(keyHex) ?? true)
+    )
+      this.#traces.set(keyHex, {
+        correlationId: keyHex,
+        gatewayReceiveMs: receivedAtMono,
+      });
+    const trace = firstObserved ? this.#traces.get(keyHex) : undefined;
     try {
       const outcome = await this.#queues.enqueue(
         sectorIdForTile(command.tileIndex),
-        () =>
-          this.#authority.apply(
+        () => {
+          if (trace)
+            trace.sectorQueueEnterMs = Number(process.hrtime.bigint()) / 1e6;
+          return this.#authority.apply(
             session.identity.actorId,
             session.identity.schoolSlot,
             command.key,
             command.tileIndex,
-          ),
+          );
+        },
+        "command",
       );
+      if (trace) {
+        trace.chunkId = id;
+        trace.viewRevision = outcome.result.viewRevision ?? "0";
+        trace.poolAcquiredMs = outcome.metrics.poolAcquiredAtMonotonicMs;
+        trace.commitMs = outcome.metrics.committedAtMonotonicMs;
+      }
       const result = outcome.result;
       const viewRevision = BigInt(result.viewRevision ?? "0");
       const status =
@@ -353,7 +409,15 @@ export class DurableRealtimeCore {
           chunkId: id,
           viewRevision,
         }),
+        undefined,
+        trace
+          ? () => {
+              trace.ackSinkSendResolvedMs =
+                Number(process.hrtime.bigint()) / 1e6;
+            }
+          : undefined,
       );
+      if (trace) trace.ackEnqueueMs = Number(process.hrtime.bigint()) / 1e6;
       this.metrics.observe("durable_pool_wait_ms", outcome.metrics.poolWaitMs);
       this.metrics.observe(
         "durable_transaction_ms",
@@ -399,6 +463,11 @@ export class DurableRealtimeCore {
   }
 
   async #publish(event: CommittedFixtureDelta): Promise<void> {
+    const trace = this.#traces.get(event.commandKeyHex);
+    if (trace) {
+      trace.outboxClaimReturnedMs = event.claimReturnedAtMs;
+      trace.projectionDecodedMs = event.projectedAtMs;
+    }
     await this.#queues.enqueue(
       this.#sectorForChunk(event.chunkId),
       async () => {
@@ -445,8 +514,16 @@ export class DurableRealtimeCore {
             session.outbound.enqueue(
               delta,
               () => session.subscriptions.get(event.chunkId) === generation,
+              trace && session.identity.actorId === event.actorId
+                ? () => {
+                    trace.deltaSinkSendResolvedMs =
+                      Number(process.hrtime.bigint()) / 1e6;
+                  }
+                : undefined,
             )
           ) {
+            if (trace && session.identity.actorId === event.actorId)
+              trace.deltaEnqueueMs = Number(process.hrtime.bigint()) / 1e6;
             session.revisions.set(event.chunkId, event.viewRevision);
             recipients++;
           }
@@ -462,6 +539,7 @@ export class DurableRealtimeCore {
             Number(process.hrtime.bigint()) / 1e6 - event.committedAtMs,
           );
       },
+      "relay",
     );
   }
 

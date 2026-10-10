@@ -16,7 +16,10 @@ class SerialSectorQueue {
     return this.#depth;
   }
 
-  enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
+  enqueue<T>(
+    operation: () => T | Promise<T>,
+    kind?: "command" | "snapshot" | "relay",
+  ): Promise<T> {
     if (this.#depth >= this.#maxDepth) {
       this.#metrics.count("sector_queue_rejected");
       return Promise.reject(new Error("Sector queue full"));
@@ -25,15 +28,16 @@ class SerialSectorQueue {
     this.#depth++;
     this.#metrics.observe("sector_queue_depth", this.#depth);
     const task = this.#tail.then(async () => {
-      this.#metrics.observe(
-        "sector_queue_wait_ms",
-        performance.now() - queuedAt,
-      );
+      const waited = performance.now() - queuedAt;
+      this.#metrics.observe("sector_queue_wait_ms", waited);
+      if (kind) this.#metrics.observe(`sector_${kind}_queue_wait_ms`, waited);
       const start = performance.now();
       try {
         return await operation();
       } finally {
-        this.#metrics.observe("sector_execute_ms", performance.now() - start);
+        const executed = performance.now() - start;
+        this.#metrics.observe("sector_execute_ms", executed);
+        if (kind) this.#metrics.observe(`sector_${kind}_execute_ms`, executed);
         this.#depth--;
       }
     });
@@ -53,10 +57,14 @@ export class SectorQueues {
       () => new SerialSectorQueue(metrics, maxDepth),
     );
   }
-  enqueue<T>(sectorId: number, operation: () => T | Promise<T>): Promise<T> {
+  enqueue<T>(
+    sectorId: number,
+    operation: () => T | Promise<T>,
+    kind?: "command" | "snapshot" | "relay",
+  ): Promise<T> {
     const queue = this.#queues[sectorId];
     if (!queue) throw new RangeError("Invalid sector id");
-    return queue.enqueue(operation);
+    return queue.enqueue(operation, kind);
   }
   depths(): number[] {
     return this.#queues.map((queue) => queue.depth);

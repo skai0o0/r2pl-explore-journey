@@ -1,0 +1,889 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "ramBytes": 34164097024,
+    "generator": "separate Node process, same host as server",
+    "fanoutMode": "indexed",
+    "durable": true,
+    "trial": "backlog2"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 10,
+    "targetActions": 2500,
+    "requestedActionsPerSecond": 250,
+    "hotspotSectorShare": 0.7,
+    "schools": 2,
+    "subscribedChunksPerClient": 1
+  },
+  "outcomes": {
+    "connected": 1000,
+    "acknowledged": 2500,
+    "applied": 2500,
+    "noChange": 0,
+    "converged": true,
+    "convergenceCheckMs": 11732.451599999999,
+    "resyncs": 0,
+    "clientErrors": 0,
+    "durableRetries": {
+      "duplicates": 10,
+      "conflicts": 10
+    }
+  },
+  "timings": {
+    "connectionSeconds": 0.7441776999999999,
+    "connectionRatePerSecond": 1343.7650711651263,
+    "actionSeconds": 12.761250599999999,
+    "acknowledgedActionsPerSecond": 195.9055643026084,
+    "clientAckMs": {
+      "count": 2500,
+      "p50": 357.832,
+      "p95": 2255.15,
+      "p99": 2623.482,
+      "max": 2774.445
+    },
+    "sampledOwnDeltaVisibleMs": {
+      "count": 54,
+      "p50": 12917.489,
+      "p95": 14135.064,
+      "p99": 14146.375,
+      "max": 14146.375
+    },
+    "commitToClientAckMs": {
+      "count": 2500,
+      "p50": 0.231,
+      "p95": 1.54,
+      "p99": 12.633,
+      "max": 47.558
+    },
+    "sampledCommitToClientVisibleMs": {
+      "count": 54,
+      "p50": 12257.484,
+      "p95": 12475.544,
+      "p99": 12480.693,
+      "max": 12480.693
+    },
+    "sampledOwnDeltaMissing": 0,
+    "server": {
+      "outbox_claim_query_ms": {
+        "count": 148,
+        "p50": 2.1824000000488013,
+        "p95": 5.212999999988824,
+        "p99": 10.395999999949709,
+        "max": 59.79590000002645
+      },
+      "outbox_claim_batch_size": {
+        "count": 148,
+        "p50": 0,
+        "p95": 50,
+        "p99": 50,
+        "max": 50
+      },
+      "socket_buffered_bytes": {
+        "count": 100000,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "outbound_queue_depth": {
+        "count": 100000,
+        "p50": 1,
+        "p95": 1,
+        "p99": 1,
+        "max": 2
+      },
+      "sector_queue_depth": {
+        "count": 6020,
+        "p50": 1,
+        "p95": 411,
+        "p99": 652,
+        "max": 712
+      },
+      "sector_queue_wait_ms": {
+        "count": 6020,
+        "p50": 0.01330000000052678,
+        "p95": 1657.1725999999999,
+        "p99": 2542.6021,
+        "max": 2723.6501000000007
+      },
+      "sector_snapshot_queue_wait_ms": {
+        "count": 1000,
+        "p50": 212.52199999999993,
+        "p95": 380.6002000000001,
+        "p99": 395.32119999999986,
+        "max": 399.52369999999996
+      },
+      "sector_execute_ms": {
+        "count": 6020,
+        "p50": 4.65309999999954,
+        "p95": 13.947900000001027,
+        "p99": 33.47149999999965,
+        "max": 136.0182000000002
+      },
+      "sector_snapshot_execute_ms": {
+        "count": 1000,
+        "p50": 0.5018000000000029,
+        "p95": 2.1019999999998618,
+        "p99": 90.55150000000003,
+        "max": 136.0182000000002
+      },
+      "sector_command_queue_wait_ms": {
+        "count": 2520,
+        "p50": 253.6237000000001,
+        "p95": 2226.8166999999994,
+        "p99": 2616.7567,
+        "max": 2723.6501000000007
+      },
+      "sector_command_execute_ms": {
+        "count": 2520,
+        "p50": 5.901099999999133,
+        "p95": 20.82549999999901,
+        "p99": 38.952400000000125,
+        "max": 66.14890000000014
+      },
+      "durable_pool_wait_ms": {
+        "count": 2510,
+        "p50": 0.047100000000682485,
+        "p95": 0.2018000000007305,
+        "p99": 0.48700000000008004,
+        "max": 1.8033999999997832
+      },
+      "durable_transaction_ms": {
+        "count": 2510,
+        "p50": 5.785899999999856,
+        "p95": 20.698300000000017,
+        "p99": 38.86869999999908,
+        "max": 65.88450000000012
+      },
+      "durable_chunk_lock_ms": {
+        "count": 2510,
+        "p50": 0.19589999999971042,
+        "p95": 0.7426000000014028,
+        "p99": 1.6702000000004773,
+        "max": 8.644000000000233
+      },
+      "commit_to_ack_enqueue_ms": {
+        "count": 2510,
+        "p50": 0.04490000000077998,
+        "p95": 0.12250000000040018,
+        "p99": 0.2176999999992404,
+        "max": 0.3850000000002183
+      },
+      "command_ack_ms": {
+        "count": 2510,
+        "p50": 350.64400000000023,
+        "p95": 2254.6458000000002,
+        "p99": 2623.2379,
+        "max": 2772.4755000000005
+      },
+      "ack_delivery_ms": {
+        "count": 2520,
+        "p50": 0.07959999999911815,
+        "p95": 2.9056000000000495,
+        "p99": 5.228299999999763,
+        "max": 20.657799999999952
+      },
+      "projection_decode_ms": {
+        "count": 2500,
+        "p50": 0.013299999991431832,
+        "p95": 0.01959999999962747,
+        "p99": 0.025799999944865704,
+        "max": 0.1753000000026077
+      },
+      "commit_to_claim_return_ms": {
+        "count": 2500,
+        "p50": 12156.964400000172,
+        "p95": 12391.313199999975,
+        "p99": 12466.780000000028,
+        "max": 12569.599500000011
+      },
+      "sector_relay_queue_wait_ms": {
+        "count": 2500,
+        "p50": 0.004600000000209548,
+        "p95": 3.5560999999997875,
+        "p99": 32.03449999999975,
+        "max": 2533.850699999999
+      },
+      "delta_encode_ms": {
+        "count": 2500,
+        "p50": 0.011900000001332955,
+        "p95": 0.015799999999217107,
+        "p99": 0.02239999999801512,
+        "max": 0.18779999999969732
+      },
+      "fanout_candidates": {
+        "count": 2500,
+        "p50": 300,
+        "p95": 412,
+        "p99": 412,
+        "max": 412
+      },
+      "fanout_enqueue_ms": {
+        "count": 2500,
+        "p50": 0.38950000000113505,
+        "p95": 0.6039000000018859,
+        "p99": 0.81479999999965,
+        "max": 1.8482000000003609
+      },
+      "commit_to_delta_enqueue_ms": {
+        "count": 2500,
+        "p50": 12279.010199999902,
+        "p95": 12467.054599999916,
+        "p99": 12558.442400000058,
+        "max": 12581.811599999899
+      },
+      "sector_relay_execute_ms": {
+        "count": 2500,
+        "p50": 4.667100000002392,
+        "p95": 7.120899999998073,
+        "p99": 8.976200000000972,
+        "max": 20.509399999999914
+      },
+      "delta_delivery_ms": {
+        "count": 100000,
+        "p50": 4.28650000000016,
+        "p95": 9.477200000001176,
+        "p99": 15.362900000000081,
+        "max": 20.69309999999996
+      },
+      "outbox_mark_delivered_ms": {
+        "count": 2500,
+        "p50": 0.7628000001423061,
+        "p95": 1.0860000001266599,
+        "p99": 2.6634000001940876,
+        "max": 35.424699999857694
+      },
+      "outbox_claim_to_delivered_ms": {
+        "count": 2500,
+        "p50": 128.2727999999188,
+        "p95": 301.2532999999821,
+        "p99": 757.7658999999985,
+        "max": 11129.153200000059
+      }
+    }
+  },
+  "traffic": {
+    "receivedBytesPerClient": {
+      "count": 1000,
+      "p50": 35110,
+      "p95": 44945,
+      "p99": 44945,
+      "max": 45025
+    },
+    "receivedFramesPerClient": {
+      "count": 1000,
+      "p50": 755,
+      "p95": 1036,
+      "p99": 1036,
+      "max": 1038
+    },
+    "serverCounters": {
+      "relay_poll_triggers": 3723,
+      "outbox_claim_queries": 148,
+      "outbox_events_claimed": 2500,
+      "connections": 1000,
+      "outbound_frames": 669547,
+      "outbound_bytes": 32116745,
+      "inbound_frames": 3520,
+      "snapshots_enqueued": 1000,
+      "subscription_changes": 1000,
+      "durable_commands": 2500,
+      "fanout_recipients": 665027,
+      "outbox_events_delivered": 2500,
+      "durable_retries": 10,
+      "idempotency_conflicts": 10
+    }
+  },
+  "resources": {
+    "cpuUserMs": 13234,
+    "cpuSystemMs": 2406,
+    "rssBytes": 185946112,
+    "heapUsedBytes": 73382992,
+    "arrayBufferBytes": 18125546,
+    "eventLoopLagP95Ms": 26.935295,
+    "server": {
+      "cpuUserMs": 11328,
+      "cpuSystemMs": 7735,
+      "eventLoopLagP95Ms": 28.688383,
+      "memory": {
+        "rss": 263364608,
+        "heapTotal": 184557568,
+        "heapUsed": 109872872,
+        "external": 11749090,
+        "arrayBuffers": 934270
+      },
+      "logicalCpus": 16
+    },
+    "generator": {
+      "cpuUserMs": 13234,
+      "cpuSystemMs": 2406,
+      "memory": {
+        "rss": 185946112,
+        "heapTotal": 86331392,
+        "heapUsed": 73382992,
+        "external": 29267630,
+        "arrayBuffers": 18125546
+      }
+    }
+  },
+  "database": {
+    "walBytes": 11046080,
+    "deadlocks": 0,
+    "pendingOutbox": 0,
+    "poolMaxTotal": 16,
+    "poolMaxWaiting": 0,
+    "poolMaxBusy": 11,
+    "backlogSamples": [
+      {
+        "elapsedMs": 310.1461999998428,
+        "pending": 47,
+        "rssBytes": 165183488,
+        "heapUsedBytes": 34686736
+      },
+      {
+        "elapsedMs": 811.4825999999885,
+        "pending": 110,
+        "rssBytes": 175575040,
+        "heapUsedBytes": 60789368
+      },
+      {
+        "elapsedMs": 1311.0391999999993,
+        "pending": 151,
+        "rssBytes": 185573376,
+        "heapUsedBytes": 47727736
+      },
+      {
+        "elapsedMs": 1810.999799999874,
+        "pending": 251,
+        "rssBytes": 193634304,
+        "heapUsedBytes": 51674864
+      },
+      {
+        "elapsedMs": 2310.8850000000093,
+        "pending": 375,
+        "rssBytes": 203956224,
+        "heapUsedBytes": 64965472
+      },
+      {
+        "elapsedMs": 2811.3634999999776,
+        "pending": 460,
+        "rssBytes": 229453824,
+        "heapUsedBytes": 95488720
+      },
+      {
+        "elapsedMs": 3315.626099999994,
+        "pending": 544,
+        "rssBytes": 201105408,
+        "heapUsedBytes": 41371280
+      },
+      {
+        "elapsedMs": 3813.8244999998715,
+        "pending": 646,
+        "rssBytes": 202092544,
+        "heapUsedBytes": 39926072
+      },
+      {
+        "elapsedMs": 4313.354599999962,
+        "pending": 757,
+        "rssBytes": 201060352,
+        "heapUsedBytes": 38870184
+      },
+      {
+        "elapsedMs": 4813.306099999929,
+        "pending": 860,
+        "rssBytes": 196231168,
+        "heapUsedBytes": 34394864
+      },
+      {
+        "elapsedMs": 5312.297999999952,
+        "pending": 958,
+        "rssBytes": 196214784,
+        "heapUsedBytes": 32785432
+      },
+      {
+        "elapsedMs": 5812.591800000053,
+        "pending": 1079,
+        "rssBytes": 197840896,
+        "heapUsedBytes": 35254672
+      },
+      {
+        "elapsedMs": 6314.267299999949,
+        "pending": 1169,
+        "rssBytes": 196763648,
+        "heapUsedBytes": 33951528
+      },
+      {
+        "elapsedMs": 6813.998200000031,
+        "pending": 1280,
+        "rssBytes": 196710400,
+        "heapUsedBytes": 36731064
+      },
+      {
+        "elapsedMs": 7315.008999999845,
+        "pending": 1378,
+        "rssBytes": 197111808,
+        "heapUsedBytes": 34574504
+      },
+      {
+        "elapsedMs": 7814.204299999867,
+        "pending": 1497,
+        "rssBytes": 197341184,
+        "heapUsedBytes": 36068536
+      },
+      {
+        "elapsedMs": 8315.189599999925,
+        "pending": 1598,
+        "rssBytes": 195633152,
+        "heapUsedBytes": 33424240
+      },
+      {
+        "elapsedMs": 8815.524500000058,
+        "pending": 1715,
+        "rssBytes": 196890624,
+        "heapUsedBytes": 34838544
+      },
+      {
+        "elapsedMs": 9314.865500000073,
+        "pending": 1819,
+        "rssBytes": 197087232,
+        "heapUsedBytes": 34686056
+      },
+      {
+        "elapsedMs": 9814.818800000008,
+        "pending": 1929,
+        "rssBytes": 197820416,
+        "heapUsedBytes": 37565352
+      },
+      {
+        "elapsedMs": 10316.972799999872,
+        "pending": 1997,
+        "rssBytes": 195461120,
+        "heapUsedBytes": 31326112
+      },
+      {
+        "elapsedMs": 10815.63369999989,
+        "pending": 2071,
+        "rssBytes": 200863744,
+        "heapUsedBytes": 42225872
+      },
+      {
+        "elapsedMs": 11322.724299999885,
+        "pending": 2114,
+        "rssBytes": 196251648,
+        "heapUsedBytes": 33331024
+      },
+      {
+        "elapsedMs": 11814.9767,
+        "pending": 2161,
+        "rssBytes": 199815168,
+        "heapUsedBytes": 40131360
+      },
+      {
+        "elapsedMs": 12328.60400000005,
+        "pending": 2222,
+        "rssBytes": 196272128,
+        "heapUsedBytes": 32522968
+      },
+      {
+        "elapsedMs": 12835.311999999918,
+        "pending": 2267,
+        "rssBytes": 200261632,
+        "heapUsedBytes": 44124984
+      },
+      {
+        "elapsedMs": 13332.311800000025,
+        "pending": 2185,
+        "rssBytes": 221949952,
+        "heapUsedBytes": 75583200
+      },
+      {
+        "elapsedMs": 13857.306799999904,
+        "pending": 2087,
+        "rssBytes": 228016128,
+        "heapUsedBytes": 43704352
+      },
+      {
+        "elapsedMs": 14357.282499999972,
+        "pending": 1987,
+        "rssBytes": 228122624,
+        "heapUsedBytes": 70448336
+      },
+      {
+        "elapsedMs": 14864.099299999885,
+        "pending": 1888,
+        "rssBytes": 227561472,
+        "heapUsedBytes": 42143584
+      },
+      {
+        "elapsedMs": 15372.340199999977,
+        "pending": 1781,
+        "rssBytes": 227794944,
+        "heapUsedBytes": 61803600
+      },
+      {
+        "elapsedMs": 15875.81669999985,
+        "pending": 1672,
+        "rssBytes": 227868672,
+        "heapUsedBytes": 84983112
+      },
+      {
+        "elapsedMs": 16381.578500000061,
+        "pending": 1564,
+        "rssBytes": 227868672,
+        "heapUsedBytes": 55809424
+      },
+      {
+        "elapsedMs": 16888.493299999973,
+        "pending": 1463,
+        "rssBytes": 227880960,
+        "heapUsedBytes": 80061744
+      },
+      {
+        "elapsedMs": 17391.890200000023,
+        "pending": 1354,
+        "rssBytes": 227880960,
+        "heapUsedBytes": 49947712
+      },
+      {
+        "elapsedMs": 17894.5848999999,
+        "pending": 1253,
+        "rssBytes": 228462592,
+        "heapUsedBytes": 72021880
+      },
+      {
+        "elapsedMs": 18387.814999999944,
+        "pending": 1152,
+        "rssBytes": 228581376,
+        "heapUsedBytes": 39936608
+      },
+      {
+        "elapsedMs": 18903.12819999992,
+        "pending": 1046,
+        "rssBytes": 228581376,
+        "heapUsedBytes": 66513520
+      },
+      {
+        "elapsedMs": 19395.81839999999,
+        "pending": 940,
+        "rssBytes": 228581376,
+        "heapUsedBytes": 34186176
+      },
+      {
+        "elapsedMs": 19915.492899999954,
+        "pending": 842,
+        "rssBytes": 228597760,
+        "heapUsedBytes": 59234304
+      },
+      {
+        "elapsedMs": 20397.026700000046,
+        "pending": 742,
+        "rssBytes": 228597760,
+        "heapUsedBytes": 79260784
+      },
+      {
+        "elapsedMs": 20900.802200000035,
+        "pending": 637,
+        "rssBytes": 228597760,
+        "heapUsedBytes": 49001768
+      },
+      {
+        "elapsedMs": 21410.696999999927,
+        "pending": 531,
+        "rssBytes": 228597760,
+        "heapUsedBytes": 74420728
+      },
+      {
+        "elapsedMs": 21908.867499999935,
+        "pending": 428,
+        "rssBytes": 228597760,
+        "heapUsedBytes": 45344760
+      },
+      {
+        "elapsedMs": 22421.02139999997,
+        "pending": 331,
+        "rssBytes": 228597760,
+        "heapUsedBytes": 66539288
+      },
+      {
+        "elapsedMs": 22938.27469999995,
+        "pending": 253,
+        "rssBytes": 229822464,
+        "heapUsedBytes": 88738696
+      },
+      {
+        "elapsedMs": 23421.509300000034,
+        "pending": 180,
+        "rssBytes": 229822464,
+        "heapUsedBytes": 56021472
+      },
+      {
+        "elapsedMs": 23924.712099999888,
+        "pending": 108,
+        "rssBytes": 230518784,
+        "heapUsedBytes": 77862624
+      },
+      {
+        "elapsedMs": 24430.74410000001,
+        "pending": 39,
+        "rssBytes": 229842944,
+        "heapUsedBytes": 43991872
+      },
+      {
+        "elapsedMs": 24935.250800000038,
+        "pending": 0,
+        "rssBytes": 229875712,
+        "heapUsedBytes": 84352760
+      }
+    ],
+    "peakPendingOutbox": 2267
+  },
+  "correlatedTraces": [
+    {
+      "correlationId": "000000000000000000000000000000a5",
+      "gatewayReceiveMs": 1122964.358,
+      "sectorQueueEnterMs": 1122964.6626,
+      "chunkId": 0,
+      "viewRevision": "1",
+      "poolAcquiredMs": 1122965.134,
+      "commitMs": 1122979.3662,
+      "ackEnqueueMs": 1122979.5685,
+      "ackSinkSendResolvedMs": 1122979.8225,
+      "outboxClaimReturnedMs": 1122980.453,
+      "projectionDecodedMs": 1122980.6779,
+      "deltaEnqueueMs": 1123002.1073,
+      "deltaSinkSendResolvedMs": 1123007.4426,
+      "clientSendMs": 1122964.1469,
+      "clientAckReceivedMs": 1122980.0356,
+      "clientDeltaReceivedMs": 1123003.1954
+    },
+    {
+      "correlationId": "010000000000000000000000000000a5",
+      "gatewayReceiveMs": 1122970.9607,
+      "sectorQueueEnterMs": 1122979.6038,
+      "chunkId": 0,
+      "viewRevision": "1",
+      "poolAcquiredMs": 1122979.8909,
+      "commitMs": 1122991.1773,
+      "ackEnqueueMs": 1122991.2454,
+      "ackSinkSendResolvedMs": 1122991.3516,
+      "outboxClaimReturnedMs": 1123013.2034,
+      "projectionDecodedMs": 1123013.2495,
+      "deltaEnqueueMs": 1123024.2505,
+      "deltaSinkSendResolvedMs": 1123028.3461,
+      "clientSendMs": 1122970.7986,
+      "clientAckReceivedMs": 1122991.4307,
+      "clientDeltaReceivedMs": 1123025.0653
+    },
+    {
+      "correlationId": "020000000000000000000000000000a5",
+      "gatewayReceiveMs": 1122980.2206,
+      "sectorQueueEnterMs": 1122991.2559,
+      "chunkId": 0,
+      "viewRevision": "2",
+      "poolAcquiredMs": 1122991.3634,
+      "commitMs": 1122994.48,
+      "ackEnqueueMs": 1122994.5259,
+      "ackSinkSendResolvedMs": 1122994.593,
+      "outboxClaimReturnedMs": 1123013.2034,
+      "projectionDecodedMs": 1123029.277,
+      "deltaEnqueueMs": 1123041.0306,
+      "deltaSinkSendResolvedMs": 1123046.1252,
+      "clientSendMs": 1122980.1216,
+      "clientAckReceivedMs": 1122994.6713,
+      "clientDeltaReceivedMs": 1123041.9017
+    },
+    {
+      "correlationId": "030000000000000000000000000000a5",
+      "gatewayReceiveMs": 1122980.2654,
+      "sectorQueueEnterMs": 1122994.5338,
+      "chunkId": 0,
+      "viewRevision": "2",
+      "poolAcquiredMs": 1122994.6005,
+      "commitMs": 1122997.9545,
+      "ackEnqueueMs": 1122998.0098,
+      "ackSinkSendResolvedMs": 1122998.0792,
+      "outboxClaimReturnedMs": 1123013.2034,
+      "projectionDecodedMs": 1123048.152,
+      "deltaEnqueueMs": 1123058.0848,
+      "deltaSinkSendResolvedMs": 1123062.1374,
+      "clientSendMs": 1122980.1836,
+      "clientAckReceivedMs": 1122998.1566,
+      "clientDeltaReceivedMs": 1123058.9276
+    },
+    {
+      "correlationId": "fa0000000000000000000000000000a5",
+      "gatewayReceiveMs": 1123963.4026,
+      "sectorQueueEnterMs": 1123963.4327,
+      "chunkId": 0,
+      "viewRevision": "104",
+      "poolAcquiredMs": 1123963.4504,
+      "commitMs": 1123966.3786,
+      "ackEnqueueMs": 1123966.403,
+      "ackSinkSendResolvedMs": 1123969.8367,
+      "outboxClaimReturnedMs": 1135753.1272,
+      "projectionDecodedMs": 1135936.9258,
+      "deltaEnqueueMs": 1135937.1669,
+      "deltaSinkSendResolvedMs": 1135943.6042,
+      "clientSendMs": 1123963.2499,
+      "clientAckReceivedMs": 1123966.8579,
+      "clientDeltaReceivedMs": 1135940.743
+    },
+    {
+      "correlationId": "f40100000000000000000000000000a5",
+      "gatewayReceiveMs": 1124970.9794,
+      "sectorQueueEnterMs": 1125009.7441,
+      "chunkId": 0,
+      "viewRevision": "207",
+      "poolAcquiredMs": 1125009.8203,
+      "commitMs": 1125016.9076,
+      "ackEnqueueMs": 1125016.9751,
+      "ackSinkSendResolvedMs": 1125017.1018,
+      "outboxClaimReturnedMs": 1137157.4302,
+      "projectionDecodedMs": 1137257.4457,
+      "deltaEnqueueMs": 1137257.7431,
+      "deltaSinkSendResolvedMs": 1137263.3931,
+      "clientSendMs": 1124970.4609,
+      "clientAckReceivedMs": 1125017.2407,
+      "clientDeltaReceivedMs": 1137266.8168
+    },
+    {
+      "correlationId": "ee0200000000000000000000000000a5",
+      "gatewayReceiveMs": 1125964.8291,
+      "sectorQueueEnterMs": 1126315.0193,
+      "chunkId": 0,
+      "viewRevision": "310",
+      "poolAcquiredMs": 1126315.1395,
+      "commitMs": 1126322.0786,
+      "ackEnqueueMs": 1126322.132,
+      "ackSinkSendResolvedMs": 1126322.241,
+      "outboxClaimReturnedMs": 1138408.5094,
+      "projectionDecodedMs": 1138572.3376,
+      "deltaEnqueueMs": 1138572.7498,
+      "deltaSinkSendResolvedMs": 1138578.3884,
+      "clientSendMs": 1125964.5153,
+      "clientAckReceivedMs": 1126322.3385,
+      "clientDeltaReceivedMs": 1138580.0451
+    },
+    {
+      "correlationId": "e80300000000000000000000000000a5",
+      "gatewayReceiveMs": 1126964.695,
+      "sectorQueueEnterMs": 1127631.0402,
+      "chunkId": 0,
+      "viewRevision": "413",
+      "poolAcquiredMs": 1127631.2021,
+      "commitMs": 1127637.8339,
+      "ackEnqueueMs": 1127637.8836,
+      "ackSinkSendResolvedMs": 1127637.9724,
+      "outboxClaimReturnedMs": 1139811.1102,
+      "projectionDecodedMs": 1139879.1199,
+      "deltaEnqueueMs": 1139879.1731,
+      "deltaSinkSendResolvedMs": 1139885.0385,
+      "clientSendMs": 1126963.241,
+      "clientAckReceivedMs": 1127638.1033,
+      "clientDeltaReceivedMs": 1139880.7344
+    },
+    {
+      "correlationId": "e20400000000000000000000000000a5",
+      "gatewayReceiveMs": 1127972.0146,
+      "sectorQueueEnterMs": 1128801.5611,
+      "chunkId": 0,
+      "viewRevision": "517",
+      "poolAcquiredMs": 1128801.6452,
+      "commitMs": 1128818.1506,
+      "ackEnqueueMs": 1128818.2032,
+      "ackSinkSendResolvedMs": 1128818.5024,
+      "outboxClaimReturnedMs": 1141032.9336,
+      "projectionDecodedMs": 1141181.6117,
+      "deltaEnqueueMs": 1141181.8086,
+      "deltaSinkSendResolvedMs": 1141187.9493,
+      "clientSendMs": 1127971.5768,
+      "clientAckReceivedMs": 1128818.3805,
+      "clientDeltaReceivedMs": 1141192.3146
+    },
+    {
+      "correlationId": "dc0500000000000000000000000000a5",
+      "gatewayReceiveMs": 1128964.4788,
+      "sectorQueueEnterMs": 1130155.7824,
+      "chunkId": 0,
+      "viewRevision": "620",
+      "poolAcquiredMs": 1130155.8781,
+      "commitMs": 1130180.0417,
+      "ackEnqueueMs": 1130180.1218,
+      "ackSinkSendResolvedMs": 1130180.2847,
+      "outboxClaimReturnedMs": 1142460.8017,
+      "projectionDecodedMs": 1142474.6591,
+      "deltaEnqueueMs": 1142474.9412,
+      "deltaSinkSendResolvedMs": 1142480.7869,
+      "clientSendMs": 1128964.0487,
+      "clientAckReceivedMs": 1130180.4249,
+      "clientDeltaReceivedMs": 1142484.4231
+    },
+    {
+      "correlationId": "d60600000000000000000000000000a5",
+      "gatewayReceiveMs": 1129967.988,
+      "sectorQueueEnterMs": 1131393.9739,
+      "chunkId": 0,
+      "viewRevision": "723",
+      "poolAcquiredMs": 1131394.0859,
+      "commitMs": 1131401.622,
+      "ackEnqueueMs": 1131401.6925,
+      "ackSinkSendResolvedMs": 1131401.8026,
+      "outboxClaimReturnedMs": 1143699.7881,
+      "projectionDecodedMs": 1143793.9901,
+      "deltaEnqueueMs": 1143794.3955,
+      "deltaSinkSendResolvedMs": 1143800.1121,
+      "clientSendMs": 1129967.2653,
+      "clientAckReceivedMs": 1131401.95,
+      "clientDeltaReceivedMs": 1143806.4772
+    },
+    {
+      "correlationId": "d00700000000000000000000000000a5",
+      "gatewayReceiveMs": 1130967.7023,
+      "sectorQueueEnterMs": 1132601.3651,
+      "chunkId": 0,
+      "viewRevision": "826",
+      "poolAcquiredMs": 1132601.4627,
+      "commitMs": 1132608.1658,
+      "ackEnqueueMs": 1132608.2273,
+      "ackSinkSendResolvedMs": 1132608.3194,
+      "outboxClaimReturnedMs": 1144915.4794,
+      "projectionDecodedMs": 1145066.9613,
+      "deltaEnqueueMs": 1145067.0015,
+      "deltaSinkSendResolvedMs": 1145072.6962,
+      "clientSendMs": 1130967.4233,
+      "clientAckReceivedMs": 1132608.4217,
+      "clientDeltaReceivedMs": 1145077.3037
+    },
+    {
+      "correlationId": "ca0800000000000000000000000000a5",
+      "gatewayReceiveMs": 1131971.1293,
+      "sectorQueueEnterMs": 1134051.8699,
+      "chunkId": 0,
+      "viewRevision": "929",
+      "poolAcquiredMs": 1134051.9749,
+      "commitMs": 1134057.1062,
+      "ackEnqueueMs": 1134057.1644,
+      "ackSinkSendResolvedMs": 1134057.2549,
+      "outboxClaimReturnedMs": 1146113.9167,
+      "projectionDecodedMs": 1146383.7262,
+      "deltaEnqueueMs": 1146383.9354,
+      "deltaSinkSendResolvedMs": 1146389.7051,
+      "clientSendMs": 1131970.8639,
+      "clientAckReceivedMs": 1134057.4412,
+      "clientDeltaReceivedMs": 1146393.7595
+    }
+  ],
+  "limitations": [
+    "Single-host loopback with separate Node processes; CPU still shares host",
+    "Synthetic M3.5 fixture cost and identity; not approved gameplay or production capacity",
+    "M2 payload byte counts exclude Colyseus/WebSocket framing overhead",
+    "Cross-process commit-to-receive timings use Node's same-host monotonic clock"
+  ],
+  "disconnectSeconds": 0.2623816000000006,
+  "totalWallSeconds": 27.491381299999997
+}

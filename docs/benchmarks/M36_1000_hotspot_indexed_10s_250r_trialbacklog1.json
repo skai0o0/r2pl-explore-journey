@@ -1,0 +1,789 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "ramBytes": 34164097024,
+    "generator": "separate Node process, same host as server",
+    "fanoutMode": "indexed",
+    "durable": true,
+    "trial": "backlog1"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 10,
+    "targetActions": 2500,
+    "requestedActionsPerSecond": 250,
+    "hotspotSectorShare": 0.7,
+    "schools": 2,
+    "subscribedChunksPerClient": 1
+  },
+  "outcomes": {
+    "connected": 1000,
+    "acknowledged": 2500,
+    "applied": 2500,
+    "noChange": 0,
+    "converged": true,
+    "convergenceCheckMs": 11054.713800000001,
+    "resyncs": 0,
+    "clientErrors": 0,
+    "durableRetries": {
+      "duplicates": 10,
+      "conflicts": 10
+    }
+  },
+  "timings": {
+    "connectionSeconds": 0.7358349999999999,
+    "connectionRatePerSecond": 1359.0003193650753,
+    "actionSeconds": 13.1420161,
+    "acknowledgedActionsPerSecond": 190.22956454908012,
+    "clientAckMs": {
+      "count": 2500,
+      "p50": 211.791,
+      "p95": 2819.78,
+      "p99": 3000.098,
+      "max": 3158.035
+    },
+    "sampledOwnDeltaVisibleMs": {
+      "count": 54,
+      "p50": 12852.838,
+      "p95": 14010.894,
+      "p99": 14014.972,
+      "max": 14014.972
+    },
+    "commitToClientAckMs": {
+      "count": 2500,
+      "p50": 0.238,
+      "p95": 1.724,
+      "p99": 12.578,
+      "max": 27.403
+    },
+    "sampledCommitToClientVisibleMs": {
+      "count": 54,
+      "p50": 11504.049,
+      "p95": 12203.887,
+      "p99": 12208.611,
+      "max": 12208.611
+    },
+    "sampledOwnDeltaMissing": 0,
+    "server": {
+      "outbox_claim_query_ms": {
+        "count": 146,
+        "p50": 2.2591999999713153,
+        "p95": 5.3795000000391155,
+        "p99": 16.143800000078045,
+        "max": 45.43920000002254
+      },
+      "outbox_claim_batch_size": {
+        "count": 146,
+        "p50": 0,
+        "p95": 50,
+        "p99": 50,
+        "max": 50
+      },
+      "socket_buffered_bytes": {
+        "count": 100000,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "outbound_queue_depth": {
+        "count": 100000,
+        "p50": 1,
+        "p95": 1,
+        "p99": 1,
+        "max": 2
+      },
+      "sector_queue_depth": {
+        "count": 6020,
+        "p50": 1,
+        "p95": 411,
+        "p99": 652,
+        "max": 712
+      },
+      "sector_queue_wait_ms": {
+        "count": 6020,
+        "p50": 0.013399999999819556,
+        "p95": 2559.2062000000005,
+        "p99": 2967.2487999999994,
+        "max": 3151.4249
+      },
+      "sector_snapshot_queue_wait_ms": {
+        "count": 1000,
+        "p50": 207.66609999999991,
+        "p95": 386.3814,
+        "p99": 401.46939999999995,
+        "max": 405.1731000000002
+      },
+      "sector_execute_ms": {
+        "count": 6020,
+        "p50": 4.521200000001045,
+        "p95": 15.54410000000098,
+        "p99": 29.710399999999936,
+        "max": 177.32410000000004
+      },
+      "sector_snapshot_execute_ms": {
+        "count": 1000,
+        "p50": 0.5280999999999949,
+        "p95": 2.103399999999965,
+        "p99": 98.6875,
+        "max": 177.32410000000004
+      },
+      "sector_command_queue_wait_ms": {
+        "count": 2520,
+        "p50": 184.70600000000013,
+        "p95": 2811.6083,
+        "p99": 2993.3521999999994,
+        "max": 3151.4249
+      },
+      "sector_command_execute_ms": {
+        "count": 2520,
+        "p50": 6.2882999999992535,
+        "p95": 20.889400000000023,
+        "p99": 40.16579999999885,
+        "max": 59.502300000000105
+      },
+      "durable_pool_wait_ms": {
+        "count": 2510,
+        "p50": 0.046199999999771535,
+        "p95": 0.19989999999961583,
+        "p99": 0.414400000000569,
+        "max": 2.2685999999994237
+      },
+      "durable_transaction_ms": {
+        "count": 2510,
+        "p50": 6.152299999999741,
+        "p95": 20.786299999999756,
+        "p99": 39.50280000000021,
+        "max": 59.31720000000132
+      },
+      "durable_chunk_lock_ms": {
+        "count": 2510,
+        "p50": 0.21810000000004948,
+        "p95": 0.9584999999997308,
+        "p99": 2.5471000000006825,
+        "max": 8.725600000000668
+      },
+      "commit_to_ack_enqueue_ms": {
+        "count": 2510,
+        "p50": 0.044799999999668216,
+        "p95": 0.11670000000003711,
+        "p99": 0.19359999999869615,
+        "max": 0.4671999999991385
+      },
+      "command_ack_ms": {
+        "count": 2510,
+        "p50": 201.8204999999998,
+        "p95": 2819.586000000001,
+        "p99": 2999.5897999999997,
+        "max": 3156.316500000001
+      },
+      "ack_delivery_ms": {
+        "count": 2520,
+        "p50": 0.08129999999982829,
+        "p95": 3.2861000000002605,
+        "p99": 6.572700000000168,
+        "max": 16.50969999999961
+      },
+      "projection_decode_ms": {
+        "count": 2500,
+        "p50": 0.013199999928474426,
+        "p95": 0.018999999971129,
+        "p99": 0.0313000000314787,
+        "max": 1.3307999999960884
+      },
+      "commit_to_claim_return_ms": {
+        "count": 2500,
+        "p50": 11778.007500000065,
+        "p95": 12266.01000000001,
+        "p99": 12330.40280000004,
+        "max": 12369.417499999981
+      },
+      "sector_relay_queue_wait_ms": {
+        "count": 2500,
+        "p50": 0.004300000000512227,
+        "p95": 4.263100000000122,
+        "p99": 28.150700000000143,
+        "max": 2534.5871000000006
+      },
+      "delta_encode_ms": {
+        "count": 2500,
+        "p50": 0.011800000000221189,
+        "p95": 0.015800000001036096,
+        "p99": 0.020599999999831198,
+        "max": 0.1091999999989639
+      },
+      "fanout_candidates": {
+        "count": 2500,
+        "p50": 300,
+        "p95": 412,
+        "p99": 412,
+        "max": 412
+      },
+      "fanout_enqueue_ms": {
+        "count": 2500,
+        "p50": 0.3812999999972817,
+        "p95": 0.5885999999991327,
+        "p99": 0.8244999999999436,
+        "max": 1.8293999999987136
+      },
+      "commit_to_delta_enqueue_ms": {
+        "count": 2500,
+        "p50": 11938.140399999917,
+        "p95": 12350.857599999988,
+        "p99": 12379.282400000026,
+        "max": 12395.4767
+      },
+      "sector_relay_execute_ms": {
+        "count": 2500,
+        "p50": 4.492500000000291,
+        "p95": 6.761900000001333,
+        "p99": 8.396399999997811,
+        "max": 16.958700000001045
+      },
+      "delta_delivery_ms": {
+        "count": 100000,
+        "p50": 3.6329000000000633,
+        "p95": 8.641200000000026,
+        "p99": 13.439200000000255,
+        "max": 16.94470000000001
+      },
+      "outbox_mark_delivered_ms": {
+        "count": 2500,
+        "p50": 0.7651000000769272,
+        "p95": 1.037099999957718,
+        "p99": 2.3260000000009313,
+        "max": 37.823899999959394
+      },
+      "outbox_claim_to_delivered_ms": {
+        "count": 2500,
+        "p50": 124.3416000000434,
+        "p95": 279.26329999999143,
+        "p99": 952.343200000003,
+        "max": 11464.012199999997
+      }
+    }
+  },
+  "traffic": {
+    "receivedBytesPerClient": {
+      "count": 1000,
+      "p50": 35110,
+      "p95": 44945,
+      "p99": 44945,
+      "max": 45025
+    },
+    "receivedFramesPerClient": {
+      "count": 1000,
+      "p50": 755,
+      "p95": 1036,
+      "p99": 1036,
+      "max": 1038
+    },
+    "serverCounters": {
+      "relay_poll_triggers": 3718,
+      "outbox_claim_queries": 146,
+      "outbox_events_claimed": 2500,
+      "connections": 1000,
+      "outbound_frames": 669547,
+      "outbound_bytes": 32116745,
+      "inbound_frames": 3520,
+      "snapshots_enqueued": 1000,
+      "subscription_changes": 1000,
+      "durable_commands": 2500,
+      "fanout_recipients": 665027,
+      "outbox_events_delivered": 2500,
+      "durable_retries": 10,
+      "idempotency_conflicts": 10
+    }
+  },
+  "resources": {
+    "cpuUserMs": 12844,
+    "cpuSystemMs": 2454,
+    "rssBytes": 186925056,
+    "heapUsedBytes": 69593576,
+    "arrayBufferBytes": 18134070,
+    "eventLoopLagP95Ms": 27.525119,
+    "server": {
+      "cpuUserMs": 10703,
+      "cpuSystemMs": 8281,
+      "eventLoopLagP95Ms": 27.885567,
+      "memory": {
+        "rss": 246517760,
+        "heapTotal": 171663360,
+        "heapUsed": 44636712,
+        "external": 14840702,
+        "arrayBuffers": 3937811
+      },
+      "logicalCpus": 16
+    },
+    "generator": {
+      "cpuUserMs": 12844,
+      "cpuSystemMs": 2454,
+      "memory": {
+        "rss": 186925056,
+        "heapTotal": 86327296,
+        "heapUsed": 69593576,
+        "external": 29276154,
+        "arrayBuffers": 18134070
+      }
+    }
+  },
+  "database": {
+    "walBytes": 11426792,
+    "deadlocks": 0,
+    "pendingOutbox": 0,
+    "poolMaxTotal": 16,
+    "poolMaxWaiting": 0,
+    "poolMaxBusy": 11,
+    "backlogSamples": [
+      {
+        "elapsedMs": 310.407600000035,
+        "pending": 43
+      },
+      {
+        "elapsedMs": 811.703600000008,
+        "pending": 77
+      },
+      {
+        "elapsedMs": 1310.3041000000667,
+        "pending": 104
+      },
+      {
+        "elapsedMs": 1810.5354999999981,
+        "pending": 196
+      },
+      {
+        "elapsedMs": 2310.5706000000937,
+        "pending": 300
+      },
+      {
+        "elapsedMs": 2811.0698000000557,
+        "pending": 404
+      },
+      {
+        "elapsedMs": 3310.566300000064,
+        "pending": 498
+      },
+      {
+        "elapsedMs": 3812.1077000000514,
+        "pending": 598
+      },
+      {
+        "elapsedMs": 4311.25270000007,
+        "pending": 696
+      },
+      {
+        "elapsedMs": 4811.102500000037,
+        "pending": 787
+      },
+      {
+        "elapsedMs": 5317.251600000076,
+        "pending": 878
+      },
+      {
+        "elapsedMs": 5815.0171000000555,
+        "pending": 981
+      },
+      {
+        "elapsedMs": 6312.1124000001,
+        "pending": 1082
+      },
+      {
+        "elapsedMs": 6812.097999999998,
+        "pending": 1186
+      },
+      {
+        "elapsedMs": 7311.882900000084,
+        "pending": 1281
+      },
+      {
+        "elapsedMs": 7813.043900000048,
+        "pending": 1374
+      },
+      {
+        "elapsedMs": 8314.158800000092,
+        "pending": 1470
+      },
+      {
+        "elapsedMs": 8812.302800000063,
+        "pending": 1564
+      },
+      {
+        "elapsedMs": 9312.173500000034,
+        "pending": 1663
+      },
+      {
+        "elapsedMs": 9812.84830000007,
+        "pending": 1776
+      },
+      {
+        "elapsedMs": 10321.607599999988,
+        "pending": 1836
+      },
+      {
+        "elapsedMs": 10813.601100000087,
+        "pending": 1900
+      },
+      {
+        "elapsedMs": 11313.855900000082,
+        "pending": 1973
+      },
+      {
+        "elapsedMs": 11814.843600000022,
+        "pending": 2044
+      },
+      {
+        "elapsedMs": 12319.860500000068,
+        "pending": 2111
+      },
+      {
+        "elapsedMs": 12812.8428000001,
+        "pending": 2182
+      },
+      {
+        "elapsedMs": 13338.21760000009,
+        "pending": 2197
+      },
+      {
+        "elapsedMs": 13852.575900000054,
+        "pending": 2099
+      },
+      {
+        "elapsedMs": 14342.339500000002,
+        "pending": 1994
+      },
+      {
+        "elapsedMs": 14854.632400000002,
+        "pending": 1893
+      },
+      {
+        "elapsedMs": 15349.40120000008,
+        "pending": 1785
+      },
+      {
+        "elapsedMs": 15845.589400000055,
+        "pending": 1679
+      },
+      {
+        "elapsedMs": 16347.313000000082,
+        "pending": 1567
+      },
+      {
+        "elapsedMs": 16852.628400000045,
+        "pending": 1457
+      },
+      {
+        "elapsedMs": 17360.833500000066,
+        "pending": 1343
+      },
+      {
+        "elapsedMs": 17866.839000000036,
+        "pending": 1233
+      },
+      {
+        "elapsedMs": 18364.46880000003,
+        "pending": 1121
+      },
+      {
+        "elapsedMs": 18865.105500000063,
+        "pending": 1012
+      },
+      {
+        "elapsedMs": 19374.84990000003,
+        "pending": 892
+      },
+      {
+        "elapsedMs": 19880.171300000045,
+        "pending": 799
+      },
+      {
+        "elapsedMs": 20384.913100000005,
+        "pending": 681
+      },
+      {
+        "elapsedMs": 20891.722200000077,
+        "pending": 577
+      },
+      {
+        "elapsedMs": 21400.75800000003,
+        "pending": 468
+      },
+      {
+        "elapsedMs": 21918.50020000001,
+        "pending": 369
+      },
+      {
+        "elapsedMs": 22445.264000000083,
+        "pending": 288
+      },
+      {
+        "elapsedMs": 22949.9473,
+        "pending": 215
+      },
+      {
+        "elapsedMs": 23449.238500000094,
+        "pending": 140
+      },
+      {
+        "elapsedMs": 23958.505700000096,
+        "pending": 62
+      },
+      {
+        "elapsedMs": 24460.960500000045,
+        "pending": 0
+      },
+      {
+        "elapsedMs": 24972.455000000075,
+        "pending": 0
+      }
+    ],
+    "peakPendingOutbox": 2197
+  },
+  "correlatedTraces": [
+    {
+      "correlationId": "000000000000000000000000000000a5",
+      "gatewayReceiveMs": 999505.3439,
+      "sectorQueueEnterMs": 999505.6526,
+      "chunkId": 0,
+      "viewRevision": "1",
+      "poolAcquiredMs": 999506.1512,
+      "commitMs": 999519.1476,
+      "ackEnqueueMs": 999519.3254,
+      "ackSinkSendResolvedMs": 999519.5296,
+      "outboxClaimReturnedMs": 999520.159,
+      "projectionDecodedMs": 999520.3516,
+      "deltaEnqueueMs": 999533.4316,
+      "deltaSinkSendResolvedMs": 999539.0395,
+      "clientSendMs": 999505.1288,
+      "clientAckReceivedMs": 999519.7251,
+      "clientDeltaReceivedMs": 999534.5573
+    },
+    {
+      "correlationId": "010000000000000000000000000000a5",
+      "gatewayReceiveMs": 999516.3315,
+      "sectorQueueEnterMs": 999519.3512,
+      "chunkId": 0,
+      "viewRevision": "1",
+      "poolAcquiredMs": 999519.6086,
+      "commitMs": 999526.4036,
+      "ackEnqueueMs": 999526.4694,
+      "ackSinkSendResolvedMs": 999526.5735,
+      "outboxClaimReturnedMs": 999540.9456,
+      "projectionDecodedMs": 999540.9968,
+      "deltaEnqueueMs": 999554.105,
+      "deltaSinkSendResolvedMs": 999558.1944,
+      "clientSendMs": 999516.1581,
+      "clientAckReceivedMs": 999526.6937,
+      "clientDeltaReceivedMs": 999554.9134
+    },
+    {
+      "correlationId": "020000000000000000000000000000a5",
+      "gatewayReceiveMs": 999516.4767,
+      "sectorQueueEnterMs": 999526.478,
+      "chunkId": 0,
+      "viewRevision": "2",
+      "poolAcquiredMs": 999526.5839,
+      "commitMs": 999529.8651,
+      "ackEnqueueMs": 999529.9176,
+      "ackSinkSendResolvedMs": 999530.0026,
+      "outboxClaimReturnedMs": 999540.9456,
+      "projectionDecodedMs": 999559.0628,
+      "deltaEnqueueMs": 999571.4182,
+      "deltaSinkSendResolvedMs": 999576.6968,
+      "clientSendMs": 999516.298,
+      "clientAckReceivedMs": 999530.0854,
+      "clientDeltaReceivedMs": 999572.4916
+    },
+    {
+      "correlationId": "030000000000000000000000000000a5",
+      "gatewayReceiveMs": 999519.8674,
+      "sectorQueueEnterMs": 999529.9253,
+      "chunkId": 0,
+      "viewRevision": "2",
+      "poolAcquiredMs": 999530.0117,
+      "commitMs": 999533.1212,
+      "ackEnqueueMs": 999533.1705,
+      "ackSinkSendResolvedMs": 999538.9575,
+      "outboxClaimReturnedMs": 999540.9456,
+      "projectionDecodedMs": 999577.7112,
+      "deltaEnqueueMs": 999587.0521,
+      "deltaSinkSendResolvedMs": 999592.5333,
+      "clientSendMs": 999519.801,
+      "clientAckReceivedMs": 999534.3458,
+      "clientDeltaReceivedMs": 999587.7395
+    },
+    {
+      "correlationId": "fa0000000000000000000000000000a5",
+      "gatewayReceiveMs": 1000509.3867,
+      "sectorQueueEnterMs": 1000509.4321,
+      "chunkId": 0,
+      "viewRevision": "104",
+      "poolAcquiredMs": 1000509.4747,
+      "commitMs": 1000512.4922,
+      "ackEnqueueMs": 1000512.5411,
+      "ackSinkSendResolvedMs": 1000516.1261,
+      "outboxClaimReturnedMs": 1001304.752,
+      "projectionDecodedMs": 1001304.8627,
+      "deltaEnqueueMs": 1001368.2174,
+      "deltaSinkSendResolvedMs": 1001375.2908,
+      "clientSendMs": 1000507.4001,
+      "clientAckReceivedMs": 1000522.4886,
+      "clientDeltaReceivedMs": 1001370.117
+    },
+    {
+      "correlationId": "f40100000000000000000000000000a5",
+      "gatewayReceiveMs": 1001506.0145,
+      "sectorQueueEnterMs": 1001528.0807,
+      "chunkId": 0,
+      "viewRevision": "207",
+      "poolAcquiredMs": 1001528.3979,
+      "commitMs": 1001533.9028,
+      "ackEnqueueMs": 1001533.9909,
+      "ackSinkSendResolvedMs": 1001534.1565,
+      "outboxClaimReturnedMs": 1013826.7757,
+      "projectionDecodedMs": 1013826.8011,
+      "deltaEnqueueMs": 1013826.9635,
+      "deltaSinkSendResolvedMs": 1013829.9471,
+      "clientSendMs": 1001505.1179,
+      "clientAckReceivedMs": 1001541.4088,
+      "clientDeltaReceivedMs": 1013828.7478
+    },
+    {
+      "correlationId": "ee0200000000000000000000000000a5",
+      "gatewayReceiveMs": 1002508.0325,
+      "sectorQueueEnterMs": 1002752.9705,
+      "chunkId": 0,
+      "viewRevision": "310",
+      "poolAcquiredMs": 1002753.276,
+      "commitMs": 1002772.5161,
+      "ackEnqueueMs": 1002772.5552,
+      "ackSinkSendResolvedMs": 1002772.6291,
+      "outboxClaimReturnedMs": 1015002.8069,
+      "projectionDecodedMs": 1015061.8762,
+      "deltaEnqueueMs": 1015062.292,
+      "deltaSinkSendResolvedMs": 1015067.822,
+      "clientSendMs": 1002507.9461,
+      "clientAckReceivedMs": 1002772.7209,
+      "clientDeltaReceivedMs": 1015073.3961
+    },
+    {
+      "correlationId": "e80300000000000000000000000000a5",
+      "gatewayReceiveMs": 1003509.0154,
+      "sectorQueueEnterMs": 1004158.9566,
+      "chunkId": 0,
+      "viewRevision": "413",
+      "poolAcquiredMs": 1004159.1543,
+      "commitMs": 1004164.9332,
+      "ackEnqueueMs": 1004164.9985,
+      "ackSinkSendResolvedMs": 1004165.1538,
+      "outboxClaimReturnedMs": 1016138.8509,
+      "projectionDecodedMs": 1016362.8075,
+      "deltaEnqueueMs": 1016362.8534,
+      "deltaSinkSendResolvedMs": 1016368.5358,
+      "clientSendMs": 1003508.0889,
+      "clientAckReceivedMs": 1004165.2472,
+      "clientDeltaReceivedMs": 1016367.9408
+    },
+    {
+      "correlationId": "e20400000000000000000000000000a5",
+      "gatewayReceiveMs": 1004505.6932,
+      "sectorQueueEnterMs": 1005659.6749,
+      "chunkId": 0,
+      "viewRevision": "517",
+      "poolAcquiredMs": 1005659.7575,
+      "commitMs": 1005666.5221,
+      "ackEnqueueMs": 1005666.5557,
+      "ackSinkSendResolvedMs": 1005666.6346,
+      "outboxClaimReturnedMs": 1017505.5496,
+      "projectionDecodedMs": 1017640.1419,
+      "deltaEnqueueMs": 1017640.3152,
+      "deltaSinkSendResolvedMs": 1017646.1461,
+      "clientSendMs": 1004505.5281,
+      "clientAckReceivedMs": 1005666.7538,
+      "clientDeltaReceivedMs": 1017648.009
+    },
+    {
+      "correlationId": "dc0500000000000000000000000000a5",
+      "gatewayReceiveMs": 1005511.1816,
+      "sectorQueueEnterMs": 1007097.5986,
+      "chunkId": 0,
+      "viewRevision": "620",
+      "poolAcquiredMs": 1007097.6765,
+      "commitMs": 1007103.0846,
+      "ackEnqueueMs": 1007103.1299,
+      "ackSinkSendResolvedMs": 1007103.2206,
+      "outboxClaimReturnedMs": 1018825.1473,
+      "projectionDecodedMs": 1018891.0815,
+      "deltaEnqueueMs": 1018891.388,
+      "deltaSinkSendResolvedMs": 1018896.7914,
+      "clientSendMs": 1005506.7797,
+      "clientAckReceivedMs": 1007103.3103,
+      "clientDeltaReceivedMs": 1018900.4551
+    },
+    {
+      "correlationId": "d60600000000000000000000000000a5",
+      "gatewayReceiveMs": 1006506.1469,
+      "sectorQueueEnterMs": 1008529.6394,
+      "chunkId": 0,
+      "viewRevision": "723",
+      "poolAcquiredMs": 1008529.7949,
+      "commitMs": 1008554.3829,
+      "ackEnqueueMs": 1008554.4725,
+      "ackSinkSendResolvedMs": 1008554.9645,
+      "outboxClaimReturnedMs": 1020033.0484,
+      "projectionDecodedMs": 1020234.8349,
+      "deltaEnqueueMs": 1020235.2047,
+      "deltaSinkSendResolvedMs": 1020241.6277,
+      "clientSendMs": 1006505.6166,
+      "clientAckReceivedMs": 1008554.7827,
+      "clientDeltaReceivedMs": 1020248.0158
+    },
+    {
+      "correlationId": "d00700000000000000000000000000a5",
+      "gatewayReceiveMs": 1007505.2053,
+      "sectorQueueEnterMs": 1009983.8398,
+      "chunkId": 0,
+      "viewRevision": "826",
+      "poolAcquiredMs": 1009983.9032,
+      "commitMs": 1009987.8965,
+      "ackEnqueueMs": 1009987.9233,
+      "ackSinkSendResolvedMs": 1009987.9722,
+      "outboxClaimReturnedMs": 1021204.5659,
+      "projectionDecodedMs": 1021490.9292,
+      "deltaEnqueueMs": 1021490.977,
+      "deltaSinkSendResolvedMs": 1021496.5484,
+      "clientSendMs": 1007504.7559,
+      "clientAckReceivedMs": 1009988.0301,
+      "clientDeltaReceivedMs": 1021500.0427
+    },
+    {
+      "correlationId": "ca0800000000000000000000000000a5",
+      "gatewayReceiveMs": 1008516.7491,
+      "sectorQueueEnterMs": 1011215.5553,
+      "chunkId": 0,
+      "viewRevision": "929",
+      "poolAcquiredMs": 1011215.6062,
+      "commitMs": 1011226.2759,
+      "ackEnqueueMs": 1011226.3873,
+      "ackSinkSendResolvedMs": 1011226.6249,
+      "outboxClaimReturnedMs": 1022540.0592,
+      "projectionDecodedMs": 1022684.6547,
+      "deltaEnqueueMs": 1022684.8308,
+      "deltaSinkSendResolvedMs": 1022690.5105,
+      "clientSendMs": 1008516.1189,
+      "clientAckReceivedMs": 1011226.8534,
+      "clientDeltaReceivedMs": 1022695.7885
+    }
+  ],
+  "limitations": [
+    "Single-host loopback with separate Node processes; CPU still shares host",
+    "Synthetic M3.5 fixture cost and identity; not approved gameplay or production capacity",
+    "M2 payload byte counts exclude Colyseus/WebSocket framing overhead",
+    "Cross-process commit-to-receive timings use Node's same-host monotonic clock"
+  ],
+  "disconnectSeconds": 0.21447529999999823,
+  "totalWallSeconds": 27.1473039
+}

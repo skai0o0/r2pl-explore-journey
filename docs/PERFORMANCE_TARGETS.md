@@ -1,4 +1,4 @@
-# Performance and code budgets — M1–M3.5 evidence and later targets
+# Performance and code budgets — M1–M3.6 evidence and later targets
 
 Targets are test obligations, not measured V2 properties. Publish workload, hardware, software versions, client viewport, school count, traffic distribution and sample counts with every result.
 
@@ -44,3 +44,7 @@ M3 measured PostgreSQL 16.15 transaction p50/p95/p99, chunk-head lock wait p50/p
 ### M3.5 durable network gate
 
 `M3.5_REPORT.md` and `M35_*_indexed_*.json` measure the PostgreSQL-backed v1 command pipeline with separate server and generator processes on one host. Six balanced/hotspot stages from 100 to 1,000 clients converged, including 1,000 hotspot clients at 100 actions/s. Both 1,000-client hotspot trials at 250 actions/s acknowledged every committed action but failed the 10-second visible-convergence gate with pending outbox work. This is an **open delivery-capacity gate** despite passing synthetic durability and retry tests. Next measurements must isolate relay catch-up, sector queue scheduling and fanout CPU, then repeat longer sustained hotspot trials. Protocol-v2 batching cannot inherit M2.6's RAM-only results, and no 10,000-CCU readiness follows.
+
+### M3.6 sustained delivery gate
+
+`M3.6_REPORT.md` and `M36_*.json` add correlated monotonic action traces, work-type queue histograms, server/generator CPU separation, outbox claim/relay phases, fanout and socket measurements, 500-ms backlog/RSS samples, and three independent 20-second balanced/hotspot trials at 1,000 clients and 250 submitted actions/s. Exact server-projected replicas and the outbox eventually converged under a 30-second post-ACK drain bound. Trial 3 measured correct 250/s generator dispatch, but hotspot ACK p95 was 4.83 s, visible p95 24.86 s and peak pending outbox 4,332. Balanced ACK p95 was 52.9 ms with peak pending 241. A repeated 4-second 750/s hotspot burst submitted at 750/s but required 13.14 s to ACK all actions and 15.83 s further for exact convergence. These are **failed low-latency delivery stages** even though final-state and durability checks passed. The shared host and short RSS sample do not prove independent-host throughput or long-term memory bounds. Do not promote M2.6 batching or claim M4/M7 capacity from these runs.

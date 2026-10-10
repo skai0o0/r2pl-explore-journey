@@ -36,9 +36,11 @@ const rate = Number(option("rate", "20"));
 const isolated = option("isolated", "false") === "true";
 const profile = option("profile", "false") === "true";
 const durable = option("durable", "false") === "true";
+const series = option("series", durable ? "M35" : "M25");
 // The M3.5 authority always indexes subscribers by school and chunk.
 const fanoutMode = durable ? "indexed" : option("fanout", "scan");
 const trial = option("trial", "1");
+const drainSeconds = Number(option("drain", "10"));
 if (
   !Number.isInteger(clients) ||
   clients < 1 ||
@@ -48,8 +50,11 @@ if (
   durationSeconds <= 0 ||
   !Number.isFinite(rate) ||
   rate <= 0 ||
+  !Number.isFinite(drainSeconds) ||
+  drainSeconds <= 0 ||
   !["scan", "indexed"].includes(fanoutMode) ||
-  (durable && !isolated)
+  (durable && !isolated) ||
+  !/^[A-Z0-9]{2,8}$/.test(series)
 )
   throw new Error("Invalid benchmark arguments");
 
@@ -127,6 +132,7 @@ class LoadPeer {
   readonly #deltaArrivals = new Map<string, number>();
   readonly #deltaArrivalsMono = new Map<string, number>();
   readonly #ackArrivals = new Map<string, number>();
+  readonly #sentMono = new Map<string, number>();
   readonly #ownActions: {
     chunkId: number;
     revision: bigint;
@@ -221,12 +227,35 @@ class LoadPeer {
   explore(tileIndex: number, key: Uint8Array): Promise<Ack> {
     const hex = Buffer.from(key).toString("hex");
     return new Promise<Ack>((resolve, reject) => {
+      if (!this.#sentMono.has(hex))
+        this.#sentMono.set(hex, Number(process.hrtime.bigint()) / 1e6);
       this.#pending.set(hex, { sentAt: performance.now(), resolve, reject });
       this.room.sendBytes(
         "m2",
         encodeExplore({ key, tileIndex, ruleVersion: 0 }),
       );
     });
+  }
+
+  clientTrace(
+    correlationId: string,
+    chunkId: number,
+    viewRevision: bigint,
+  ): {
+    clientSendMs?: number;
+    clientAckReceivedMs?: number;
+    clientDeltaReceivedMs?: number;
+  } {
+    const clientSendMs = this.#sentMono.get(correlationId);
+    const clientAckReceivedMs = this.#ackArrivals.get(correlationId);
+    const clientDeltaReceivedMs = this.#deltaArrivalsMono.get(
+      `${chunkId}:${viewRevision}`,
+    );
+    return {
+      ...(clientSendMs === undefined ? {} : { clientSendMs }),
+      ...(clientAckReceivedMs === undefined ? {} : { clientAckReceivedMs }),
+      ...(clientDeltaReceivedMs === undefined ? {} : { clientDeltaReceivedMs }),
+    };
   }
   rejectPending(): void {
     for (const pending of this.#pending.values())
@@ -342,7 +371,12 @@ try {
           ? targetChunks[0]!
           : targetChunks[index % 16]!;
       peers.push(
-        new LoadPeer(room, fixtures[index]!.schoolSlot, chunk, index < 20),
+        new LoadPeer(
+          room,
+          fixtures[index]!.schoolSlot,
+          chunk,
+          index < 20 || index % 250 === 0,
+        ),
       );
     });
   }
@@ -361,6 +395,7 @@ try {
 
   const count = Math.round(rate * durationSeconds);
   const actionStarted = performance.now();
+  let dispatchSeconds = 0;
   const acks: Promise<Ack>[] = [];
   for (let n = 0; n < count; n++) {
     const targetTime = actionStarted + (n * 1000) / rate;
@@ -368,6 +403,7 @@ try {
       await sleep(targetTime - performance.now());
     acks.push(peers[n % peers.length]!.explore(actionTile(n), actionKey(n)));
   }
+  dispatchSeconds = (performance.now() - actionStarted) / 1000;
   let ackTimeout: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     ackTimeout = setTimeout(() => reject(new Error("Ack timeout")), 20_000);
@@ -391,7 +427,10 @@ try {
     ).values(),
   ];
   let isolatedSummary: Record<string, unknown> | undefined;
-  const projected = new Map<string, { mask: Buffer; fog: Buffer }>();
+  const projected = new Map<
+    string,
+    { revision: bigint; mask: Buffer; fog: Buffer }
+  >();
   if (child) {
     isolatedSummary = await waitChild(child, "summary", {
       type: "summary",
@@ -400,14 +439,23 @@ try {
     for (const item of isolatedSummary.projections as {
       slot: number;
       chunk: number;
+      revision: string;
       mask: string;
       fog: string;
     }[])
       projected.set(`${item.slot}:${item.chunk}`, {
+        revision: BigInt(item.revision),
         mask: Buffer.from(item.mask, "base64"),
         fog: Buffer.from(item.fog, "base64"),
       });
   }
+  const revisionsConverged = () =>
+    peers.every((peer) => {
+      const expected = projected.get(`${peer.slot}:${peer.chunk}`);
+      return (
+        !expected || peer.replica.revision(peer.chunk) === expected.revision
+      );
+    });
   const converged = () =>
     peers.every((peer) => {
       const { chunkX, chunkZ } = chunkCoordinatesForId(peer.chunk);
@@ -429,11 +477,26 @@ try {
       return true;
     });
   const convergenceStarted = performance.now();
-  while (!converged() && performance.now() - convergenceStarted < 10_000)
+  while (
+    !revisionsConverged() &&
+    performance.now() - convergenceStarted < drainSeconds * 1000
+  )
     await sleep(20);
   const convergenceMs = performance.now() - convergenceStarted;
-  if (!converged())
+  if (!revisionsConverged() || !converged())
     throw new Error("Client replicas diverged from authoritative projection");
+
+  if (durable && child) {
+    while (performance.now() - convergenceStarted < drainSeconds * 1000) {
+      const summary = await waitChild(child, "summary", {
+        type: "summary",
+        pairs: [],
+      });
+      if ((summary.database as { pendingOutbox: number }).pendingOutbox === 0)
+        break;
+      await sleep(100);
+    }
+  }
 
   const actionSummary =
     durable && child
@@ -471,6 +534,12 @@ try {
       type: "summary",
       pairs: [],
     });
+  if (
+    durable &&
+    isolatedSummary &&
+    (isolatedSummary.database as { pendingOutbox: number }).pendingOutbox > 0
+  )
+    throw new Error("Outbox did not fully drain within benchmark window");
 
   const memory = process.memoryUsage();
   const cpu = process.cpuUsage(cpuBefore);
@@ -487,6 +556,27 @@ try {
   const commitToAck = peers.flatMap((peer) =>
     peer.committedAckTimings(ackCommitTimeline),
   );
+  const correlatedTraces = durable
+    ? (
+        (actionSummary?.correlatedTraces ?? []) as Array<{
+          correlationId: string;
+        }>
+      ).map((trace) => {
+        const index = Buffer.from(trace.correlationId, "hex").readUInt32LE(0);
+        const ack = outcomes[index];
+        const peer = peers[index % peers.length];
+        return {
+          ...trace,
+          ...(peer && ack
+            ? peer.clientTrace(
+                trace.correlationId,
+                ack.chunkId,
+                ack.viewRevision,
+              )
+            : {}),
+        };
+      })
+    : [];
   result = {
     environment: {
       node: process.version,
@@ -529,6 +619,8 @@ try {
       connectionSeconds,
       connectionRatePerSecond: clients / connectionSeconds,
       actionSeconds,
+      dispatchSeconds,
+      submittedActionsPerSecond: count / dispatchSeconds,
       acknowledgedActionsPerSecond: outcomes.length / actionSeconds,
       clientAckMs: percentile(actionAckTimings),
       sampledOwnDeltaVisibleMs: percentile(visibleMeasured),
@@ -578,6 +670,7 @@ try {
         : {}),
     },
     ...(durable ? { database: actionSummary?.database } : {}),
+    ...(durable ? { correlatedTraces } : {}),
     limitations: [
       isolated
         ? "Single-host loopback with separate Node processes; CPU still shares host"
@@ -633,6 +726,31 @@ try {
             serverMetrics: failedServerSummary.metrics,
             serverResources: failedServerSummary.resources,
             database: failedServerSummary.database,
+            correlatedTraces: (
+              (failedServerSummary.correlatedTraces ?? []) as Array<{
+                correlationId: string;
+                chunkId?: number;
+                viewRevision?: string;
+              }>
+            ).map((trace) => {
+              const index = Buffer.from(
+                trace.correlationId,
+                "hex",
+              ).readUInt32LE(0);
+              const peer = peers[index % peers.length];
+              return {
+                ...trace,
+                ...(peer &&
+                trace.chunkId !== undefined &&
+                trace.viewRevision !== undefined
+                  ? peer.clientTrace(
+                      trace.correlationId,
+                      trace.chunkId,
+                      BigInt(trace.viewRevision),
+                    )
+                  : {}),
+              };
+            }),
           }
         : {}),
     },
@@ -662,7 +780,7 @@ if (result) {
   result.disconnectSeconds = disconnectSeconds;
   result.totalWallSeconds = (performance.now() - runStarted) / 1000;
   const path = isolated
-    ? `docs/benchmarks/${durable ? "M35" : "M25"}_${clients}_${mode}_${fanoutMode}_${durationSeconds}s_${rate}r${durable ? `_trial${trial}` : ""}${failure ? "_failed" : ""}.json`
+    ? `docs/benchmarks/${series}_${clients}_${mode}_${fanoutMode}_${durationSeconds}s_${rate}r${durable ? `_trial${trial}` : ""}${failure ? "_failed" : ""}.json`
     : `docs/benchmarks/M2_${clients}_${mode}.json`;
   await mkdir("docs/benchmarks", { recursive: true });
   await writeFile(path, `${JSON.stringify(result, null, 2)}\n`);

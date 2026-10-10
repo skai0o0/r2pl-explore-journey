@@ -41,6 +41,7 @@ export interface M3TestResult {
 export interface MutationMetrics {
   readonly transactionMs: number;
   readonly poolWaitMs: number;
+  readonly poolAcquiredAtMonotonicMs: number;
   readonly dbTransactionMs: number;
   readonly committedAtMs: number;
   readonly committedAtMonotonicMs: number;
@@ -206,6 +207,7 @@ export class M3TestMutationService {
     let headLockWaitMs = 0;
     const client = await this.#pool.connect();
     const poolWaitMs = performance.now() - start;
+    const poolAcquiredAtMonotonicMs = Number(process.hrtime.bigint()) / 1e6;
     const dbStarted = performance.now();
     let committed = false;
     let replayed = false;
@@ -245,6 +247,7 @@ export class M3TestMutationService {
           metrics: {
             transactionMs: performance.now() - start,
             poolWaitMs,
+            poolAcquiredAtMonotonicMs,
             dbTransactionMs: committedAtMs - dbStarted,
             committedAtMs,
             committedAtMonotonicMs,
@@ -484,6 +487,7 @@ export class M3TestMutationService {
         metrics: {
           transactionMs: performance.now() - start,
           poolWaitMs,
+          poolAcquiredAtMonotonicMs,
           dbTransactionMs: committedAtMs - dbStarted,
           committedAtMs,
           committedAtMonotonicMs,

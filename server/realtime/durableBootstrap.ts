@@ -16,6 +16,7 @@ export async function createDurableSyntheticServer(
   fixtures: readonly { token: string; actorId: string; schoolSlot: number }[],
   explicitFixtureCost: bigint,
   faultHooks: FaultHooks = {},
+  traceCorrelationIds?: ReadonlySet<string>,
 ): Promise<{
   readonly server: Server;
   readonly transport: WebSocketTransport;
@@ -29,7 +30,9 @@ export async function createDurableSyntheticServer(
     faultHooks,
   );
   await authority.validateCampaign(registry);
-  const core = new DurableRealtimeCore(authority);
+  const core = new DurableRealtimeCore(authority, {
+    ...(traceCorrelationIds ? { traceCorrelationIds } : {}),
+  });
   const auth = new SyntheticAuth(registry, fixtures);
   const transport = new WebSocketTransport();
   const server = new Server({

@@ -11,6 +11,7 @@ interface Item {
   readonly bytes: Uint8Array;
   readonly enqueuedAt: number;
   readonly valid?: () => boolean;
+  readonly onSinkSendResolved?: () => void;
 }
 
 /** Ordered per-client queue with a hard in-process and underlying-socket budget. */
@@ -46,7 +47,11 @@ export class OutboundQueue {
     return this.#closed;
   }
 
-  enqueue(bytes: Uint8Array, valid?: () => boolean): boolean {
+  enqueue(
+    bytes: Uint8Array,
+    valid?: () => boolean,
+    onSinkSendResolved?: () => void,
+  ): boolean {
     if (this.#closed) return false;
     this.#metrics.observe(
       "socket_buffered_bytes",
@@ -65,6 +70,7 @@ export class OutboundQueue {
       bytes: Uint8Array.from(bytes),
       enqueuedAt: performance.now(),
       ...(valid ? { valid } : {}),
+      ...(onSinkSendResolved ? { onSinkSendResolved } : {}),
     });
     this.#bytes += bytes.byteLength;
     this.#metrics.observe("outbound_queue_depth", this.#items.length);
@@ -92,6 +98,7 @@ export class OutboundQueue {
         this.#bytes -= item.bytes.byteLength;
         if (item.valid && !item.valid()) continue;
         await this.#sink.send(item.bytes);
+        item.onSinkSendResolved?.();
         if (item.bytes[3] === M2_KIND.DELTA)
           this.#metrics.observe(
             "delta_delivery_ms",

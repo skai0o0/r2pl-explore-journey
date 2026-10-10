@@ -32,6 +32,8 @@ class InvalidOutboxProjection extends Error {}
 
 export interface CommittedFixtureDelta {
   readonly eventId: string;
+  readonly actorId: string;
+  readonly commandKeyHex: string;
   readonly chunkId: number;
   readonly schoolSlot: number;
   readonly viewRevision: bigint;
@@ -39,6 +41,13 @@ export interface CommittedFixtureDelta {
   readonly mask: number;
   readonly discovered: boolean;
   readonly committedAtMs?: number;
+  readonly claimReturnedAtMs: number;
+  readonly projectedAtMs: number;
+}
+
+interface RelayTelemetry {
+  count(name: string, amount?: number): void;
+  observe(name: string, value: number): void;
 }
 
 /** PostgreSQL-backed adapter for the explicitly synthetic M3.5 network fixture. */
@@ -180,17 +189,35 @@ export class M35FixtureAuthority {
   drain(
     publish: (delta: CommittedFixtureDelta) => Promise<void>,
     recoverSubscribers: () => Promise<void>,
+    telemetry?: RelayTelemetry,
   ): Promise<number> {
     if (this.#draining) return this.#draining;
     const run = async (): Promise<number> => {
       let delivered = 0;
       for (;;) {
         const events = await this.#relay.claim(this.#campaignId, 50);
+        telemetry?.count("outbox_claim_queries");
+        telemetry?.observe(
+          "outbox_claim_query_ms",
+          this.#relay.lastClaimQueryMs,
+        );
+        telemetry?.observe("outbox_claim_batch_size", events.length);
+        telemetry?.count("outbox_events_claimed", events.length);
         if (events.length === 0) return delivered;
         for (const event of events) {
           let delta: CommittedFixtureDelta;
+          const projectionStarted = Number(process.hrtime.bigint()) / 1e6;
           try {
             delta = this.#decodeEvent(event);
+            telemetry?.observe(
+              "projection_decode_ms",
+              Number(process.hrtime.bigint()) / 1e6 - projectionStarted,
+            );
+            if (delta.committedAtMs !== undefined)
+              telemetry?.observe(
+                "commit_to_claim_return_ms",
+                event.claimReturnedAtMs - delta.committedAtMs,
+              );
           } catch (error) {
             if (!(error instanceof InvalidOutboxProjection)) throw error;
             try {
@@ -205,7 +232,17 @@ export class M35FixtureAuthority {
           }
           try {
             await publish(delta);
+            const markStarted = Number(process.hrtime.bigint()) / 1e6;
             await this.#relay.markDelivered(event.id, event.leaseToken);
+            telemetry?.observe(
+              "outbox_mark_delivered_ms",
+              Number(process.hrtime.bigint()) / 1e6 - markStarted,
+            );
+            telemetry?.observe(
+              "outbox_claim_to_delivered_ms",
+              Number(process.hrtime.bigint()) / 1e6 - event.claimReturnedAtMs,
+            );
+            telemetry?.count("outbox_events_delivered");
             this.#commitTimes.delete(event.id);
             delivered++;
           } catch (error) {
@@ -269,12 +306,16 @@ export class M35FixtureAuthority {
     const committedAtMs = this.#commitTimes.get(event.id);
     return {
       eventId: event.id,
+      actorId: event.actorId,
+      commandKeyHex: event.commandKeyHex,
       chunkId,
       schoolSlot,
       viewRevision: BigInt(revision),
       localIndex,
       mask,
       discovered: true,
+      claimReturnedAtMs: event.claimReturnedAtMs,
+      projectedAtMs: Number(process.hrtime.bigint()) / 1e6,
       ...(committedAtMs !== undefined ? { committedAtMs } : {}),
     };
   }

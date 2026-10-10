@@ -39,3 +39,14 @@ Installed `mimo.ps1`; provider listing succeeded with the available Xiaomi crede
 The review was advisory. Codex checked each point against code and PostgreSQL tests. No agent modified files, selected gameplay rules, approved protocol v2, or changed ADR-011.
 
 A follow-up `mimo run --pure` request attached the finalized transaction, relay, durable-core and v1 protocol files for a second edge-case pass. It started but returned no findings after an extended wait, so Codex interrupted it. The completed review above is the MiMo evidence; the follow-up is **not** counted as a second successful review or as validation of the final patches.
+
+## M3.6 read-only review requests, 2026-10-10
+
+The root `AGENTS.md` Multi-Agent Review policy remained active. Codex requested independent review without granting either CLI edit, migration or production access. These attempts did **not** return substantive findings, so M3.6 has no successful new external review.
+
+| CLI | Bounded request and invocation | Availability/result | Codex disposition |
+|---|---|---|---|
+| Antigravity | `agy --mode plan --sandbox --print-timeout 60s -p ...` received a self-contained ADR-011/sector/outbox/fanout summary, 1,000-client hotspot measurements, and an explicit no-tools/no-edits instruction. | `agy.exe` installed. CLI reported `You are not logged into Antigravity`, attempted interactive authentication, and could not reach its network endpoint. Interrupted; **no review returned**. | Retained Codex's measured bottleneck conclusion; no Antigravity claim is attributed to M3.6. Owner may authenticate the CLI for a later independent design pass. |
+| Xiaomi MiMo | `mimo run --pure` with read-only attached `DurableRealtimeCore.ts`, `M35FixtureAuthority.ts`, `OutboxRelay.ts` and `m36-delivery.test.ts`; asked for ordering, replay, duplicate, crash and school-isolation edge cases. | Installed. Initial sandbox attempt could not write its own SQLite journal; the escalated run started (`build · mimo-v2.5`) but returned no findings after more than a minute and was interrupted. **No M3.6 source review returned**. | Prior M3.5 MiMo findings above remain historical evidence, not approval of the M3.6 telemetry edits. Codex integrated and ran the 26-test suite directly. |
+
+No supporting agent modified shared files. The missing M3.6 reviewer feedback is an open review limitation, not a passed gate.
