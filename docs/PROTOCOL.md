@@ -45,6 +45,12 @@ The experimental branch keeps version 1 as the default. A client opts in by send
 
 This is a test-only protocol candidate. Its full-wire compatibility and network behavior require further review before replacing the M2 default.
 
+## M3.5 durable fixture over default version 1
+
+The M3.5 test gateway keeps the version-1 frame layout and golden bytes. Synthetic `EXPLORE` uses the existing 16-byte idempotency key, `ruleVersion=0`, a server-bound fixture identity and an explicitly configured `fixture-credit` cost. This is a test rule, not approved gameplay. The server serializes by sector and commits the PostgreSQL wallet debit, world effect, command result and outbox event before a `TEST_APPLIED` ACK. Repeated equal requests return the stored ACK result, including across restart; a key reused with changed payload gets `IDEMPOTENCY_CONFLICT`. Production mutation frames remain disabled.
+
+The ACK's revision is the authenticated school's **chunk view revision**, not the global world revision. An outbox event advances that same school/chunk revision once and publishes a version-1 DELTA only to matching subscribers. A reconnect, explicit RESYNC or observed revision gap loads a school-filtered PostgreSQL snapshot. ACK delivery does not depend on viewport delta delivery; clients still use revision checks and resync to reach final state. A postcommit transport failure closes the session so retry can obtain the committed result, rather than sending a false rejection. Version-2 batching remains isolated on `experiment/m2.6-batching`; the M3.5 gateway does not enable it.
+
 ## Golden frames
 
 These lowercase hex strings include the CRC. Their tests are in `tests/m2-protocol.test.ts`.

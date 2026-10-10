@@ -1,9 +1,19 @@
 import { type Client, Room } from "@colyseus/core";
-import type { RealtimeCore } from "./RealtimeCore.ts";
+import type { OutboundSink } from "./OutboundQueue.ts";
 import type { SyntheticAuth, SyntheticIdentity } from "./SyntheticAuth.ts";
 
-/** Thin Colyseus adapter. All world, visibility and command decisions live in RealtimeCore. */
-export function createGatewayRoom(core: RealtimeCore, auth: SyntheticAuth) {
+/** Thin Colyseus adapter for either explicit synthetic authority. */
+export interface GatewayCore {
+  handle(sessionId: string, bytes: Uint8Array): Promise<void>;
+  addSession(
+    sessionId: string,
+    identity: SyntheticIdentity,
+    sink: OutboundSink,
+  ): void;
+  removeSession(sessionId: string): void;
+}
+
+export function createGatewayRoom(core: GatewayCore, auth: SyntheticAuth) {
   return class GatewayRoom extends Room {
     onCreate(): void {
       this.maxClients = 2000;

@@ -62,4 +62,28 @@ export class OutboxRelay {
     if (result.rowCount !== 1)
       throw new Error("Outbox lease replaced, delivered or missing");
   }
+
+  /** M3.5-only poison projection quarantine after affected subscribers resync. */
+  async quarantine(id: string, leaseToken: string): Promise<void> {
+    const client = await this.#pool.connect();
+    try {
+      await client.query("BEGIN");
+      const updated = await client.query(
+        "UPDATE r2pl_v2.outbox_events SET delivered_at=clock_timestamp(),lease_until=NULL,lease_token=NULL WHERE id=$1 AND lease_token=$2 AND lease_until>=clock_timestamp() AND delivered_at IS NULL RETURNING id",
+        [id, leaseToken],
+      );
+      if (updated.rowCount !== 1)
+        throw new Error("Outbox quarantine lease expired or replaced");
+      await client.query(
+        "INSERT INTO r2pl_v2.outbox_dead_letters(event_id,reason) VALUES($1,'invalid_projection')",
+        [id],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }

@@ -1,0 +1,35 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "generator": "separate process",
+    "fanoutMode": "indexed",
+    "durable": true,
+    "trial": "final1"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 10,
+    "requestedActionsPerSecond": 250
+  },
+  "failure": "Client replicas diverged from authoritative projection",
+  "partial": {
+    "connected": 1000,
+    "acknowledged": 2500,
+    "clientErrors": 0,
+    "resyncs": 0,
+    "clientAckMs": {
+      "count": 2500,
+      "p50": 139.468,
+      "p95": 751.386,
+      "p99": 801.181,
+      "max": 819.822
+    },
+    "generatorCpu": {
+      "user": 11204000,
+      "system": 2453000
+    }
+  },
+  "disconnectSeconds": 7.000000005064067e-7,
+  "totalWallSeconds": 23.335255500000002
+}

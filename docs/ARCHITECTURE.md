@@ -1,4 +1,4 @@
-# R2PL Game V2 architecture — accepted baseline, M2 implementation
+# R2PL Game V2 architecture — accepted baseline, M3.5 synthetic integration
 
 ## Boundary and dependency direction
 
@@ -22,13 +22,13 @@ The campaign has coordinates `x,z ∈ [0,999]`, row-major tile index `z*1000+x`,
 
 The dense uint16 array stores only current school presence. Sparse records store per-school knowledge strength/timestamps and other dynamic state. Per-school fog is a separate bitset; discovery persistence and visibility rules are separate from knowledge decay. The database records the stable campaign school-slot registry. World format changes require a new version and migration; slot reassignment is forbidden while any saved mask uses it.
 
-The M1 `SectorAuthority` contract exposes `readChunk` and inert `setPresence` within a sector boundary. Its replaceable in-process router owns 16 logical sectors. M2 adds ordered in-process queues and subscriptions around it, without persistence or a production concurrency guarantee. M3 must integrate durable transactions and recovery. Multi-sector actions will need deterministic sector ordering and one database transaction or an explicit saga with idempotent compensation. Future process ownership uses a durable epoch/fencing token checked by every commit, not just a Redis lock.
+The M1 `SectorAuthority` contract exposes `readChunk` and inert `setPresence` within a sector boundary. Its replaceable in-process router owns 16 logical sectors. M2 adds ordered in-process queues and subscriptions around it, without persistence or a production concurrency guarantee. M3.5 uses the same room/queue/protocol boundaries with a separate PostgreSQL-backed synthetic fixture authority. Multi-sector actions will need deterministic sector ordering and one database transaction or an explicit saga with idempotent compensation. Future process ownership uses a durable epoch/fencing token checked by every commit, not just a Redis lock.
 
 ## Command and commit path
 
 `receive → decode/size check → authenticate → authorize/visibility check → validate rule and preconditions → route → transaction lock/idempotency check → calculate → commit world + ledger + idempotency + outbox → acknowledge → publish authorized deltas`.
 
-The transaction is the linearization point. A retry with the same actor/key/payload returns the stored result; the same key with a different payload is rejected. A crash after commit but before acknowledgement is safe to retry. A failed transaction has no spend or world effect. Outbox delivery may repeat, so consumers deduplicate by event ID. M2's in-memory adapter only supports convergence tests and is not a production mutation path. ADR-011 leaves the physical PostgreSQL world-write strategy open until M3 benchmarks; the transaction must durably commit a world mutation/revision together with the economy ledger and idempotency result. A later materialized chunk snapshot is a recoverable projection, never the sole record behind a success ack.
+The transaction is the linearization point. A retry with the same actor/key/payload returns the stored result; the same key with a different payload is rejected. A crash after commit but before acknowledgement is safe to retry. A failed transaction has no spend or world effect. Outbox delivery may repeat, so consumers deduplicate by event ID. M2's in-memory adapter only supports convergence tests and is not a production mutation path. M3 benchmarks led to owner approval of full-chunk transactional writes as ADR-011's current baseline, while the mutation-log candidate remains available for future measurements. M3.5 verifies a synthetic network command against this contract; production identity and gameplay rules remain disabled.
 
 ## Synchronization and privacy
 
@@ -47,7 +47,8 @@ Initial deployment is one modular monolith process with PostgreSQL. Separate out
 1. M2/M3 durability sequencing: production commit-success is disabled until durable transactions exist.
 2. Large hotspots can saturate one sector despite low global action rate; measure queue wait and revise routing only with evidence.
 3. Shared knowledge and fog can expose hidden schools if raw masks are sent without visibility filtering.
-4. Per-action chunk rewrites may amplify writes and contend on hotspot rows; deferred snapshots require replayable durable mutations and bounded recovery. ADR-011 is open until M3 measurements.
+4. Per-action chunk rewrites may amplify writes and contend on hotspot rows; deferred snapshots require replayable durable mutations and bounded recovery. ADR-011 is a revisitable full-chunk baseline after M3 measurements.
+5. The M3.5 1,000-client/250-actions/s hotspot acknowledged all commands but twice missed its bounded visible-convergence gate due to undrained outbox work. Its protocol-v1 delta delivery is not a high-capacity claim. See `M3.5_REPORT.md` for the current transaction and publication diagrams, measurements and M4 review gate.
 5. Initial viewport and overview strategies need browser/GPU and outbound-byte measurements before choosing cache residency.
 
 ## Implemented M2 realtime boundary

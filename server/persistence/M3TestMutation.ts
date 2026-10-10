@@ -36,9 +36,14 @@ export interface M3TestResult {
   readonly chunkId: number;
   readonly revision: string;
   readonly balance: string;
+  readonly viewRevision?: string; // M3.5 synthetic per-school projection only
 }
 export interface MutationMetrics {
   readonly transactionMs: number;
+  readonly poolWaitMs: number;
+  readonly dbTransactionMs: number;
+  readonly committedAtMs: number;
+  readonly committedAtMonotonicMs: number;
   readonly headLockWaitMs: number;
   readonly worldReadMs: number;
   readonly worldWriteMs: number;
@@ -48,12 +53,14 @@ export interface MutationMetrics {
 export interface ApplyOutcome {
   readonly result: M3TestResult;
   readonly metrics: MutationMetrics;
+  readonly outboxId?: string;
 }
 export interface FaultHooks {
   readonly beforeCommit?: () => void;
   readonly afterCommit?: () => void;
 }
 export class IdempotencyConflict extends Error {}
+export class CommittedResultInterrupted extends Error {}
 
 const ZERO_MASK = Buffer.alloc(CHUNK_MASK_BYTES);
 const ZERO_FOG = Buffer.alloc(CHUNK_FOG_BYTES);
@@ -170,8 +177,10 @@ export async function readAuthoritativeChunk(
 /** M3 fixture-only transaction. This is not connected to the M2 production opcode. */
 export class M3TestMutationService {
   readonly #pool: Pool;
-  constructor(pool: Pool) {
+  readonly #realtimeViews: boolean;
+  constructor(pool: Pool, options: { readonly realtimeViews?: boolean } = {}) {
     this.#pool = pool;
+    this.#realtimeViews = options.realtimeViews ?? false;
   }
 
   async apply(
@@ -196,8 +205,11 @@ export class M3TestMutationService {
     let worldWriteMs = 0;
     let headLockWaitMs = 0;
     const client = await this.#pool.connect();
+    const poolWaitMs = performance.now() - start;
+    const dbStarted = performance.now();
     let committed = false;
     let replayed = false;
+    let outboxId: string | undefined;
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL search_path = r2pl_v2, pg_catalog");
@@ -224,12 +236,18 @@ export class M3TestMutationService {
         if (row.status === "processing" || !row.result)
           throw new Error("Incomplete committed command result");
         await client.query("COMMIT");
+        const committedAtMs = performance.now();
+        const committedAtMonotonicMs = Number(process.hrtime.bigint()) / 1e6;
         committed = true;
         replayed = true;
         return {
           result: row.result,
           metrics: {
             transactionMs: performance.now() - start,
+            poolWaitMs,
+            dbTransactionMs: committedAtMs - dbStarted,
+            committedAtMs,
+            committedAtMonotonicMs,
             headLockWaitMs,
             worldReadMs,
             worldWriteMs,
@@ -243,6 +261,11 @@ export class M3TestMutationService {
         [command.campaignId],
       );
       if (!campaign.rows[0]) throw new Error("Unknown campaign");
+      if (
+        this.#realtimeViews &&
+        campaign.rows[0].write_strategy !== "full_chunk"
+      )
+        throw new Error("M3.5 realtime views require full-chunk persistence");
       const school = await client.query(
         "SELECT 1 FROM campaign_schools WHERE campaign_id=$1 AND slot=$2",
         [command.campaignId, command.schoolSlot],
@@ -275,6 +298,19 @@ export class M3TestMutationService {
         command.schoolSlot,
       );
       worldReadMs = performance.now() - readStart;
+      let viewRevision = 0n;
+      if (this.#realtimeViews) {
+        await client.query(
+          "INSERT INTO school_chunk_views(campaign_id,chunk_id,school_slot) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+          [command.campaignId, id, command.schoolSlot],
+        );
+        const view = await client.query<{ view_revision: string }>(
+          "SELECT view_revision FROM school_chunk_views WHERE campaign_id=$1 AND chunk_id=$2 AND school_slot=$3 FOR UPDATE",
+          [command.campaignId, id, command.schoolSlot],
+        );
+        if (!view.rows[0]) throw new Error("Missing school view revision");
+        viewRevision = BigInt(view.rows[0].view_revision);
+      }
       let result: M3TestResult;
       if (
         maskAt(chunk.mask, local) & schoolBit(command.schoolSlot) &&
@@ -290,6 +326,9 @@ export class M3TestMutationService {
           chunkId: id,
           revision: chunk.revision.toString(),
           balance: wallet.rows[0]?.balance ?? "0",
+          ...(this.#realtimeViews
+            ? { viewRevision: viewRevision.toString() }
+            : {}),
         };
       } else {
         const wallet = await client.query<{ balance: string }>(
@@ -307,11 +346,16 @@ export class M3TestMutationService {
             chunkId: id,
             revision: chunk.revision.toString(),
             balance: current.rows[0]?.balance ?? "0",
+            ...(this.#realtimeViews
+              ? { viewRevision: viewRevision.toString() }
+              : {}),
           };
         } else {
           const writeStart = performance.now();
           if (chunk.revision === 0x7fffffffffffffffn)
             throw new RangeError("World revision exhausted");
+          if (this.#realtimeViews && viewRevision === 0x7fffffffffffffffn)
+            throw new RangeError("School view revision exhausted");
           const next = chunk.revision + 1n;
           const newMask =
             maskAt(chunk.mask, local) | schoolBit(command.schoolSlot);
@@ -359,6 +403,18 @@ export class M3TestMutationService {
             );
           }
           worldWriteMs = performance.now() - writeStart;
+          if (this.#realtimeViews) {
+            viewRevision++;
+            await client.query(
+              "UPDATE school_chunk_views SET view_revision=$4 WHERE campaign_id=$1 AND chunk_id=$2 AND school_slot=$3",
+              [
+                command.campaignId,
+                id,
+                command.schoolSlot,
+                viewRevision.toString(),
+              ],
+            );
+          }
           if (command.cost > 0n)
             await client.query(
               "INSERT INTO ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',$4)",
@@ -369,26 +425,40 @@ export class M3TestMutationService {
                 (-command.cost).toString(),
               ],
             );
-          await client.query(
-            "INSERT INTO outbox_events(campaign_id,actor_id,command_key,event_type,event_version,payload) VALUES($1,$2,$3,'m3_test_world_changed',1,$4)",
+          const outbox = await client.query<{ id: string }>(
+            "INSERT INTO outbox_events(campaign_id,actor_id,command_key,event_type,event_version,payload) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
             [
               command.campaignId,
               command.actorId,
               Buffer.from(command.key),
+              this.#realtimeViews
+                ? "m35_fixture_world_changed"
+                : "m3_test_world_changed",
+              this.#realtimeViews ? 2 : 1,
               JSON.stringify({
                 chunkId: id,
-                revision: next.toString(),
                 schoolSlot: command.schoolSlot,
                 localIndex: local,
+                ...(this.#realtimeViews
+                  ? {
+                      viewRevision: viewRevision.toString(),
+                      mask: newMask & schoolBit(command.schoolSlot),
+                      discovered: true,
+                    }
+                  : { revision: next.toString() }),
               }),
             ],
           );
+          outboxId = outbox.rows[0]?.id;
           result = {
             status: "test_applied",
             reason: "none",
             chunkId: id,
             revision: next.toString(),
             balance: wallet.rows[0].balance,
+            ...(this.#realtimeViews
+              ? { viewRevision: viewRevision.toString() }
+              : {}),
           };
         }
       }
@@ -404,12 +474,19 @@ export class M3TestMutationService {
       );
       hooks.beforeCommit?.();
       await client.query("COMMIT");
+      const committedAtMs = performance.now();
+      const committedAtMonotonicMs = Number(process.hrtime.bigint()) / 1e6;
       committed = true;
       hooks.afterCommit?.();
       return {
         result,
+        ...(outboxId ? { outboxId } : {}),
         metrics: {
           transactionMs: performance.now() - start,
+          poolWaitMs,
+          dbTransactionMs: committedAtMs - dbStarted,
+          committedAtMs,
+          committedAtMonotonicMs,
           headLockWaitMs,
           worldReadMs,
           worldWriteMs,
@@ -419,6 +496,12 @@ export class M3TestMutationService {
       };
     } catch (error) {
       if (!committed) await client.query("ROLLBACK");
+      else
+        throw new CommittedResultInterrupted(
+          error instanceof Error
+            ? error.message
+            : "Post-commit response interrupted",
+        );
       throw error;
     } finally {
       client.release();

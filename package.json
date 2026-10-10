@@ -16,6 +16,7 @@
     "bench:world": "node --expose-gc --experimental-strip-types scripts/bench-world.ts",
     "bench:realtime": "node --experimental-strip-types scripts/bench-realtime.ts",
     "migrate:m3": "node --experimental-strip-types scripts/migrate-m3.ts",
+    "migrate:m35": "node --experimental-strip-types scripts/migrate-m35.ts",
     "bench:postgres": "node --experimental-strip-types scripts/bench-postgres.ts",
     "report:size": "node scripts/report-size.mjs"
   },

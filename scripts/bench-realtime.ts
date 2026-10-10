@@ -16,6 +16,7 @@ import {
   encodeResync,
   encodeSubscribe,
   M2_KIND,
+  REASON,
 } from "../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../shared/protocol/replica.ts";
 import { CHUNK_SIZE, WORLD_WIDTH } from "../shared/world/constants.ts";
@@ -33,8 +34,11 @@ const mode = option("mode", "balanced");
 const durationSeconds = Number(option("duration", "6"));
 const rate = Number(option("rate", "20"));
 const isolated = option("isolated", "false") === "true";
-const fanoutMode = option("fanout", "scan");
 const profile = option("profile", "false") === "true";
+const durable = option("durable", "false") === "true";
+// The M3.5 authority always indexes subscribers by school and chunk.
+const fanoutMode = durable ? "indexed" : option("fanout", "scan");
+const trial = option("trial", "1");
 if (
   !Number.isInteger(clients) ||
   clients < 1 ||
@@ -44,7 +48,8 @@ if (
   durationSeconds <= 0 ||
   !Number.isFinite(rate) ||
   rate <= 0 ||
-  !["scan", "indexed"].includes(fanoutMode)
+  !["scan", "indexed"].includes(fanoutMode) ||
+  (durable && !isolated)
 )
   throw new Error("Invalid benchmark arguments");
 
@@ -72,6 +77,17 @@ const actionKey = (n: number) => {
   new DataView(key.buffer).setUint32(0, n, true);
   key[15] = 0xa5;
   return key;
+};
+const actionTile = (n: number): number => {
+  const chunk =
+    mode === "hotspot" && n % 10 < 7 ? targetChunks[0]! : targetChunks[n % 16]!;
+  const { chunkX, chunkZ } = chunkCoordinatesForId(chunk);
+  const local = (n * 17) % 4096;
+  return (
+    (chunkZ * CHUNK_SIZE + Math.floor(local / CHUNK_SIZE)) * WORLD_WIDTH +
+    chunkX * CHUNK_SIZE +
+    (local % CHUNK_SIZE)
+  );
 };
 
 function waitChild(
@@ -109,11 +125,14 @@ class LoadPeer {
   readonly timings: number[] = [];
   readonly #measureVisibility: boolean;
   readonly #deltaArrivals = new Map<string, number>();
+  readonly #deltaArrivalsMono = new Map<string, number>();
+  readonly #ackArrivals = new Map<string, number>();
   readonly #ownActions: {
     chunkId: number;
     revision: bigint;
     sentAt: number;
   }[] = [];
+  readonly #seenAppliedKeys = new Set<string>();
   readonly #pending = new Map<
     string,
     {
@@ -150,11 +169,16 @@ class LoadPeer {
         this.snapshotReady = true;
       } else if (frame.kind === M2_KIND.DELTA) {
         const delta = decodeDelta(frame.payload);
-        if (this.#measureVisibility)
+        if (this.#measureVisibility) {
           this.#deltaArrivals.set(
             `${delta.chunkId}:${delta.nextRevision}`,
             performance.now(),
           );
+          this.#deltaArrivalsMono.set(
+            `${delta.chunkId}:${delta.nextRevision}`,
+            Number(process.hrtime.bigint()) / 1e6,
+          );
+        }
         if (this.replica.applyDelta(delta) === "resync") {
           this.resyncs++;
           this.room.sendBytes("m2", encodeResync(delta.chunkId));
@@ -163,17 +187,27 @@ class LoadPeer {
         const ack = decodeAck(frame.payload);
         const pending = this.#pending.get(Buffer.from(ack.key).toString("hex"));
         if (pending) {
-          this.timings.push(performance.now() - pending.sentAt);
+          const receivedAt = performance.now();
+          this.timings.push(receivedAt - pending.sentAt);
+          const ackKey = Buffer.from(ack.key).toString("hex");
+          if (!this.#ackArrivals.has(ackKey))
+            this.#ackArrivals.set(
+              ackKey,
+              Number(process.hrtime.bigint()) / 1e6,
+            );
           if (
             this.#measureVisibility &&
             ack.status === ACK_STATUS.TEST_APPLIED &&
-            ack.chunkId === this.chunk
-          )
+            ack.chunkId === this.chunk &&
+            !this.#seenAppliedKeys.has(ackKey)
+          ) {
+            this.#seenAppliedKeys.add(ackKey);
             this.#ownActions.push({
               chunkId: ack.chunkId,
               revision: ack.viewRevision,
               sentAt: pending.sentAt,
             });
+          }
           this.#pending.delete(Buffer.from(ack.key).toString("hex"));
           pending.resolve(ack);
         }
@@ -212,6 +246,27 @@ class LoadPeer {
     }
     return { measured, missing };
   }
+
+  committedVisibleTimings(commits: Readonly<Record<string, number>>): number[] {
+    const values: number[] = [];
+    for (const action of this.#ownActions) {
+      const suffix = `${action.chunkId}:${action.revision}`;
+      const arrival = this.#deltaArrivalsMono.get(suffix);
+      const commit = commits[`${this.slot}:${suffix}`];
+      if (arrival !== undefined && commit !== undefined)
+        values.push(arrival - commit);
+    }
+    return values;
+  }
+
+  committedAckTimings(commits: Readonly<Record<string, number>>): number[] {
+    const values: number[] = [];
+    for (const [key, arrival] of this.#ackArrivals) {
+      const commit = commits[key];
+      if (commit !== undefined) values.push(arrival - commit);
+    }
+    return values;
+  }
 }
 
 const registry = new SchoolRegistry([
@@ -232,7 +287,7 @@ const server = isolated
 const child = isolated
   ? fork(
       fileURLToPath(new URL("./bench-realtime-server.ts", import.meta.url)),
-      [String(clients), fanoutMode],
+      [String(clients), fanoutMode, durable ? "durable" : "ephemeral"],
       {
         execArgv: [
           "--experimental-strip-types",
@@ -301,6 +356,8 @@ try {
     await sleep(10);
   if (peers.some((peer) => !peer.snapshotReady))
     throw new Error("Initial snapshot timeout");
+  if (durable && child)
+    await waitChild(child, "baseline", { type: "baseline" });
 
   const count = Math.round(rate * durationSeconds);
   const actionStarted = performance.now();
@@ -309,17 +366,7 @@ try {
     const targetTime = actionStarted + (n * 1000) / rate;
     if (performance.now() < targetTime)
       await sleep(targetTime - performance.now());
-    const chunk =
-      mode === "hotspot" && n % 10 < 7
-        ? targetChunks[0]!
-        : targetChunks[n % 16]!;
-    const { chunkX, chunkZ } = chunkCoordinatesForId(chunk);
-    const local = (n * 17) % 4096;
-    const tile =
-      (chunkZ * CHUNK_SIZE + Math.floor(local / CHUNK_SIZE)) * WORLD_WIDTH +
-      chunkX * CHUNK_SIZE +
-      (local % CHUNK_SIZE);
-    acks.push(peers[n % peers.length]!.explore(tile, actionKey(n)));
+    acks.push(peers[n % peers.length]!.explore(actionTile(n), actionKey(n)));
   }
   let ackTimeout: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
@@ -388,6 +435,37 @@ try {
   if (!converged())
     throw new Error("Client replicas diverged from authoritative projection");
 
+  const actionSummary =
+    durable && child
+      ? await waitChild(child, "summary", { type: "summary", pairs: [] })
+      : undefined;
+
+  const actionAckTimings = peers.flatMap((peer) => peer.timings);
+  let durableRetries: { duplicates: number; conflicts: number } | undefined;
+  if (durable) {
+    let duplicates = 0,
+      conflicts = 0;
+    for (let n = 0; n < Math.min(count, 10); n++) {
+      const peer = peers[n % peers.length]!;
+      const original = await peer.explore(actionTile(n), actionKey(n));
+      if (
+        original.status === outcomes[n]?.status &&
+        original.viewRevision === outcomes[n]?.viewRevision
+      )
+        duplicates++;
+      const conflicting = await peer.explore(
+        actionTile(n) === 0 ? 1 : 0,
+        actionKey(n),
+      );
+      if (
+        conflicting.status === ACK_STATUS.REJECTED &&
+        conflicting.reason === REASON.IDEMPOTENCY_CONFLICT
+      )
+        conflicts++;
+    }
+    durableRetries = { duplicates, conflicts };
+  }
+
   if (child)
     isolatedSummary = await waitChild(child, "summary", {
       type: "summary",
@@ -398,6 +476,17 @@ try {
   const cpu = process.cpuUsage(cpuBefore);
   const visible = peers.slice(0, 20).map((peer) => peer.visibleTimings());
   const visibleMeasured = visible.flatMap((entry) => entry.measured);
+  const commitTimeline = (isolatedSummary?.commitTimeline ?? {}) as Readonly<
+    Record<string, number>
+  >;
+  const ackCommitTimeline = (isolatedSummary?.ackCommitTimeline ??
+    {}) as Readonly<Record<string, number>>;
+  const commitToVisible = peers
+    .slice(0, 20)
+    .flatMap((peer) => peer.committedVisibleTimings(commitTimeline));
+  const commitToAck = peers.flatMap((peer) =>
+    peer.committedAckTimings(ackCommitTimeline),
+  );
   result = {
     environment: {
       node: process.version,
@@ -409,6 +498,8 @@ try {
         ? "separate Node process, same host as server"
         : "same Node process and host as server",
       fanoutMode,
+      durable,
+      trial,
     },
     workload: {
       clients,
@@ -432,14 +523,21 @@ try {
       convergenceCheckMs: convergenceMs,
       resyncs: peers.reduce((sum, peer) => sum + peer.resyncs, 0),
       clientErrors: peers.reduce((sum, peer) => sum + peer.errors, 0),
+      ...(durableRetries ? { durableRetries } : {}),
     },
     timings: {
       connectionSeconds,
       connectionRatePerSecond: clients / connectionSeconds,
       actionSeconds,
       acknowledgedActionsPerSecond: outcomes.length / actionSeconds,
-      clientAckMs: percentile(peers.flatMap((peer) => peer.timings)),
+      clientAckMs: percentile(actionAckTimings),
       sampledOwnDeltaVisibleMs: percentile(visibleMeasured),
+      ...(durable
+        ? {
+            commitToClientAckMs: percentile(commitToAck),
+            sampledCommitToClientVisibleMs: percentile(commitToVisible),
+          }
+        : {}),
       sampledOwnDeltaMissing: visible.reduce(
         (sum, entry) => sum + entry.missing,
         0,
@@ -479,21 +577,42 @@ try {
           }
         : {}),
     },
+    ...(durable ? { database: actionSummary?.database } : {}),
     limitations: [
       isolated
         ? "Single-host loopback with separate Node processes; CPU still shares host"
         : "Single-host loopback and same-process load generator; not a production CCU claim",
-      "M2 state and idempotency are ephemeral; no database or durable acknowledgements",
+      durable
+        ? "Synthetic M3.5 fixture cost and identity; not approved gameplay or production capacity"
+        : "M2 state and idempotency are ephemeral; no database or durable acknowledgements",
       "M2 payload byte counts exclude Colyseus/WebSocket framing overhead",
+      ...(durable
+        ? [
+            "Cross-process commit-to-receive timings use Node's same-host monotonic clock",
+          ]
+        : []),
     ],
   };
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);
+  let failedServerSummary: Record<string, unknown> | undefined;
+  if (durable && child?.connected) {
+    try {
+      failedServerSummary = await waitChild(child, "summary", {
+        type: "summary",
+        pairs: [],
+      });
+    } catch {
+      // Keep the original workload failure as the primary diagnostic.
+    }
+  }
   result = {
     environment: {
       node: process.version,
       generator: isolated ? "separate process" : "same process",
       fanoutMode,
+      durable,
+      trial,
     },
     workload: {
       clients,
@@ -509,6 +628,13 @@ try {
       resyncs: peers.reduce((sum, peer) => sum + peer.resyncs, 0),
       clientAckMs: percentile(peers.flatMap((peer) => peer.timings)),
       generatorCpu: process.cpuUsage(cpuBefore),
+      ...(failedServerSummary
+        ? {
+            serverMetrics: failedServerSummary.metrics,
+            serverResources: failedServerSummary.resources,
+            database: failedServerSummary.database,
+          }
+        : {}),
     },
   };
 } finally {
@@ -536,7 +662,7 @@ if (result) {
   result.disconnectSeconds = disconnectSeconds;
   result.totalWallSeconds = (performance.now() - runStarted) / 1000;
   const path = isolated
-    ? `docs/benchmarks/M25_${clients}_${mode}_${fanoutMode}_${durationSeconds}s_${rate}r${failure ? "_failed" : ""}.json`
+    ? `docs/benchmarks/${durable ? "M35" : "M25"}_${clients}_${mode}_${fanoutMode}_${durationSeconds}s_${rate}r${durable ? `_trial${trial}` : ""}${failure ? "_failed" : ""}.json`
     : `docs/benchmarks/M2_${clients}_${mode}.json`;
   await mkdir("docs/benchmarks", { recursive: true });
   await writeFile(path, `${JSON.stringify(result, null, 2)}\n`);

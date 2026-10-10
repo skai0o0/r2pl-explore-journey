@@ -1,6 +1,6 @@
 # M3 Durable Persistence & Economy — PostgreSQL validation
 
-**Status, 2026-10-10:** M3's synthetic durability contract passed local PostgreSQL 16 validation. ADR-011 selects full-chunk transactional writes for the M3 baseline, subject to owner review. Production gameplay mutations remain disabled; M4 is unauthorized.
+**Status, 2026-10-10:** the owner technically accepted M3's tested synthetic durability foundation and approved ADR-011 full-chunk transactional writes as the revisitable baseline. Production gameplay mutations remain disabled; M3.5 is the authorized integration gate, and M4 is unauthorized.
 
 ## Environment and isolation
 

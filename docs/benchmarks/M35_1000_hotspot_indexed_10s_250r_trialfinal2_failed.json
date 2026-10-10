@@ -1,0 +1,181 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "generator": "separate process",
+    "fanoutMode": "indexed",
+    "durable": true,
+    "trial": "final2"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 10,
+    "requestedActionsPerSecond": 250
+  },
+  "failure": "Client replicas diverged from authoritative projection",
+  "partial": {
+    "connected": 1000,
+    "acknowledged": 2500,
+    "clientErrors": 0,
+    "resyncs": 0,
+    "clientAckMs": {
+      "count": 2500,
+      "p50": 223.476,
+      "p95": 2355.606,
+      "p99": 2794.87,
+      "max": 2820.104
+    },
+    "generatorCpu": {
+      "user": 11406000,
+      "system": 2359000
+    },
+    "serverMetrics": {
+      "counters": {
+        "connections": 1000,
+        "outbound_frames": 645771,
+        "outbound_bytes": 31284485,
+        "inbound_frames": 3500,
+        "snapshots_enqueued": 1000,
+        "subscription_changes": 1000,
+        "durable_commands": 2500,
+        "fanout_recipients": 641271
+      },
+      "histograms": {
+        "socket_buffered_bytes": {
+          "count": 100000,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "outbound_queue_depth": {
+          "count": 100000,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 2
+        },
+        "sector_queue_depth": {
+          "count": 5935,
+          "p50": 1,
+          "p95": 416,
+          "p99": 653,
+          "max": 712
+        },
+        "sector_queue_wait_ms": {
+          "count": 5935,
+          "p50": 0.015200000000731961,
+          "p95": 1816.4488999999994,
+          "p99": 2626.6260999999995,
+          "max": 2805.5937000000013
+        },
+        "sector_execute_ms": {
+          "count": 5935,
+          "p50": 4.423699999999371,
+          "p95": 14.144399999999678,
+          "p99": 25.09020000000055,
+          "max": 134.25950000000012
+        },
+        "durable_pool_wait_ms": {
+          "count": 2500,
+          "p50": 0.041600000000016735,
+          "p95": 0.22409999999945285,
+          "p99": 0.3746000000010099,
+          "max": 1.5697000000000116
+        },
+        "durable_transaction_ms": {
+          "count": 2500,
+          "p50": 5.9385999999994965,
+          "p95": 18.437800000000607,
+          "p99": 29.588200000000143,
+          "max": 50.473799999999756
+        },
+        "durable_chunk_lock_ms": {
+          "count": 2500,
+          "p50": 0.20139999999992142,
+          "p95": 0.7460999999993874,
+          "p99": 1.717899999999645,
+          "max": 8.34139999999934
+        },
+        "commit_to_ack_enqueue_ms": {
+          "count": 2500,
+          "p50": 0.039099999999962165,
+          "p95": 0.11020000000007713,
+          "p99": 0.19099999999980355,
+          "max": 0.46790000000055443
+        },
+        "command_ack_ms": {
+          "count": 2500,
+          "p50": 222.47289999999975,
+          "p95": 2354.9691999999995,
+          "p99": 2794.4058000000005,
+          "max": 2817.6259999999984
+        },
+        "ack_delivery_ms": {
+          "count": 2500,
+          "p50": 0.07770000000073196,
+          "p95": 3.4034999999998945,
+          "p99": 7.272099999999682,
+          "max": 17.151700000000346
+        },
+        "delta_encode_ms": {
+          "count": 2435,
+          "p50": 0.011399999999412103,
+          "p95": 0.015399999996589031,
+          "p99": 0.01900000000023283,
+          "max": 0.4477000000006228
+        },
+        "fanout_candidates": {
+          "count": 2435,
+          "p50": 300,
+          "p95": 412,
+          "p99": 412,
+          "max": 412
+        },
+        "fanout_enqueue_ms": {
+          "count": 2435,
+          "p50": 0.35759999999936554,
+          "p95": 0.5917000000008557,
+          "p99": 0.7199000000000524,
+          "max": 2.4311999999990803
+        },
+        "commit_to_delta_enqueue_ms": {
+          "count": 2435,
+          "p50": 11387.725800000131,
+          "p95": 11643.583099998534,
+          "p99": 11696.415599994361,
+          "max": 11708.102400004864
+        },
+        "delta_delivery_ms": {
+          "count": 100000,
+          "p50": 3.3205000000002656,
+          "p95": 9.708000000000084,
+          "p99": 15.458300000000236,
+          "max": 17.14259999999922
+        }
+      }
+    },
+    "serverResources": {
+      "cpuUserMs": 10172,
+      "cpuSystemMs": 7609,
+      "memory": {
+        "rss": 231591936,
+        "heapTotal": 174583808,
+        "heapUsed": 88665152,
+        "external": 13829188,
+        "arrayBuffers": 3014176
+      },
+      "logicalCpus": 16
+    },
+    "database": {
+      "walBytes": 11103312,
+      "deadlocks": 0,
+      "pendingOutbox": 68,
+      "poolMaxTotal": 16,
+      "poolMaxWaiting": 2,
+      "poolMaxBusy": 16
+    }
+  },
+  "disconnectSeconds": 7.000000005064067e-7,
+  "totalWallSeconds": 25.0344842
+}
