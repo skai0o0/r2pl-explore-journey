@@ -37,6 +37,14 @@ ACK statuses: 1 `TEST_APPLIED`, 2 `TEST_NO_CHANGE`, 3 `REJECTED`. There is inten
 
 The server projects only the authenticated school bit and that school's fog. It sends no other school bit, metadata or public overview. Revisions are per school and chunk, so activity hidden from a school does not advance its view revision. On subscription, a snapshot is queued before subsequent deltas; stale queued snapshots/deltas are discarded when the subscription generation changes. Client applies a delta only when `baseRevision` equals its stored revision and `nextRevision=baseRevision+1`; duplicates are ignored and gaps request RESYNC. Reconnect authenticates again and obtains fresh snapshots. M2 does not replay missed deltas or retain state across server restart.
 
+## M2.6 experimental transport version 2
+
+The experimental branch keeps version 1 as the default. A client opts in by sending a **version-2 SUBSCRIBE** with the unchanged subscription payload. The server then sends version-2 `DELTA_BATCH` frames for that session's subscribed chunks when a 20 ms or 50 ms batch window is configured. HELLO, SNAPSHOT, ACK, RESYNC, EXPLORE and ERROR retain their version-1 frames. A version-1 subscriber continues to receive version-1 single-record DELTAs. Version-2 frames of other kinds and version-1 `DELTA_BATCH` frames are rejected. An older server rejects version-2 SUBSCRIBE, so deployment would require capability negotiation or explicit client rollback before production use.
+
+`DELTA_BATCH` is kind 21. Its payload is `u16 chunkId`, `u64 baseRevision`, `u16 count` (1–256), then exactly `count` ordered records of `u16 localIndex`, `u16 projectedMask`, `u8 discovered`. Record `i` advances the school/chunk view from `baseRevision+i` to `baseRevision+i+1`. The encoder retains repeated updates to one tile and never merges records. Maximum frame length is 1304 bytes. A client validates every record and the school bit before applying any record; duplicate or overlapping prefixes are skipped, and a revision gap requests a version-1 RESYNC followed by a fresh snapshot. Switching subscription versions, resync, unsubscribe and disconnect invalidate pending batches. Per-session pending records are capped at 1024 and each outgoing frame at 256 records; the existing 128-frame/1-MiB outbound limit still applies. ACKs bypass batching.
+
+This is a test-only protocol candidate. Its full-wire compatibility and network behavior require further review before replacing the M2 default.
+
 ## Golden frames
 
 These lowercase hex strings include the CRC. Their tests are in `tests/m2-protocol.test.ts`.

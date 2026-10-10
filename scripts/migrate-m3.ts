@@ -13,7 +13,8 @@ const sql = await readFile(
   new URL("../database/migrations/001_m3_foundation.sql", import.meta.url),
   "utf8",
 );
-const digest = createHash("sha256").update(sql).digest();
+// Git may check out identical SQL as LF or CRLF on different hosts.
+const digest = createHash("sha256").update(sql.replace(/\r\n/g, "\n")).digest();
 const client = await pool.connect();
 try {
   await client.query("BEGIN");

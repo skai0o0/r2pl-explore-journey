@@ -1,0 +1,204 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "ramBytes": 34164097024,
+    "generator": "separate Node process, same host as server",
+    "fanoutMode": "scan",
+    "batchWindowMs": 0,
+    "protocol": "v1 per-action delta",
+    "trial": "2"
+  },
+  "workload": {
+    "clients": 1000,
+    "mode": "hotspot",
+    "durationSeconds": 20,
+    "targetActions": 5000,
+    "requestedActionsPerSecond": 250,
+    "hotspotSectorShare": 0.7,
+    "schools": 2,
+    "subscribedChunksPerClient": 1
+  },
+  "outcomes": {
+    "connected": 1000,
+    "acknowledged": 5000,
+    "applied": 4617,
+    "noChange": 383,
+    "converged": true,
+    "convergenceCheckMs": 652.2361999999994,
+    "resyncs": 0,
+    "clientErrors": 0
+  },
+  "timings": {
+    "connectionSeconds": 1.0090839999999999,
+    "connectionRatePerSecond": 990.9977762009903,
+    "actionSeconds": 22.5026791,
+    "acknowledgedActionsPerSecond": 222.19576512558453,
+    "clientAckMs": {
+      "count": 5000,
+      "p50": 2175.15,
+      "p95": 4570.38,
+      "p99": 4861.051,
+      "max": 5132.337
+    },
+    "sampledOwnDeltaVisibleMs": {
+      "count": 88,
+      "p50": 1901.13,
+      "p95": 4864.87,
+      "p99": 4867.249,
+      "max": 4867.249
+    },
+    "sampledOwnDeltaMissing": 0,
+    "server": {
+      "socket_buffered_bytes": {
+        "count": 100000,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "outbound_queue_depth": {
+        "count": 100000,
+        "p50": 1,
+        "p95": 1,
+        "p99": 1,
+        "max": 1
+      },
+      "sector_queue_depth": {
+        "count": 5000,
+        "p50": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "sector_queue_wait_ms": {
+        "count": 5000,
+        "p50": 0.018299999999726424,
+        "p95": 0.05430000000023938,
+        "p99": 7.488600000000588,
+        "max": 10.984199999998964
+      },
+      "delta_encode_ms": {
+        "count": 4617,
+        "p50": 0.006499999999505235,
+        "p95": 0.011400000000321597,
+        "p99": 0.021000000000640284,
+        "max": 0.18699999999989814
+      },
+      "fanout_candidates": {
+        "count": 4617,
+        "p50": 1000,
+        "p95": 1000,
+        "p99": 1000,
+        "max": 1000
+      },
+      "fanout_enqueue_ms": {
+        "count": 4617,
+        "p50": 0.4301000000004933,
+        "p95": 0.6830000000009022,
+        "p99": 0.9419999999990978,
+        "max": 2.0936000000001513
+      },
+      "sector_execute_ms": {
+        "count": 5000,
+        "p50": 5.209200000001147,
+        "p95": 7.843399999997928,
+        "p99": 8.850399999999354,
+        "max": 16.548800000000483
+      },
+      "delta_delivery_ms": {
+        "count": 100000,
+        "p50": 4.210900000000038,
+        "p95": 6.798099999999977,
+        "p99": 10.684000000000196,
+        "max": 13.110999999999876
+      },
+      "command_ack_ms": {
+        "count": 5000,
+        "p50": 5.511999999998807,
+        "p95": 8.388599999998405,
+        "p99": 11.262900000001537,
+        "max": 17.849500000000262
+      },
+      "ack_delivery_ms": {
+        "count": 5000,
+        "p50": 0.02659999999923457,
+        "p95": 0.05449999999927968,
+        "p99": 4.755299999997078,
+        "max": 7.494599999998172
+      }
+    }
+  },
+  "traffic": {
+    "receivedBytesPerClient": {
+      "count": 1000,
+      "p50": 58290,
+      "p95": 70855,
+      "p99": 70855,
+      "max": 70855
+    },
+    "receivedFramesPerClient": {
+      "count": 1000,
+      "p50": 1417,
+      "p95": 1776,
+      "p99": 1776,
+      "max": 1776
+    },
+    "totalApplicationFrames": 1189125,
+    "totalApplicationBytes": 50318848,
+    "deltaFrames": 1182338,
+    "batchFrames": 0,
+    "deltaRecords": 1182338,
+    "serverCounters": {
+      "connections": 1000,
+      "outbound_frames": 1189338,
+      "outbound_bytes": 50321830,
+      "inbound_frames": 6000,
+      "snapshots_enqueued": 1000,
+      "subscription_changes": 1000,
+      "fanout_recipients": 1182338,
+      "actions_applied": 4617,
+      "actions_no_change": 383
+    }
+  },
+  "resources": {
+    "cpuUserMs": 21703,
+    "cpuSystemMs": 3906,
+    "rssBytes": 320520192,
+    "heapUsedBytes": 82961928,
+    "arrayBufferBytes": 18185252,
+    "eventLoopLagP95Ms": 23.429119,
+    "server": {
+      "cpuUserMs": 11547,
+      "cpuSystemMs": 11422,
+      "memory": {
+        "rss": 255373312,
+        "heapTotal": 183783424,
+        "heapUsed": 100446640,
+        "external": 13832886,
+        "arrayBuffers": 3051633
+      },
+      "logicalCpus": 16
+    },
+    "generator": {
+      "cpuUserMs": 21703,
+      "cpuSystemMs": 3906,
+      "memory": {
+        "rss": 320520192,
+        "heapTotal": 218238976,
+        "heapUsed": 82961928,
+        "external": 29261800,
+        "arrayBuffers": 18185252
+      }
+    }
+  },
+  "limitations": [
+    "Single-host loopback with separate Node processes; CPU still shares host",
+    "M2 state and idempotency are ephemeral; no database or durable acknowledgements",
+    "M2 payload byte counts exclude Colyseus/WebSocket framing overhead"
+  ],
+  "disconnectSeconds": 0.22639290000000256,
+  "totalWallSeconds": 25.657068
+}

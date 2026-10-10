@@ -12,6 +12,8 @@ Client, load generator and database shared one Windows desktop: Intel i5-13400F,
 
 The private r2pl_v2 migration creates versioned campaigns, immutable 16-slot school assignments, fixture wallets and ledger, idempotency records with payload hashes, chunk heads and checksummed mask/fog checkpoints, ordered mutation records and a token-leased outbox. The migration runner executes in one transaction under an advisory lock and checks its SHA-256 on repeat runs. No production roster, cost, reward or visibility rule is seeded.
 
+A final cross-worktree regression exposed a Windows checkout portability issue: Git could materialize the same SQL as LF or CRLF, causing a false checksum mismatch against the already applied migration. The migration runner now normalizes CRLF to LF **for hashing only**. The SQL and stored LF checksum are unchanged, and the disposable database's repeated migration passed from both worktrees after this correction.
+
 M3TestMutationService performs the fixture world effect, wallet debit, ledger entry, saved command result and outbox event in one transaction with synchronous_commit=on. A committed-success result is returned only after COMMIT. Identical retries return the saved result; a changed payload with the same key conflicts. The M2 production mutation path remains fail-closed and is not wired to this fixture service.
 
 The full suite passed: **20 tests, 0 failures, 0 skips**. The PostgreSQL integration case ran in about 1.9 seconds. It covered:
@@ -64,6 +66,6 @@ The hot chunk remains a serialization limit in either strategy: at 64 concurrent
 
 ## Source, CI and readiness
 
-The V2 CI workflow includes an Ubuntu PostgreSQL 16 service with synthetic credentials. Its remote run awaits owner-provided GitHub repository details. A clean npm install from the lockfile, strict compile, lint, client build and all 20 tests passed locally. The source-size report measured **25 first-party source files / 98,579 bytes**, **6 test files / 46,445 bytes**, and **10 scripts / 47,770 bytes**. The unchanged client bundle is **535,489 bytes raw / 133,880 bytes gzip**. pg and @types/pg are the only M3 package additions.
+The V2 CI workflow includes an Ubuntu PostgreSQL 16 service with synthetic credentials. Its remote run awaits owner-provided GitHub repository details. A clean npm install from the lockfile, strict compile, lint, client build and all 20 tests passed locally. The source-size report measured **25 first-party source files / 98,579 bytes**, **6 test files / 46,445 bytes**, and **10 scripts / 47,862 bytes** after the portable migration-checksum fix. The unchanged client bundle is **535,489 bytes raw / 133,880 bytes gzip**. pg and @types/pg are the only M3 package additions.
 
 **M3 technical recommendation:** accept the durable synthetic transaction foundation and ADR-011 full-chunk choice for M3. Production gameplay actions must wait for approved identity, visibility and game rules, plus the owner review gate. **M4 remains unauthorized.**
