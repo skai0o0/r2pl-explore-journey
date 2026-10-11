@@ -10,6 +10,9 @@ import {
   chunkId,
   tileIndex,
 } from "../../shared/world/coordinates.ts";
+import { ModelAssetLoader } from "./assetLoader.ts";
+import { type AssetMount, mountModelAsset } from "./assetPipeline.ts";
+import { MODEL_ASSETS, MODEL_PLACEMENTS } from "./assetRegistry.ts";
 
 export interface PickedTile {
   readonly x: number;
@@ -116,6 +119,7 @@ export class WorldView {
     { pixels: Uint8Array; texture: THREE.DataTexture; mesh: THREE.Mesh }
   >();
   readonly #markerElements: HTMLElement[] = [];
+  readonly #assetMounts: AssetMount[] = [];
   readonly #selection: HTMLElement;
   readonly #hoverElement: HTMLElement;
   readonly #pendingElement: HTMLElement;
@@ -200,6 +204,30 @@ export class WorldView {
       ),
     );
 
+    const assetLoader = new ModelAssetLoader();
+    for (const placement of MODEL_PLACEMENTS) {
+      const fallback =
+        placement.asset === "hq"
+          ? new THREE.Mesh(
+              new THREE.BoxGeometry(1, 1, 0.08),
+              new THREE.MeshBasicMaterial({ color: 0x8bd9b4 }),
+            )
+          : new THREE.Mesh(
+              new THREE.CircleGeometry(0.5, 4),
+              new THREE.MeshBasicMaterial({ color: 0xc3a5eb }),
+            );
+      this.#assetMounts.push(
+        mountModelAsset(
+          this.#scene,
+          assetLoader,
+          MODEL_ASSETS[placement.asset].url,
+          placement,
+          fallback,
+          this.#render,
+        ),
+      );
+    }
+
     for (const marker of markers) {
       const element = document.createElement("div");
       element.className = `map-marker ${marker.kind}`;
@@ -250,6 +278,11 @@ export class WorldView {
     host.addEventListener("wheel", this.#wheel, { passive: false });
     window.addEventListener("resize", this.#render);
     this.#render();
+  }
+
+  dispose(): void {
+    for (const mount of this.#assetMounts) mount.dispose();
+    this.#assetMounts.length = 0;
   }
 
   setSchool(slot: number): void {

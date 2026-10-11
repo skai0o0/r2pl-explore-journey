@@ -1,0 +1,31 @@
+{
+  "asset": { "version": "2.0", "generator": "R2PL V2 fixture" },
+  "extensionsUsed": ["KHR_materials_unlit"],
+  "scene": 0,
+  "scenes": [{ "nodes": [0, 1, 2, 3] }],
+  "nodes": [
+    { "name": "North crystal", "mesh": 0, "translation": [0, 0.28, 0] },
+    { "name": "East crystal", "mesh": 0, "translation": [0.28, 0, 0], "rotation": [0, 0, 0.7071068, 0.7071068] },
+    { "name": "South crystal", "mesh": 0, "translation": [0, -0.28, 0], "rotation": [0, 0, 1, 0] },
+    { "name": "West crystal", "mesh": 0, "translation": [-0.28, 0, 0], "rotation": [0, 0, -0.7071068, 0.7071068] }
+  ],
+  "meshes": [{ "primitives": [{ "attributes": { "POSITION": 0 }, "material": 0 }] }],
+  "materials": [{
+    "name": "Landmark violet",
+    "pbrMetallicRoughness": { "baseColorFactor": [0.72, 0.45, 0.95, 1] },
+    "extensions": { "KHR_materials_unlit": {} }
+  }],
+  "buffers": [{
+    "byteLength": 36,
+    "uri": "data:application/octet-stream;base64,AAAAvwAAAL8AAAAAAAAAPwAAAL8AAAAAAAAAAAAAAD8AAAAA"
+  }],
+  "bufferViews": [{ "buffer": 0, "byteOffset": 0, "byteLength": 36, "target": 34962 }],
+  "accessors": [{
+    "bufferView": 0,
+    "componentType": 5126,
+    "count": 3,
+    "type": "VEC3",
+    "min": [-0.5, -0.5, 0],
+    "max": [0.5, 0.5, 0]
+  }]
+}

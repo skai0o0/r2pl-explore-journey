@@ -1,0 +1,29 @@
+{
+  "asset": { "version": "2.0", "generator": "R2PL V2 fixture" },
+  "extensionsUsed": ["KHR_materials_unlit"],
+  "scene": 0,
+  "scenes": [{ "nodes": [0, 1] }],
+  "nodes": [
+    { "name": "HQ roof", "mesh": 0, "translation": [0, 0.3, 0.02] },
+    { "name": "HQ base", "mesh": 0, "translation": [0, -0.2, 0], "rotation": [0, 0, 1, 0], "scale": [1, 0.7, 1] }
+  ],
+  "meshes": [{ "primitives": [{ "attributes": { "POSITION": 0 }, "material": 0 }] }],
+  "materials": [{
+    "name": "HQ mint",
+    "pbrMetallicRoughness": { "baseColorFactor": [0.25, 0.9, 0.65, 1] },
+    "extensions": { "KHR_materials_unlit": {} }
+  }],
+  "buffers": [{
+    "byteLength": 36,
+    "uri": "data:application/octet-stream;base64,AAAAvwAAAL8AAAAAAAAAPwAAAL8AAAAAAAAAAAAAAD8AAAAA"
+  }],
+  "bufferViews": [{ "buffer": 0, "byteOffset": 0, "byteLength": 36, "target": 34962 }],
+  "accessors": [{
+    "bufferView": 0,
+    "componentType": 5126,
+    "count": 3,
+    "type": "VEC3",
+    "min": [-0.5, -0.5, 0],
+    "max": [0.5, 0.5, 0]
+  }]
+}
