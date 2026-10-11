@@ -8,6 +8,142 @@ import {
   mountModelAsset,
 } from "../client/src/assetPipeline.ts";
 import { MODEL_ASSETS, MODEL_PLACEMENTS } from "../client/src/assetRegistry.ts";
+import {
+  type CameraMode,
+  configureMapCamera,
+  deriveDevCreditState,
+  groundPointFromNdc,
+  projectTileCorners,
+  TileIndicatorLayer,
+} from "../client/src/worldView.ts";
+
+test("dev credit state only blocks a known positive unaffordable cost", () => {
+  assert.equal(deriveDevCreditState(undefined, "1"), "unknown");
+  assert.equal(deriveDevCreditState("0", undefined), "unknown");
+  assert.equal(deriveDevCreditState("not-a-balance", "1"), "unknown");
+  assert.equal(deriveDevCreditState("0", "0"), "free");
+  assert.equal(deriveDevCreditState("0", "1"), "insufficient");
+  assert.equal(deriveDevCreditState("2", "3"), "insufficient");
+  assert.equal(deriveDevCreditState("3", "3"), "affordable");
+  assert.equal(
+    deriveDevCreditState("9007199254740993", "9007199254740992"),
+    "affordable",
+  );
+});
+
+test("camera projection, tile corners, and ground picking agree in every view", () => {
+  const views = [
+    { centerX: 215, centerZ: 235, span: 275, aspect: 16 / 9 },
+    { centerX: 500, centerZ: 500, span: 1_000, aspect: 1 },
+    { centerX: 12, centerZ: 988, span: 32, aspect: 9 / 16 },
+    { centerX: 785, centerZ: 765, span: 200, aspect: 2.4 },
+  ] as const;
+  const tiles = [
+    { x: 0, z: 0 },
+    { x: 214, z: 234 },
+    { x: 510, z: 485 },
+    { x: 999, z: 999 },
+  ] as const;
+
+  for (const mode of ["top-down", "isometric"] satisfies CameraMode[]) {
+    for (const view of views) {
+      const camera = new THREE.OrthographicCamera();
+      configureMapCamera(
+        camera,
+        mode,
+        view.centerX,
+        view.centerZ,
+        view.span,
+        view.aspect,
+      );
+
+      const expectedCenter = new THREE.Vector3(
+        view.centerX - 500,
+        500 - view.centerZ,
+        0,
+      );
+      const centerHit = groundPointFromNdc(camera, new THREE.Vector2(0, 0));
+      assert.ok(centerHit);
+      assert.ok(centerHit.distanceTo(expectedCenter) < 1e-8);
+
+      for (const tile of tiles) {
+        const quad = projectTileCorners(camera, tile.x, tile.z);
+        const worldCorners = [
+          new THREE.Vector3(tile.x - 500, 500 - tile.z, 0),
+          new THREE.Vector3(tile.x - 499, 500 - tile.z, 0),
+          new THREE.Vector3(tile.x - 499, 499 - tile.z, 0),
+          new THREE.Vector3(tile.x - 500, 499 - tile.z, 0),
+        ];
+        quad.forEach((corner, index) => {
+          const projected = worldCorners[index]!.clone().project(camera);
+          assert.ok(corner.distanceTo(projected) < 1e-12);
+          const roundTrip = groundPointFromNdc(camera, corner);
+          assert.ok(roundTrip);
+          assert.ok(roundTrip.distanceTo(worldCorners[index]!) < 1e-7);
+        });
+
+        const tileCenter = new THREE.Vector3(tile.x - 499.5, 499.5 - tile.z, 0);
+        const centerScreen = tileCenter.clone().project(camera);
+        const centerRoundTrip = groundPointFromNdc(
+          camera,
+          new THREE.Vector2(centerScreen.x, centerScreen.y),
+        );
+        assert.ok(centerRoundTrip);
+        assert.ok(centerRoundTrip.distanceTo(tileCenter) < 1e-7);
+      }
+    }
+  }
+});
+
+test("tile indicators reuse constant scene resources without WebGL", () => {
+  const indicators = new TileIndicatorLayer();
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  indicators.object.traverse((child) => {
+    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+      geometries.add(child.geometry);
+      const childMaterials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      for (const material of childMaterials) materials.add(material);
+    }
+  });
+  assert.equal(indicators.object.children.length, 5);
+  assert.equal(geometries.size, 2);
+  assert.equal(materials.size, 10);
+
+  for (let index = 0; index < 10_000; index++) {
+    indicators.setTile("hover", { x: index % 1_000, z: index % 1_000 });
+    indicators.setTile("selected", { x: 999, z: 0 });
+  }
+  assert.equal(indicators.object.children.length, 5);
+  assert.equal(geometries.size, 2);
+  const hover = indicators.object.children[0];
+  assert.ok(hover);
+  assert.equal(hover.visible, true);
+  assert.deepEqual(hover.position.toArray(), [499.5, -499.5, 0]);
+  const outline = hover.children[1];
+  assert.ok(outline instanceof THREE.LineLoop);
+  const positions = outline.geometry.getAttribute("position");
+  const worldCorners = Array.from({ length: positions.count }, (_, index) =>
+    new THREE.Vector3(
+      positions.getX(index),
+      positions.getY(index),
+      positions.getZ(index),
+    ).add(hover.position),
+  );
+  assert.deepEqual(
+    worldCorners.map(({ x, y }) => [x, y]),
+    [
+      [499, -499],
+      [500, -499],
+      [500, -500],
+      [499, -500],
+    ],
+  );
+  indicators.dispose();
+  assert.equal(indicators.object.children.length, 0);
+});
 
 test("model registry uses local swappable URLs and preserves world locations", () => {
   assert.deepEqual(MODEL_ASSETS, {
@@ -61,7 +197,10 @@ test("fixture glTF files are self-contained glTF 2.0 geometry", async () => {
     const c = new THREE.Vector3(positions[6], positions[7], positions[8]);
     const normal = b.sub(a).cross(c.sub(a));
     assert.ok(normal.lengthSq() > 0, "fixture triangle must not be degenerate");
-    assert.ok(normal.z > 0, "fixture front face must point toward the map camera");
+    assert.ok(
+      normal.z > 0,
+      "fixture front face must point toward the map camera",
+    );
   }
 });
 

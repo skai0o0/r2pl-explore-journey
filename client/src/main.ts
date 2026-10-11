@@ -13,7 +13,11 @@ import {
   REASON,
 } from "../../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../../shared/protocol/replica.ts";
-import { type PickedTile, WorldView } from "./worldView.ts";
+import {
+  deriveDevCreditState,
+  type PickedTile,
+  WorldView,
+} from "./worldView.ts";
 import "./style.css";
 
 const players = [
@@ -78,7 +82,19 @@ let subscribeTimer: number | undefined;
 let balanceTimer: number | undefined;
 let reconnectTimer: number | undefined;
 let subscribed = "";
+let profileBalance: string | undefined;
+let profileCost: string | undefined;
 const pending = new Map<string, PendingAction>();
+
+function lacksTestCredits(): boolean {
+  return deriveDevCreditState(profileBalance, profileCost) === "insufficient";
+}
+
+function showInsufficientCredits(): void {
+  ui.explore.disabled = true;
+  ui.explore.innerHTML =
+    "<span>✦</span> Not enough test credits <small>Explore unavailable</small>";
+}
 
 function activity(message: string, kind = "normal"): void {
   const row = document.createElement("li");
@@ -95,7 +111,7 @@ function activity(message: string, kind = "normal"): void {
 function status(label: string, online: boolean): void {
   ui.connection.textContent = label;
   ui.connection.dataset.online = String(online);
-  ui.explore.disabled = !online || !selected;
+  ui.explore.disabled = !online || !selected || lacksTestCredits();
   ui.retry.hidden = online;
 }
 
@@ -193,9 +209,13 @@ function updateTile(): void {
         "Discovered territory · Unclaimed university presence";
       ui.badge.textContent = "SCOUTED";
       ui.badge.className = "badge-tag scouted";
-      ui.explore.disabled = !room;
-      ui.explore.innerHTML =
-        "<span>✦</span> Establish Knowledge <small>1 test credit</small>";
+      if (lacksTestCredits()) {
+        showInsufficientCredits();
+      } else {
+        ui.explore.disabled = !room;
+        ui.explore.innerHTML =
+          "<span>✦</span> Establish Knowledge <small>1 test credit</small>";
+      }
       return;
     }
 
@@ -204,9 +224,13 @@ function updateTile(): void {
     ui.badge.className = "badge-tag fogged";
   }
 
-  ui.explore.disabled = !room;
-  ui.explore.innerHTML =
-    "<span>✦</span> Explore tile <small>1 test credit</small>";
+  if (lacksTestCredits()) {
+    showInsufficientCredits();
+  } else {
+    ui.explore.disabled = !room;
+    ui.explore.innerHTML =
+      "<span>✦</span> Explore tile <small>1 test credit</small>";
+  }
 }
 
 function updateHover(hovered?: PickedTile): void {
@@ -236,6 +260,9 @@ async function refreshProfile(token = player.token): Promise<void> {
     ui.player.textContent = profile.name;
     ui.balance.textContent = profile.balance;
     ui.cost.textContent = profile.cost;
+    profileBalance = profile.balance;
+    profileCost = profile.cost;
+    updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
   } catch {
     if (token === player.token)
@@ -261,6 +288,21 @@ const world = new WorldView(
   },
 );
 
+const overviewButton = get<HTMLButtonElement>("overview-button");
+const worldHost = get<HTMLElement>("world-view");
+
+function announceCameraMode(log: boolean): void {
+  const label = world.cameraMode === "isometric" ? "Isometric 3D" : "Top-down";
+  overviewButton.title = `World overview (O) · ${label} view · toggle view (I)`;
+  worldHost.setAttribute(
+    "aria-label",
+    `Interactive thousand by thousand tile world, ${label} view. Press I to toggle camera view.`,
+  );
+  if (log) activity(`${label} camera · press I to toggle view`);
+}
+
+announceCameraMode(true);
+
 function scheduleSubscribe(): void {
   window.clearTimeout(subscribeTimer);
   subscribeTimer = window.setTimeout(subscribeNow, 300);
@@ -279,6 +321,11 @@ function subscribeNow(): void {
 function explore(): void {
   if (!room || !selected) {
     activity("Select a tile while connected", "error");
+    return;
+  }
+  if (lacksTestCredits()) {
+    showInsufficientCredits();
+    activity("Not enough test credits to explore", "normal");
     return;
   }
   const key = crypto.getRandomValues(new Uint8Array(16));
@@ -379,6 +426,8 @@ async function connect(nextPlayer: Player): Promise<void> {
   subscribed = "";
   if (previous) void previous.leave();
   player = nextPlayer;
+  profileBalance = undefined;
+  profileCost = undefined;
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
@@ -441,7 +490,7 @@ get("home-button").addEventListener("click", () =>
 get("landmark-button").addEventListener("click", () =>
   world.animateFocus(510, 485, 200),
 );
-get("overview-button").addEventListener("click", () =>
+overviewButton.addEventListener("click", () =>
   world.animateFocus(500, 500, 1000),
 );
 get("zoom-in").addEventListener("click", () => world.zoom(0.72));
@@ -469,6 +518,11 @@ window.addEventListener("keydown", (event) => {
     case "o":
     case "O":
       world.animateFocus(500, 500, 1000);
+      break;
+    case "i":
+    case "I":
+      world.toggleCameraMode();
+      announceCameraMode(true);
       break;
     case "+":
     case "=":

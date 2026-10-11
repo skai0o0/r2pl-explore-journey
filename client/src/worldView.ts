@@ -22,6 +22,192 @@ export interface PickedTile {
   readonly local: number;
 }
 
+export type CameraMode = "isometric" | "top-down";
+
+export type DevCreditState = "unknown" | "free" | "affordable" | "insufficient";
+
+export function deriveDevCreditState(
+  balance: string | undefined,
+  cost: string | undefined,
+): DevCreditState {
+  if (!balance?.match(/^\d+$/) || !cost?.match(/^\d+$/)) return "unknown";
+  const required = BigInt(cost);
+  if (required === 0n) return "free";
+  return BigInt(balance) >= required ? "affordable" : "insufficient";
+}
+
+const CAMERA_DISTANCE = 1_800;
+const CAMERA_FAR = 4_000;
+const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+
+export function configureMapCamera(
+  camera: THREE.OrthographicCamera,
+  mode: CameraMode,
+  centerX: number,
+  centerZ: number,
+  span: number,
+  aspect: number,
+): void {
+  const targetX = centerX - WORLD_WIDTH / 2;
+  const targetY = WORLD_HEIGHT / 2 - centerZ;
+  camera.left = (-span * aspect) / 2;
+  camera.right = (span * aspect) / 2;
+  camera.top = span / 2;
+  camera.bottom = -span / 2;
+  camera.near = 0.1;
+  camera.far = CAMERA_FAR;
+
+  if (mode === "isometric") {
+    camera.up.set(0, 0, 1);
+    camera.position.set(
+      targetX + CAMERA_DISTANCE * 0.5,
+      targetY - CAMERA_DISTANCE * 0.5,
+      CAMERA_DISTANCE * 0.62,
+    );
+  } else {
+    camera.up.set(0, 1, 0);
+    camera.position.set(targetX, targetY, CAMERA_DISTANCE);
+  }
+  camera.lookAt(targetX, targetY, 0);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+}
+
+export function groundPointFromNdc(
+  camera: THREE.Camera,
+  ndc: THREE.Vector2,
+  raycaster = new THREE.Raycaster(),
+  target = new THREE.Vector3(),
+): THREE.Vector3 | undefined {
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.ray.intersectPlane(GROUND_PLANE, target) ?? undefined;
+}
+
+export type ProjectedTileQuad = readonly [
+  THREE.Vector2,
+  THREE.Vector2,
+  THREE.Vector2,
+  THREE.Vector2,
+];
+
+export function projectTileCorners(
+  camera: THREE.Camera,
+  x: number,
+  z: number,
+): ProjectedTileQuad {
+  const left = x - WORLD_WIDTH / 2;
+  const right = left + 1;
+  const top = WORLD_HEIGHT / 2 - z;
+  const bottom = top - 1;
+  const project = (worldX: number, worldY: number): THREE.Vector2 => {
+    const point = new THREE.Vector3(worldX, worldY, 0).project(camera);
+    return new THREE.Vector2(point.x, point.y);
+  };
+  return [
+    project(left, top),
+    project(right, top),
+    project(right, bottom),
+    project(left, bottom),
+  ];
+}
+
+export type TileIndicatorKind =
+  | "hover"
+  | "selected"
+  | "pending"
+  | "reveal"
+  | "reject";
+
+const TILE_INDICATOR_KINDS = [
+  "hover",
+  "selected",
+  "pending",
+  "reveal",
+  "reject",
+] as const satisfies readonly TileIndicatorKind[];
+
+const TILE_INDICATOR_STYLE: Record<
+  TileIndicatorKind,
+  { readonly color: number; readonly opacity: number }
+> = {
+  hover: { color: 0xe8fff6, opacity: 0.18 },
+  selected: { color: 0x5fffd0, opacity: 0.3 },
+  pending: { color: 0xffcc66, opacity: 0.34 },
+  reveal: { color: 0x7dffad, opacity: 0.5 },
+  reject: { color: 0xff657a, opacity: 0.5 },
+};
+
+export class TileIndicatorLayer {
+  readonly object = new THREE.Group();
+  readonly #fillGeometry = new THREE.PlaneGeometry(1, 1);
+  readonly #outlineGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.5, 0.5, 0),
+    new THREE.Vector3(0.5, 0.5, 0),
+    new THREE.Vector3(0.5, -0.5, 0),
+    new THREE.Vector3(-0.5, -0.5, 0),
+  ]);
+  readonly #states = new Map<TileIndicatorKind, THREE.Group>();
+  readonly #materials: THREE.Material[] = [];
+
+  constructor() {
+    for (const kind of TILE_INDICATOR_KINDS) {
+      const style = TILE_INDICATOR_STYLE[kind];
+      const fillMaterial = new THREE.MeshBasicMaterial({
+        color: style.color,
+        depthTest: false,
+        depthWrite: false,
+        opacity: style.opacity,
+        side: THREE.DoubleSide,
+        transparent: true,
+      });
+      const outlineMaterial = new THREE.LineBasicMaterial({
+        color: style.color,
+        depthTest: false,
+        depthWrite: false,
+        opacity: Math.min(1, style.opacity + 0.55),
+        transparent: true,
+      });
+      this.#materials.push(fillMaterial, outlineMaterial);
+      const state = new THREE.Group();
+      const fill = new THREE.Mesh(this.#fillGeometry, fillMaterial);
+      const outline = new THREE.LineLoop(
+        this.#outlineGeometry,
+        outlineMaterial,
+      );
+      fill.renderOrder = 100;
+      outline.renderOrder = 101;
+      state.add(fill, outline);
+      state.visible = false;
+      this.object.add(state);
+      this.#states.set(kind, state);
+    }
+  }
+
+  setTile(
+    kind: TileIndicatorKind,
+    tile: { readonly x: number; readonly z: number } | undefined,
+  ): void {
+    const state = this.#states.get(kind);
+    if (!state) return;
+    state.visible = tile !== undefined;
+    if (!tile) return;
+    state.position.set(
+      tile.x + 0.5 - WORLD_WIDTH / 2,
+      WORLD_HEIGHT / 2 - tile.z - 0.5,
+      0,
+    );
+  }
+
+  dispose(): void {
+    this.#fillGeometry.dispose();
+    this.#outlineGeometry.dispose();
+    for (const material of this.#materials) material.dispose();
+    this.#materials.length = 0;
+    this.#states.clear();
+    this.object.clear();
+  }
+}
+
 const markers = [
   {
     x: 215,
@@ -113,13 +299,27 @@ export class WorldView {
   readonly #host: HTMLElement;
   readonly #renderer: THREE.WebGLRenderer;
   readonly #scene = new THREE.Scene();
-  readonly #camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+  readonly #camera = new THREE.OrthographicCamera(
+    -1,
+    1,
+    1,
+    -1,
+    0.1,
+    CAMERA_FAR,
+  );
+  readonly #raycaster = new THREE.Raycaster();
+  readonly #ndc = new THREE.Vector2();
+  readonly #groundPoint = new THREE.Vector3();
+  readonly #projectedPoint = new THREE.Vector3();
   readonly #chunkLayers = new Map<
     number,
     { pixels: Uint8Array; texture: THREE.DataTexture; mesh: THREE.Mesh }
   >();
   readonly #markerElements: HTMLElement[] = [];
   readonly #assetMounts: AssetMount[] = [];
+  readonly #assetRoots: THREE.Group[] = [];
+  readonly #modelSupports: THREE.Mesh[] = [];
+  readonly #tileIndicators = new TileIndicatorLayer();
   readonly #selection: HTMLElement;
   readonly #hoverElement: HTMLElement;
   readonly #pendingElement: HTMLElement;
@@ -130,6 +330,7 @@ export class WorldView {
   readonly #onHover: ((tile: PickedTile | undefined) => void) | undefined;
 
   #schoolSlot = 0;
+  #cameraMode: CameraMode = "isometric";
   #span = 275;
   #centerX = 215;
   #centerZ = 235;
@@ -206,6 +407,33 @@ export class WorldView {
 
     const assetLoader = new ModelAssetLoader();
     for (const placement of MODEL_PLACEMENTS) {
+      // The synthetic fixture glTFs are intentionally flat. Keep their loaded
+      // geometry visible while giving the preview a small amount of real depth.
+      const supportHeight = placement.asset === "hq" ? 3 : 5;
+      const support = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          placement.asset === "hq" ? 6.5 : 7.5,
+          placement.asset === "hq" ? 7.5 : 6,
+          supportHeight,
+          placement.asset === "hq" ? 6 : 8,
+        ),
+        new THREE.MeshBasicMaterial({
+          color: placement.asset === "hq" ? 0x315e52 : 0x5b4775,
+        }),
+      );
+      support.rotation.x = Math.PI / 2;
+      support.position.set(
+        placement.worldX - WORLD_WIDTH / 2,
+        WORLD_HEIGHT / 2 - placement.worldZ,
+        supportHeight / 2 + 0.06,
+      );
+      this.#scene.add(support);
+      this.#modelSupports.push(support);
+
+      const assetRoot = new THREE.Group();
+      assetRoot.position.z = supportHeight;
+      this.#scene.add(assetRoot);
+      this.#assetRoots.push(assetRoot);
       const fallback =
         placement.asset === "hq"
           ? new THREE.Mesh(
@@ -218,7 +446,7 @@ export class WorldView {
             );
       this.#assetMounts.push(
         mountModelAsset(
-          this.#scene,
+          assetRoot,
           assetLoader,
           MODEL_ASSETS[placement.asset].url,
           placement,
@@ -267,8 +495,16 @@ export class WorldView {
     this.#rejectElement.hidden = true;
     host.append(this.#rejectElement);
 
-    this.#camera.position.z = 5;
-    this.#camera.lookAt(0, 0, 0);
+    for (const overlay of [
+      this.#hoverElement,
+      this.#selection,
+      this.#pendingElement,
+      this.#revealElement,
+      this.#rejectElement,
+    ]) {
+      overlay.style.pointerEvents = "none";
+    }
+    this.#scene.add(this.#tileIndicators.object);
 
     host.addEventListener("pointerdown", this.#pointerDown);
     host.addEventListener("pointermove", this.#pointerMove);
@@ -281,8 +517,33 @@ export class WorldView {
   }
 
   dispose(): void {
+    window.clearTimeout(this.#revealTimer);
+    window.clearTimeout(this.#rejectTimer);
+    if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
+    this.#scene.remove(this.#tileIndicators.object);
+    this.#tileIndicators.dispose();
     for (const mount of this.#assetMounts) mount.dispose();
     this.#assetMounts.length = 0;
+    for (const root of this.#assetRoots) this.#scene.remove(root);
+    this.#assetRoots.length = 0;
+    for (const support of this.#modelSupports) {
+      this.#scene.remove(support);
+      support.geometry.dispose();
+      (support.material as THREE.Material).dispose();
+    }
+    this.#modelSupports.length = 0;
+  }
+
+  get cameraMode(): CameraMode {
+    return this.#cameraMode;
+  }
+
+  toggleCameraMode(): CameraMode {
+    this.#cameraMode =
+      this.#cameraMode === "isometric" ? "top-down" : "isometric";
+    this.#render();
+    this.#onViewChange();
+    return this.#cameraMode;
   }
 
   setSchool(slot: number): void {
@@ -290,6 +551,16 @@ export class WorldView {
     this.#selected = undefined;
     this.#hovered = undefined;
     this.#pendingTile = undefined;
+    this.#onHover?.(undefined);
+    window.clearTimeout(this.#revealTimer);
+    window.clearTimeout(this.#rejectTimer);
+    this.#revealElement.hidden = true;
+    this.#revealElement.classList.remove("animating");
+    this.#rejectElement.hidden = true;
+    this.#rejectElement.classList.remove("animating");
+    for (const kind of TILE_INDICATOR_KINDS) {
+      this.#tileIndicators.setTile(kind, undefined);
+    }
     for (const layer of this.#chunkLayers.values()) {
       this.#scene.remove(layer.mesh);
       layer.texture.dispose();
@@ -376,9 +647,13 @@ export class WorldView {
     this.#revealElement.classList.remove("animating");
     void this.#revealElement.offsetWidth;
     this.#revealElement.classList.add("animating");
+    this.#tileIndicators.setTile("reveal", { x, z });
+    this.#render();
     this.#revealTimer = window.setTimeout(() => {
       this.#revealElement.hidden = true;
       this.#revealElement.classList.remove("animating");
+      this.#tileIndicators.setTile("reveal", undefined);
+      this.#render();
     }, 750);
   }
 
@@ -390,21 +665,35 @@ export class WorldView {
     this.#rejectElement.classList.remove("animating");
     void this.#rejectElement.offsetWidth;
     this.#rejectElement.classList.add("animating");
+    this.#tileIndicators.setTile("reject", { x, z });
+    this.#render();
     this.#rejectTimer = window.setTimeout(() => {
       this.#rejectElement.hidden = true;
       this.#rejectElement.classList.remove("animating");
+      this.#tileIndicators.setTile("reject", undefined);
+      this.#render();
     }, 750);
   }
 
   visibleChunkIds(extra?: number): number[] {
-    const aspect =
-      this.#host.clientWidth / Math.max(1, this.#host.clientHeight);
-    const halfX = (this.#span * aspect) / 2 + CHUNK_SIZE;
-    const halfZ = this.#span / 2 + CHUNK_SIZE;
-    const minX = Math.max(0, Math.floor((this.#centerX - halfX) / CHUNK_SIZE));
-    const maxX = Math.min(15, Math.floor((this.#centerX + halfX) / CHUNK_SIZE));
-    const minZ = Math.max(0, Math.floor((this.#centerZ - halfZ) / CHUNK_SIZE));
-    const maxZ = Math.min(15, Math.floor((this.#centerZ + halfZ) / CHUNK_SIZE));
+    const corners = [
+      this.#pointFromNdc(-1, -1),
+      this.#pointFromNdc(-1, 1),
+      this.#pointFromNdc(1, -1),
+      this.#pointFromNdc(1, 1),
+    ].filter((point): point is { x: number; z: number } => point !== undefined);
+    const xs = corners.map((point) => point.x);
+    const zs = corners.map((point) => point.z);
+    const minWorldX = Math.min(...xs) - CHUNK_SIZE;
+    const maxWorldX = Math.max(...xs) + CHUNK_SIZE;
+    const minWorldZ = Math.min(...zs) - CHUNK_SIZE;
+    const maxWorldZ = Math.max(...zs) + CHUNK_SIZE;
+    const maxChunkX = Math.ceil(WORLD_WIDTH / CHUNK_SIZE) - 1;
+    const maxChunkZ = Math.ceil(WORLD_HEIGHT / CHUNK_SIZE) - 1;
+    const minX = Math.max(0, Math.floor(minWorldX / CHUNK_SIZE));
+    const maxX = Math.min(maxChunkX, Math.floor(maxWorldX / CHUNK_SIZE));
+    const minZ = Math.max(0, Math.floor(minWorldZ / CHUNK_SIZE));
+    const maxZ = Math.min(maxChunkZ, Math.floor(maxWorldZ / CHUNK_SIZE));
     const ids: number[] = [];
     for (let z = minZ; z <= maxZ; z++) {
       for (let x = minX; x <= maxX; x++) ids.push(chunkId(x, z));
@@ -521,22 +810,40 @@ export class WorldView {
 
   #point(clientX: number, clientY: number): { x: number; z: number } {
     const rect = this.#host.getBoundingClientRect();
-    const aspect = rect.width / Math.max(1, rect.height);
+    this.#syncCamera(rect.width, rect.height);
+    return (
+      this.#pointFromNdc(
+        ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+        1 - ((clientY - rect.top) / Math.max(1, rect.height)) * 2,
+      ) ?? { x: Number.NaN, z: Number.NaN }
+    );
+  }
+
+  #pointFromNdc(
+    ndcX: number,
+    ndcY: number,
+  ): { x: number; z: number } | undefined {
+    this.#ndc.set(ndcX, ndcY);
+    const hit = groundPointFromNdc(
+      this.#camera,
+      this.#ndc,
+      this.#raycaster,
+      this.#groundPoint,
+    );
+    if (!hit) return undefined;
     return {
-      x:
-        this.#centerX +
-        ((clientX - rect.left) / rect.width - 0.5) * this.#span * aspect,
-      z:
-        this.#centerZ + ((clientY - rect.top) / rect.height - 0.5) * this.#span,
+      x: hit.x + WORLD_WIDTH / 2,
+      z: WORLD_HEIGHT / 2 - hit.y,
     };
   }
 
   #position(x: number, z: number): { left: string; top: string } {
-    const aspect =
-      this.#host.clientWidth / Math.max(1, this.#host.clientHeight);
+    this.#projectedPoint
+      .set(x - WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - z, 0)
+      .project(this.#camera);
     return {
-      left: `${(0.5 + (x - this.#centerX) / (this.#span * aspect)) * 100}%`,
-      top: `${(0.5 + (z - this.#centerZ) / this.#span) * 100}%`,
+      left: `${(this.#projectedPoint.x * 0.5 + 0.5) * 100}%`,
+      top: `${(-this.#projectedPoint.y * 0.5 + 0.5) * 100}%`,
     };
   }
 
@@ -595,13 +902,10 @@ export class WorldView {
       const dy = event.clientY - this.#drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 5) this.#drag.moved = true;
       if (!this.#drag.moved) return;
-      const aspect =
-        this.#host.clientWidth / Math.max(1, this.#host.clientHeight);
-      this.#centerX =
-        this.#drag.centerX -
-        (dx / this.#host.clientWidth) * this.#span * aspect;
-      this.#centerZ =
-        this.#drag.centerZ - (dy / this.#host.clientHeight) * this.#span;
+      const start = this.#point(this.#drag.x, this.#drag.y);
+      const current = this.#point(event.clientX, event.clientY);
+      this.#centerX = this.#drag.centerX + start.x - current.x;
+      this.#centerZ = this.#drag.centerZ + start.z - current.z;
       this.#clampCenter();
       this.#render();
       this.#onViewChange();
@@ -621,13 +925,13 @@ export class WorldView {
         local: (z % 64) * 64 + (x % 64),
       };
       this.#hovered = tile;
-      this.#hoverElement.hidden = false;
       this.#onHover?.(tile);
-      this.#updateReticles();
+      this.#render();
     } else {
       this.#hovered = undefined;
       this.#hoverElement.hidden = true;
       this.#onHover?.(undefined);
+      this.#render();
     }
   };
 
@@ -657,6 +961,7 @@ export class WorldView {
     this.#hovered = undefined;
     this.#hoverElement.hidden = true;
     this.#onHover?.(undefined);
+    this.#render();
   };
 
   #wheel = (event: WheelEvent): void => {
@@ -679,40 +984,15 @@ export class WorldView {
   };
 
   #updateReticles(): void {
-    const width = Math.max(2, this.#host.clientWidth);
-    const height = Math.max(2, this.#host.clientHeight);
-    const aspect = width / height;
-    const tilePx = width / (this.#span * aspect);
-    const boxSize = Math.max(14, Math.min(56, Math.round(tilePx)));
-
-    if (this.#selected) {
-      this.#selection.hidden = false;
-      this.#selection.style.width = `${boxSize}px`;
-      this.#selection.style.height = `${boxSize}px`;
-      Object.assign(
-        this.#selection.style,
-        this.#position(this.#selected.x + 0.5, this.#selected.z + 0.5),
-      );
-    } else {
-      this.#selection.hidden = true;
-    }
-
-    if (this.#hovered) {
-      this.#hoverElement.hidden = false;
-      this.#hoverElement.style.width = `${boxSize}px`;
-      this.#hoverElement.style.height = `${boxSize}px`;
-      Object.assign(
-        this.#hoverElement.style,
-        this.#position(this.#hovered.x + 0.5, this.#hovered.z + 0.5),
-      );
-    } else {
-      this.#hoverElement.hidden = true;
-    }
+    this.#tileIndicators.setTile("selected", this.#selected);
+    this.#tileIndicators.setTile("hover", this.#hovered);
+    this.#tileIndicators.setTile("pending", this.#pendingTile);
+    // These former flat tile boxes are intentionally label/effect-only now.
+    this.#selection.hidden = true;
+    this.#hoverElement.hidden = true;
 
     if (this.#pendingTile) {
       this.#pendingElement.hidden = false;
-      this.#pendingElement.style.width = `${boxSize}px`;
-      this.#pendingElement.style.height = `${boxSize}px`;
       Object.assign(
         this.#pendingElement.style,
         this.#position(this.#pendingTile.x + 0.5, this.#pendingTile.z + 0.5),
@@ -722,18 +1002,23 @@ export class WorldView {
     }
   }
 
+  #syncCamera(width: number, height: number): void {
+    configureMapCamera(
+      this.#camera,
+      this.#cameraMode,
+      this.#centerX,
+      this.#centerZ,
+      this.#span,
+      Math.max(1, width) / Math.max(1, height),
+    );
+  }
+
   #render = (): void => {
     const width = Math.max(2, this.#host.clientWidth);
     const height = Math.max(2, this.#host.clientHeight);
     this.#renderer.setSize(width, height, false);
-    const aspect = width / height;
-    this.#camera.left = (-this.#span * aspect) / 2;
-    this.#camera.right = (this.#span * aspect) / 2;
-    this.#camera.top = this.#span / 2;
-    this.#camera.bottom = -this.#span / 2;
-    this.#camera.position.x = this.#centerX - 500;
-    this.#camera.position.y = 500 - this.#centerZ;
-    this.#camera.updateProjectionMatrix();
+    this.#syncCamera(width, height);
+    this.#updateReticles();
     this.#renderer.render(this.#scene, this.#camera);
 
     markers.forEach((marker, index) => {
@@ -742,7 +1027,5 @@ export class WorldView {
         Object.assign(el.style, this.#position(marker.x, marker.z));
       }
     });
-
-    this.#updateReticles();
   };
 }
