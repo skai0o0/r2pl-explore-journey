@@ -1,5 +1,7 @@
 # R2PL V2 — M4-D0 Owner Decisions Round 4
 
+> **AUTHORITATIVE READER NOTE — KNOWLEDGE V1 FREEZE CANDIDATE:** Read [Knowledge Rules v1 canonical candidate](M4D0_KNOWLEDGE_RULES_V1_FREEZE_CANDIDATE_2026-10-12.md) FIRST, then [M4-D1 readiness audit and tasks](M4D1_IMPLEMENTATION_READINESS_AUDIT_2026-10-12.md). This candidate resolves earlier conflicting clock/grace/transfer/test-fixture statements, but is **NOT a signed production ruleVersion or M4-D1 implementation authorization**. Treat conflicting historical cases as SUPERSEDED, not alternate implementations.
+
 **Date:** 2026-10-12. **Status:** owner-directed implementation freeze candidate, NOT signed production ruleVersion. This document supersedes conflicting prior proposals; no production code, timer, debit, reward deployment or M4-D1/D2 authorization. **Source:** direct owner decisions and Gamenote V2 470-line attachment, plus C-03 Rev2 and consolidation addendum. Older Gamenote values do not override newer owner messages.
 
 ## 1. Knowledge Contest / C-01 C-03 — owner approved
