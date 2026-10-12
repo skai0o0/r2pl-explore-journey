@@ -1,6 +1,6 @@
 # Production visibility policy proposal — owner decision C-08
 
-**Status: proposed, not an approved gameplay rule.** M2's executable synthetic rule is narrower: a test identity sees only its own school's presence bit and fog in subscribed chunks; no metadata, opposing presence or public overview is transmitted.
+**Status: owner approved the school-isolated fog and remembered-history DIRECTION on 2026-10-12. Tech lead selected detailed per-field projections in [Round-4 Owner Alignment](M4D0_OWNER_ALIGNMENT_ROUND4_2026-10-12.md), section 2. This older matrix is HISTORICAL where it conflicts. Not a signed production policy/ruleVersion.** M2's executable synthetic rule is narrower: a test identity sees only its own school's presence bit and fog in subscribed chunks; no metadata, opposing presence or public overview is transmitted.
 
 | Data | Public/unidentified | Same school | Opposing school | Spectator | Audited administrator |
 |---|---|---|---|---|---|

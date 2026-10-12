@@ -1,5 +1,7 @@
 # M4-D0 C-03 — Incumbent, Decay, Consolidation & Contributor Refund
 
+> **ROUND-4 CURRENT RULES OVERRIDE — 2026-10-12:** See [Owner Alignment Round 4](M4D0_OWNER_ALIGNMENT_ROUND4_2026-10-12.md). The lawful incumbent at Contest start retains FREE when challenger leaves; only a surviving non-incumbent claimant consolidates after incumbent leaves. There is NO 6h grace, NO fixed nonresettable 2h Decay: valid >=1 Point paid before expiry RESETS the 2h rolling Decay (capped by a nonresettable 48h hard claim deadline). ceil(N/2) rounds UP; unsuccessful accepted contributions return to their actual individual payers. Four-edge, max-two-school clusters; each Shared tile scores +1 for each active school; C-08 own-school fog and private player-data projections. C-04/C-05 footprint HQ 30x30, UniStop 10x2, Chest 2x2, Landmark 40x40; world layout deferred. Landmark first 1000 Crystals and LINEAR +5% of base per takeover; weekly-verified synced running required for personal UniStop use; finite Key-protected, individually discovered Chest, simple admin editor later. The older 6h grace, 48h-from-forgetting, terminal transfer, linear-not-resetting-Decay, historic first-explorer priority and prior object footprints are SUPERSEDED. M4-D0 docs only; full production freeze and M4-D1/D2 remain blocked.
+
 **Date:** 2026-10-12. **Status:** OWNER-SELECTED PRINCIPLES; DETAILS PENDING; NOT FROZEN; NOT PRODUCTION. Supersedes earlier interpretations if inconsistent. See [C-03 Rev2](M4D0_C03_SHARED_RETENTION_REV2_2026-10-12.md).
 
 ## 1. Owner-confirmed rules
@@ -15,7 +17,7 @@
 
 **KEEP PREVIOUS OWNER CHOICES:** first 24h Shared Knowledge upkeep-free, then 24h cycles; connected Shared Knowledge cluster costs a working example of 1 Point per SCHOOL per paid cycle, independent of tile count. New exploration 1 Point/tile and joining another school's Knowledge 2 Points/tile are owner working balance examples. No production ruleVersion or live billing is approved.
 
-## 2. Server-side state timeline — simultaneous 2h and 48h clocks
+## 2. HISTORICAL timeline superseded where Decay could not reset — see Round 4
 
 | Stage / instant | Meaning | Owner-confirmed vs unresolved |
 |---|---|---|
@@ -45,7 +47,7 @@
 
 **Open security/economy details:** allow multiple authorized student contributors vs pooled school treasury; partial and advance deposits; cancel/refund before deadline; overfund rejection/surplus return; how to bill if incumbent differs across tiles; exact UTC cutoff; 2h fade/grace interaction; component topology/gathering; school affiliation switch; fraud prevention; C-08 fog; C-12 scoring. The proposed tables are conceptual, not migrations.
 
-## 4. Acceptance case additions (D01–D22)
+## 4. HISTORICAL acceptance cases D01–D22 (only applicable if consistent with Round 4)
 
 | ID | Scenario | Required or pending outcome |
 |---|---|---|
@@ -75,7 +77,7 @@
 ## 5. Owner-signoff gate
 
 Confirmed: simultaneous 2h fade and 48h consolidation clocks at tDecayStart, with mathematical succession fee ceil(N/2) for odd N; all contributors get exact refunds on FAILED case. Still required: exact earlier grace/cutoff, how much valid early deposit is required and whether it counts toward the threshold, equality at each deadline, inherited tile snapshot, partial failure, both-fail case (deferred for v1 gameplay but requires safe fail-closed handling), case grouping across merge/split, contributor wallet/caps/overfund, C-08/C-12 and signed immutable ruleVersion. **This addendum does NOT approve M4-D1/D2 or production activation.**
-## 6. Simultaneous-timer acceptance extensions (D23–D34)
+## 6. HISTORICAL fixed-2h acceptance D23–D34 (superseded by rolling 2h in Round 4)
 
 Fixtures: relevant shared cluster enters decay at t0=2026-10-13T06:00:00.000Z. tFadeEnd=2026-10-13T08:00:00.000Z; tConsolidateEnd=2026-10-15T06:00:00.000Z. These are the same two clocks started atomically at t0, NOT sequential 2h+48h. Numbers N use per-tile frozen incumbent snapshot.
 

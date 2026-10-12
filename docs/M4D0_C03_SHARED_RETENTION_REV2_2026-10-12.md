@@ -1,5 +1,7 @@
 # C-03 Rev2 — Shared Knowledge & Contest-specific Upkeep
 
+> **ROUND-4 CURRENT RULES OVERRIDE — 2026-10-12:** See [Owner Alignment Round 4](M4D0_OWNER_ALIGNMENT_ROUND4_2026-10-12.md). The lawful incumbent at Contest start retains FREE when challenger leaves; only a surviving non-incumbent claimant consolidates after incumbent leaves. There is NO 6h grace, NO fixed nonresettable 2h Decay: valid >=1 Point paid before expiry RESETS the 2h rolling Decay (capped by a nonresettable 48h hard claim deadline). ceil(N/2) rounds UP; unsuccessful accepted contributions return to their actual individual payers. Four-edge, max-two-school clusters; each Shared tile scores +1 for each active school; C-08 own-school fog and private player-data projections. C-04/C-05 footprint HQ 30x30, UniStop 10x2, Chest 2x2, Landmark 40x40; world layout deferred. Landmark first 1000 Crystals and LINEAR +5% of base per takeover; weekly-verified synced running required for personal UniStop use; finite Key-protected, individually discovered Chest, simple admin editor later. The older 6h grace, 48h-from-forgetting, terminal transfer, linear-not-resetting-Decay, historic first-explorer priority and prior object footprints are SUPERSEDED. M4-D0 docs only; full production freeze and M4-D1/D2 remain blocked.
+
 > **C-03 NEW OWNER DECISIONS (2026-10-12):** [Incumbent, ~2h Decay, 48h Consolidation and Exact Contributor Refund Addendum](M4D0_C03_CONSOLIDATION_ESCROW_2026-10-12.md) **OVERRIDES conflicting earlier wording.** The *current lawful holder at new Contest start* gets incumbent/free-retention privilege, NOT the first-ever discoverer. When an eligible contested cluster ENTERS DECAY at tDecayStart, **both 2h fade and 48h consolidation clocks start TOGETHER**: forgetting at tDecayStart+2h, settlement deadline at tDecayStart+48h (46h remain after forgetting). The non-incumbent successor's fee is **ceil(N/2) Points**, rounding UP for odd N, with eligible tile/component snapshot rules still pending. Failed consolidation makes eligible inherited Knowledge neutral and **refunds every accepted Point to its ORIGINAL individual contributor**, never the old holder. Store idempotent contributor escrow/refund ledger. 24h initial free shared-upkeep and connected-cluster maintenance rules still apply; global General Decay remains OFF. Earlier grace, contribution eligibility, mixed-holder cases and precise deadline inclusivity remain OPEN. Owner defers bespoke gameplay for exact simultaneous failure of both schools; fail-closed transaction correctness is still mandatory. **Docs only: no production code, no M4-D1/D2 authorization.**
 
 **Date:** 2026-10-12. **Status:** OWNER DIRECTION PARTIALLY CONFIRMED (C: 24h FREE + RECURRING 24h UPKEEP); FEES/GRACE/EDGE CASES OPEN; NOT FROZEN; NOT PRODUCTION.
@@ -59,7 +61,7 @@ Each school's upkeep is independent: per school/tile lastPaidAt, dueAt/paidThrou
 
 **Economy gate, updated:** 1 Point for fresh Knowledge exploration; **illustrative owner working baseline of 2 Points per school/tile new Shared Knowledge entry; 1 Point per participating school/CONNECTED shared cluster per paid 24h upkeep cycle**. These are design directions, not signed production prices. Payer, eligibility and no_change/refund remain open in C-01.
 
-## 5. Acceptance scenarios
+## 5. Historical acceptance scenarios (Round 4 overrides conflicting cases)
 
 Use fixture T=(250,250), school A slot0, B slot1, C slot2; t0=2026-10-12T00:00:00.000Z. D=t0+24h=2026-10-13T00:00:00.000Z is the first upkeep-cycle boundary under owner-selected Option C. Under the proposed anchored schedule, D is where the first paid period starts; the exact enforcement cutoff/grace is not yet approved. The latest owner example supplies F=1 Point **per SCHOOL/CONNECTED CLUSTER**, NOT per tile; it remains a working baseline, not a published production ruleVersion.
 
@@ -125,7 +127,7 @@ Use fixture T=(250,250), school A slot0, B slot1, C slot2; t0=2026-10-12T00:00:0
 
 **Updated recommendation (not a freeze):** simulate F=1 Point per participating school/CONNECTED contested cluster per paid 24h cycle, with 2 Points per newly joined already-known tile as a one-time sharing premium. Simulate compact and disconnected shapes, bridge merges, splits and authenticated payer selection. Numeric examples are owner-provided working direction, not a production ruleVersion; running conversion remains unknown.
 
-## 8. Grace period and both-unpaid outcomes (NOT selected)
+## 8. SUPERSEDED grace-6h and both-unpaid alternatives (DO NOT IMPLEMENT)
 
 **Grace alternatives:** G0 = no grace, expiry at the approved due boundary; G6 = six hours after each cycle boundary; G12 = twelve hours after each boundary. A **six-hour** recovery window is a reasonable first playtest proposal to avoid punishing sleep/work schedules, but is not approved. In the G6 fixture, the grace deadline for t1 is 2026-10-13T06:00:00.000Z. Exact inclusive/exclusive cutoff must be signed (candidate: payment accepted if trusted timestamp < graceDeadline; expire at >= graceDeadline).
 
@@ -142,7 +144,7 @@ If both miss but expire at different effective instants, a brief provisional sin
 
 **Operational choices still open:** warning at due-2h or due-6h; optional opt-in notifications; loss announcements; server outage compensation; pause windows during maintenance; protected weekends; refundable payment after administrative correction. These cannot be inferred from 24h cadence.
 
-## 9. Option-C-specific acceptance cases, SC31–SC48
+## 9. Historical Option-C acceptance cases SC31–SC48 (overridden by Round 4 where conflicting)
 
 The outcomes marked **CONFIRMED** follow the owner's free-24h/recurring-24h selection. Other outcomes below are **PROPOSED FIXTURE** or **PENDING** and cannot be treated as production expectations. The owner's working example is F=1 Point **per school/connected cluster** per paid 24h; G=6h is only a proposed TEST FIXTURE, not owner-approved.
 
@@ -246,7 +248,7 @@ All fee values are owner’s illustrative working baseline, **not a frozen immut
 | R2-15 | Obligation payer: player who initiates sharing, any authorized school student or pooled school Points treasury | OPEN |
 | R2-16 | Joining an already-known tile: charged exactly once per school/tile on committed new membership; no charge for repeat/no-change, retry, invalid adjacency | Owner-directed economic intent; exact failure/refund policy pending freeze |
 | R2-17 | Expiry of a single school's cluster upkeep: loss scope all participating tiles, only overdue component, partial contributions, surviving school's unaffected membership | Direction: delinquent school forgets; exact component snapshot/membership effects OPEN |
-### 12.5 Additional cluster acceptance scenarios SC49–SC70
+### 12.5 Cluster cases SC49–SC70 (keep only when consistent with Round 4)
 
 Use the owner-directed **working balance illustration**: fresh tile exploration 1 Point; newly joining already-known Knowledge 2 Points per tile; **per-school connected Shared Knowledge upkeep 1 Point per paid 24h cycle** after first 24h free. All geometry examples assume FOUR orthogonal neighbors merely as a TEST FIXTURE. The final neighbor rule, school-pair grouping, fee currency source, grace and cluster merge billing must be signed before these become executable production acceptance tests.
 
