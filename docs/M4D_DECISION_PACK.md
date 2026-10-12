@@ -1,5 +1,20 @@
 # M4-D0 — Owner Decision Pack (R2PL Explore Journey)
 
+> **C-03 OWNER ECONOMY CLARIFICATION 2026-10-12 (LATEST, NOT PRODUCTION):** The owner directs a **higher one-time Shared Knowledge join fee (2 Points per newly joined already-known tile, compared with 1 Point to explore a fresh tile, as the working numerical example)**, but **upkeep is charged per connected shared Knowledge cluster, NOT per tile**: **1 Point per paid 24h cycle per participating school per connected shared cluster, irrespective of its tile count**. The first 24h after sharing starts remain upkeep-free (Option C). These example amounts are a working owner balance baseline, not a published ruleVersion. Cluster neighbor definition (4/8), same-school-pair vs cross-pair merging, merge/split timing, payer/treasury, grace and both-unpaid outcomes are OPEN. See [current C-03 Rev2 detailed spec + SC49–SC70](M4D0_C03_SHARED_RETENTION_REV2_2026-10-12.md). The older per-tile daily-upkeep cost language is SUPERSEDED. No production mutation, scheduled debit, or M4-D1 activation.
+
+
+> **C-03 REV2 OVERRIDE 2026-10-12 — latest owner direction:** [C-03 Rev2 Shared Knowledge & Contest-specific Upkeep](M4D0_C03_SHARED_RETENTION_REV2_2026-10-12.md) **supersedes** earlier statements that 24h automatically ends in defender victory/transfer. Two schools may share Knowledge indefinitely while EACH pays Points for its own upkeep; when one misses approved upkeep, only that school forgets and the other keeps Knowledge. **General Decay across noncontested tiles stays OFF; contest-specific upkeep/forgetting is ON as a concept.** **OWNER SELECTED OPTION C:** the first 24h of sharing have no upkeep fee; thereafter each school must pay Points for every 24h upkeep period. Fee, collection mode, cutoff, grace, both-fail outcome, C-08 fog and C-12 scoring remain **PENDING**. This is M4-D0 specification only; **NO production authorization, code or timer activation**. Earlier sections are historical or partially superseded wherever they conflict.
+
+## 2026-10-12 owner clarification - partial baseline, not full freeze
+
+**M4-D0 in progress, partial clarifications, FULL FREEZE pending.** Owner authorized "Proceed M4D" for M4-D0 decision-freeze preparation only. See [M4-D0 owner alignment worksheet](M4D0_OWNER_ALIGNMENT_2026-10-12.md) for provenance, unselected options, acceptance examples and gates. This does not authorize M4-D1 or production gameplay.
+
+`OWNER_REQUIREMENTS.md` remains the unchanged historical proposal. Owner declared the older chat `Gamenote.txt` outdated and supplied an updated working 470-line `R2PL_Gamenote_V2_Dong_bo_2026-10-12.txt`, SHA-256 `604dcb332b960e4b4667c9b776e4d946940759a89f74f5d0bf9c6f2dec103341`. These are owner-provided facts; the owner attachment was verified against its SHA-256 by the orchestration lead; the attachment is not tracked here. Import the owner's copy separately later. Historical comparisons below remain historical evidence, not the latest owner position.
+
+- **C-01 partial confirmation:** new Knowledge costs **1 Point**, not Crystal; Points and Crystals are separate. Repeat/no_change, contest/defense, transfer/refund, conversion, caps, rounding, concurrency examples and signed ruleVersion remain pending. `shared/gameplay/devRules.ts` still uses synthetic fixture-credit, version 0; it is not production currency.
+- **C-10 partial confirmation:** the existing UniStop and Chest tables in `GAME_SPEC.md` are the correct owner-confirmed V2 baseline; outdated text-file percentages are wrong. Every column totals 100%; preserve all values without normalization. There is no production gacha/reward implementation. Eligibility, stock, distribution and signed ruleVersion remain open.
+- **C-11 EXTERNAL BLOCKED (M5):** the campaign/running webdev team has not supplied API schema, endpoints or identity mapping. Do not invent verification, endpoints or km-to-Points conversion; V1 mock 1 km = 10 Points is not production. Prepare interfaces and the synthetic world first under a separately authorized implementation stage.
+
 **Status: DRAFT / NOT APPROVED.** Prepared 2026-10-11 against HEAD 3d74506a736f5ab81dd42d544717809a8a68fffc. This file requests decisions. It DOES NOT approve production rules or authorize migration, deployment, code integration, or changes to the original Gamenote.
 
 ## Authority and current engineering baseline
@@ -36,6 +51,8 @@ Source: docs/OWNER_REQUIREMENTS.md:145-151 proposes 1 Point for opening Knowledg
 **Dependent scope:** M4-D1/M4-D2 and future M5 point feed. Pure candidates/tests do not authorize production costs (tests/m4b-gameplay.test.ts:94-227; tests/m4b-rule-adapter.test.ts:20-134).
 
 ## C-03 — Shared Knowledge, Contest, Defense and general Decay
+
+**2026-10-12 C-03 owner decision UPDATED (partial freeze only):** owner confirmed perpetual multi-school Knowledge sharing if each pays upkeep, plus **OPTION C**: first 24h upkeep-free, afterward a Point obligation per school every 24h. General Decay outside shared Knowledge remains OFF. Read [current C-03 Rev2 detailed draft](M4D0_C03_SHARED_RETENTION_REV2_2026-10-12.md) (SC01–SC48). The one-shot defended/transfer text and earlier AC tests below are HISTORICAL and SUPERSEDED wherever conflicting. C-03 is **PARTIAL / NOT FROZEN**: C-01 fee and payer, grace, both-fail outcome, C-08 visibility, C-12 scoring and precise settlement still require signoff. No M4-D1 coding or production activation.
 
 Source: docs/OWNER_REQUIREMENTS.md:6,148-151 describes shared exchange at school borders and transfer after one day unless defender contributes 1 Point. V1 has independent school membership, grace of 12 hours and retention decay to zero around 22 hours, not the same transfer mechanism (docs/SPEC_CONFLICTS.md:9). Current rules are pure candidates in shared/gameplay/candidates.ts:43-221 and decay:222-...; tests/m4b-gameplay.test.ts:228-519.
 
@@ -94,7 +111,7 @@ Owner emphasizes explored Knowledge area and small fun school-event bonuses; det
 | Stage | Definition of done | Gate |
 |---|---|---|
 | M4-C closure | Typecheck/lint/asset tests/build plus actual browser E2E and UX evidence | Do not claim browser acceptance without running it |
-| M4-D0 | Signed per-C-ID record with version, owner, exact parameters and examples | All fields PENDING in this draft |
+| M4-D0 | Signed per-C-ID record with version, owner, exact parameters and examples | Partial baseline clarified on 2026-10-12; full signed freeze PENDING |
 | M4-D1 | Authoritative Knowledge/Contest state, debit and projection | C-01/C-03/C-08 |
 | M4-D2 | Durable Defense, deadlines, recovery and optional Decay | C-03/C-08 |
 | M4-D3 | Landmark contribution, puzzle, buffs and takeover | C-02/C-09 (+ C-05 placement) |
