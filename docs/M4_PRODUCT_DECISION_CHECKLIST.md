@@ -2,6 +2,8 @@
 
 **Status:** no item below is an approved production rule. M3.5/M3.6 only use synthetic identities, school slots and `fixture-credit`; M3.6 did not pass the 1,000-client hotspot delivery gate. The original owner concept in `OWNER_REQUIREMENTS.md`, observed V1 behavior and conflicts in `SPEC_CONFLICTS.md` remain traceable sources. Choose a rule version and provide examples before enabling each affected action.
 
+**2026-10-11 owner review pack:** [M4D_DECISION_PACK.md](M4D_DECISION_PACK.md) lists all pending decisions, conflicting sources, and example test gates. This draft does not approve or activate any gameplay parameters.
+
 ## Minimum for a small synthetic playable slice
 
 A tightly scoped slice can allow a synthetic player to explore a tile, spend a synthetic resource and see an authorized school-filtered map update. It needs owner approval of **C-01** for the exact exploration charge and retry/no-change behavior, and **C-08** for visibility and discovery. It also needs an explicit fixture identity/rule version and synthetic layout with immutable generic slots; this does **not** approve or persist the official C-04 roster. If the owner wants only non-spending map interaction, that is a different fixture and must be specified rather than inferred from V1.

@@ -1,0 +1,105 @@
+# M4-D0 — Owner Decision Pack (R2PL Explore Journey)
+
+**Status: DRAFT / NOT APPROVED.** Prepared 2026-10-11 against HEAD 3d74506a736f5ab81dd42d544717809a8a68fffc. This file requests decisions. It DOES NOT approve production rules or authorize migration, deployment, code integration, or changes to the original Gamenote.
+
+## Authority and current engineering baseline
+
+- Owner gameplay concept is preserved verbatim in docs/OWNER_REQUIREMENTS.md. Master Plan writing-block.md governs architecture and feature boundaries. Explicit approved, published decisions outrank implementation; proposals are not silently upgraded. Evidence: docs/GAME_SPEC.md:3,52-56; docs/DECISIONS.md:3-21; docs/SPEC_CONFLICTS.md:3-25.
+- M4-A/B/C use Dawn/Dusk synthetic school fixtures, fixture-credit and development rule version 0. Evidence: shared/gameplay/devRules.ts:1-57, scripts/play-local.ts:12-18,21-53, docs/M4B_REPORT.md:27-31.
+- Contest/Defense/Decay/Landmark code in shared/gameplay/candidates.ts:1-5,43-... is explicitly a nonproduction pure candidate, tested only in tests/m4b-gameplay.test.ts:228-783. It is not connected to server persistence or transport. server/realtime/DurableRealtimeCore.ts:242-243 rejects the production mutation opcode.
+- School isolation, atomic wallet/world/idempotency/outbox and committed ACK are non-negotiable baseline constraints, not optional gameplay knobs (docs/DECISIONS.md:8-12,17,21,43-47). M3.6 hotspot latency remains a launch blocker (docs/ROADMAP.md:14).
+
+## Approval record template — complete per decision
+
+| Field | Required owner entry |
+|---|---|
+| C-ID + effective campaign | PENDING |
+| State | PENDING / APPROVED / REJECTED / SUPERSEDED |
+| Approver / approval timestamp | PENDING |
+| Explicit ruleset version | PENDING |
+| Parameters, enums, units and precision | PENDING |
+| Exact input to expected output examples | PENDING |
+| Update policy during a live campaign | PENDING |
+| Rollback/migration policy for prior state | PENDING |
+| Acceptance test evidence and signoff | PENDING |
+
+Decisions below contain options and test scenarios ONLY. No default is selected by this document.
+
+## C-01 — Knowledge, Contest and Defense economics
+
+Source: docs/OWNER_REQUIREMENTS.md:145-151 proposes 1 Point for opening Knowledge, 1 Point for turning adjacent rival Knowledge into shared Knowledge, and 1 Point for defense. Its opening text proposes spending Points on Landmark fuel but supplies no exact Point-to-Crystal conversion. V1 charged 3 Points for shared entry, conflicting with owner proposal (docs/SPEC_CONFLICTS.md:7). Existing development gameplay spends fixture-credit only (shared/gameplay/devRules.ts:29-57).
+
+**Owner must decide:** exact charges and currencies for new Knowledge, repeat/no-change, contest entry, defense and Landmark conversion; whether a failure charges anything; adjacencies; max simultaneous memberships; actor eligibility; resource caps; version/rounding.
+
+**Owner-reviewed acceptance examples needed:** newly explored tile with adequate balance; same tile already known; insufficient balance; same command-key replay with identical payload (no second debit); same key changed payload (conflict); opposing school entry at boundary; two concurrent spenders; retry after committed ACK interruption. Each must specify knowledge mask, balance delta, command result and authorized school delta.
+
+**Dependent scope:** M4-D1/M4-D2 and future M5 point feed. Pure candidates/tests do not authorize production costs (tests/m4b-gameplay.test.ts:94-227; tests/m4b-rule-adapter.test.ts:20-134).
+
+## C-03 — Shared Knowledge, Contest, Defense and general Decay
+
+Source: docs/OWNER_REQUIREMENTS.md:6,148-151 describes shared exchange at school borders and transfer after one day unless defender contributes 1 Point. V1 has independent school membership, grace of 12 hours and retention decay to zero around 22 hours, not the same transfer mechanism (docs/SPEC_CONFLICTS.md:9). Current rules are pure candidates in shared/gameplay/candidates.ts:43-221 and decay:222-...; tests/m4b-gameplay.test.ts:228-519.
+
+**Owner must decide:** 4-neighbor or 8-neighbor adjacency, contest start/owner, simultaneous attackers, exact 24-hour boundary inclusivity, defender response/refund/reset, what transfers and what remains shared, HQ exemption, school scoring, timer clock/restart semantics. Crucially choose whether a separate general Knowledge decay mechanic exists at all. Do not import V1's 22-hour curve by analogy.
+
+**Acceptance examples to sign:** defense just before / exactly at / after deadline; concurrent open actions; repeating defense; two attackers; timer firing after restart; contest and decay firing simultaneously; HQ tile; lost Knowledge visibility; no double debit/revision on retry. Define exact membership, fog projection, persisted deadline, ACK and outbox outcome for each.
+
+**Dependent scope:** M4-D1 Contest, M4-D2 Defense/Decay. Block implementation of authoritative production commands until C-01/C-03/C-08 owner rules are signed.
+
+## C-08 — Fog and authorization visibility matrix
+
+Owner proposal: fog covers everything except headquarters and landmarks (docs/OWNER_REQUIREMENTS.md:1-4,131-138). The production visibility policy is still pending (docs/SPEC_CONFLICTS.md:14, docs/VISIBILITY_POLICY_PROPOSAL.md). Existing per-school synthetic projections are a correctness fixture, not final owner approval (docs/DECISIONS.md:21).
+
+**Owner must fill a matrix:** For each unknown, discovered, own Knowledge, opposing Knowledge, contested Knowledge, previously lost Knowledge, HQ, Landmark, UniStop and Chest, specify authorized geometry, school identity, state, progress, timer and hints as seen by public visitor / same-school player / opponent / spectator / admin. Specify whether discovered fog persists after losing Knowledge, whether spectators may see hidden tiles, and how errors/logs avoid leaks.
+
+**Acceptance examples:** unseen opponent tile, contested border, reconnect with stale revision, change of school identity, losing a previously discovered tile, spectator resync, hidden puzzle hint and cross-school delta. Review tests/m2-room.test.ts:48, tests/m35-realtime.test.ts:75-420 and tests/m36-delivery.test.ts:24-140 only as synthetic baseline. No raw mask leak.
+
+## C-02 — Landmark contribution, first light and takeover
+
+Owner proposal: 100 Crystals first light, overtake at 120 versus owner 100, correct puzzle +10 Crystals/10%, wrong answer cooldown ten minutes (docs/OWNER_REQUIREMENTS.md:152-156). V1 used initial 1000 and +5% overtaking (docs/SPEC_CONFLICTS.md:8). Neither is automatically an approved production setting.
+
+**Owner must choose:** initial/overtake thresholds, absolute vs relative lead, inclusivity/rounding, persistent contribution accounting, whether old contributions carry forward or reset, simultaneous commit resolution, allowed Crystal spend, refunds and reconnect. Examples at target-1, target, two simultaneous schools, current owner's contribution increase, ownership change while pending and committed retry; each should specify exact authoritative output.
+
+**Dependent scope:** M4-D3. Pure tests at tests/m4b-gameplay.test.ts:532-655,754-783.
+
+## C-09 — Landmark clues, content and buffs
+
+Owner source docs/OWNER_REQUIREMENTS.md:86-100,152-158 lists five Scenic Spots and five symbolic Landmarks; proposes 90% hidden landmark, hints, correct-answer progress and 10-minute incorrect-answer cooldown. Early owner prose speaks of fuel/coal, later numerical section Crystals; do not silently normalize terms. Buff ends when another school lights the Landmark; effects, duration, stacking, accessible quiz flow and map publication are unapproved (docs/SPEC_CONFLICTS.md:15).
+
+**Owner must choose:** catalog ID/name/answers, diacritic/case handling, hint exposure, who may guess, abuse protection, exact puzzle-to-resource impact, buff type/percentage/duration/stacking, takeover revocation, audit and gift interaction. Acceptance examples for right/wrong guess, cooldown boundary, simultaneous answer, school change, buff revocation at owner switch, retry/reconnect and accessibility.
+
+**Dependent scope:** M4-D3 and M4-D4. Pure tests at tests/m4b-gameplay.test.ts:656-753.
+
+## C-04/C-05 — Official eight-school registry and map layout
+
+Eight universities have been confirmed at the campaign level, but docs/OWNER_REQUIREMENTS.md:52-80 lists the five in its earlier draft. docs/DECISIONS.md:15,23-39 approves a generic immutable 16-slot registry but marks the V1-derived proposed 0-7 university mapping **pending**. Names proposed: HCMUT, HCMCOU, DTU, DHHP, HSU, HUCE, NTU, HCMIU. Reserved slots 8-15 are not campaign schools until assigned.
+
+**Owner must confirm:** official 8-school IDs and slot numbers; HQ locations and nonoverlap; exact collision vs visual footprints; map revision/rollback/onboarding policy and verified student affiliation. Original owner map dimensions: 1000x1000 tiles, HQ 20x20, landmarks 50x50, UniStop 10x5, Chest 2x2 (docs/OWNER_REQUIREMENTS.md:131-138); V1 disagrees on HQ and Landmark footprints (docs/SPEC_CONFLICTS.md:10-11).
+
+**Examples:** stable school bit identity after adding a school, overlapping HQ/landmark rejection, map edge object, updating visuals without modifying knowledge collision geometry, old fog restoration.
+
+## C-12 — Ranking and scoring
+
+Owner emphasizes explored Knowledge area and small fun school-event bonuses; detailed score and ties are missing (docs/OWNER_REQUIREMENTS.md:12-16,31-33; docs/SPEC_CONFLICTS.md:18).
+
+**Owner must choose:** unique discoveries vs currently retained tiles, how contested shared and transferred Knowledge count, personal/school rankings, tie-breakers, decay score loss, event bonus cap/cadence, running-game Point distinction, corrections and snapshots. Examples: shared tile, one-day takeover, decay, tied schools, retroactive run-data correction, school rejoin.
+
+## Future scope deliberately excluded from M4-D0 approval
+
+- C-06/C-07/C-10 (M6): UniStops, chest/key tiers, reward tables and physical Gifts. Owner loot tables display 100% per column and contain item-list conflicts (docs/SPEC_CONFLICTS.md:12-16). Preserve exact original values; no hidden normalization.
+- C-11 (M5): external running API, identity verifier, km-to-Points conversion, duplicate/corrected feeds, weekly physical Gift eligibility. No endpoint or mapping is authorized (docs/SPEC_CONFLICTS.md:17).
+- C-13 (M6): editor/admin publishing, notification permission, live events; wagering excluded until approved (docs/SPEC_CONFLICTS.md:19).
+
+## Delivery stages and stop conditions
+
+| Stage | Definition of done | Gate |
+|---|---|---|
+| M4-C closure | Typecheck/lint/asset tests/build plus actual browser E2E and UX evidence | Do not claim browser acceptance without running it |
+| M4-D0 | Signed per-C-ID record with version, owner, exact parameters and examples | All fields PENDING in this draft |
+| M4-D1 | Authoritative Knowledge/Contest state, debit and projection | C-01/C-03/C-08 |
+| M4-D2 | Durable Defense, deadlines, recovery and optional Decay | C-03/C-08 |
+| M4-D3 | Landmark contribution, puzzle, buffs and takeover | C-02/C-09 (+ C-05 placement) |
+| M4-D4 | Connected multi-school game UX, manual + automated E2E | Relevant rules finalized |
+| Parallel M3.6 | Fix sustained hotspot visible/ACK latency without lost commits | Production launch blocker independent of M4 |
+| M5/M6/M7 | Running integration / rewards & operations / scaling launch | Separate owner release gates |
+
+**Next owner action:** Review and fill the C-01/C-03/C-08 decisions first; then C-02/C-09 for Landmark. Documentation does not activate candidate rules.
