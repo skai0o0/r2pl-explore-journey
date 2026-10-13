@@ -20,13 +20,24 @@ import {
 } from "./worldView.ts";
 import "./style.css";
 
-const players = [
-  { token: "dawn-one", label: "Dawn · Explorer 1", slot: 0 },
-  { token: "dawn-two", label: "Dawn · Explorer 2", slot: 0 },
-  { token: "dusk-one", label: "Dusk · Explorer 1", slot: 15 },
-  { token: "dusk-two", label: "Dusk · Explorer 2", slot: 15 },
-] as const;
-type Player = (typeof players)[number];
+import {
+  type DevPlayer,
+  LEGACY_DEV_SESSION,
+  parseDevSession,
+} from "../../shared/integration/devSession.ts";
+
+// Codex-owned transport bootstrap contract; existing presentation stays intact.
+const bootstrapResponse = await fetch("/api/fixture/bootstrap", {
+  cache: "no-store",
+});
+const session =
+  bootstrapResponse.status === 404
+    ? LEGACY_DEV_SESSION
+    : parseDevSession(await bootstrapResponse.json());
+if (bootstrapResponse.status !== 404 && !bootstrapResponse.ok)
+  throw new Error("Synthetic session unavailable");
+const players = session.players;
+type Player = DevPlayer;
 
 interface Profile {
   name: string;
@@ -69,7 +80,9 @@ const ui = {
   hover: get<HTMLElement>("strip-hover"),
 };
 
-const sdk = new ColyseusSDK(`ws://${location.hostname}:2567`);
+const sdk = new ColyseusSDK(
+  `ws://${location.hostname}:${session.websocketPort}`,
+);
 let player: Player =
   players.find(
     (item) => item.token === sessionStorage.getItem("r2pl-fixture-player"),
@@ -192,10 +205,7 @@ function updateTile(): void {
         0;
 
     if (isOwned) {
-      ui.knowledge.textContent =
-        player.slot === 0
-          ? "Dawn University territory · Authorized presence"
-          : "Dusk University territory · Authorized presence";
+      ui.knowledge.textContent = `${player.schoolName} territory · Authorized presence`;
       ui.badge.textContent = "OWNED";
       ui.badge.className = "badge-tag owned";
       ui.explore.disabled = true;
@@ -432,6 +442,11 @@ async function connect(nextPlayer: Player): Promise<void> {
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
   world.setSchool(player.slot);
+  world.focus(
+    player.home.x,
+    player.home.z,
+    session === LEGACY_DEV_SESSION ? 275 : 72,
+  );
   updateTile();
   status("Connecting…", false);
   void refreshProfile();
@@ -453,10 +468,7 @@ async function connect(nextPlayer: Player): Promise<void> {
       reconnectTimer = window.setTimeout(() => void connect(player), 1200);
     });
     status("Connected · protocol v1", true);
-    activity(
-      `Entered ${player.slot === 0 ? "Dawn" : "Dusk"} University world`,
-      "success",
-    );
+    activity(`Entered ${player.schoolName} world`, "success");
     subscribeNow();
     for (const action of pending.values()) {
       if (action.token === player.token) joined.sendBytes("m2", action.frame);
@@ -481,11 +493,7 @@ ui.explore.addEventListener("click", explore);
 ui.retry.addEventListener("click", () => void connect(player));
 
 get("home-button").addEventListener("click", () =>
-  world.animateFocus(
-    player.slot === 0 ? 215 : 785,
-    player.slot === 0 ? 235 : 765,
-    200,
-  ),
+  world.animateFocus(player.home.x, player.home.z, 200),
 );
 get("landmark-button").addEventListener("click", () =>
   world.animateFocus(510, 485, 200),
@@ -505,11 +513,7 @@ window.addEventListener("keydown", (event) => {
   switch (event.key) {
     case "h":
     case "H":
-      world.animateFocus(
-        player.slot === 0 ? 215 : 785,
-        player.slot === 0 ? 235 : 765,
-        200,
-      );
+      world.animateFocus(player.home.x, player.home.z, 200);
       break;
     case "l":
     case "L":

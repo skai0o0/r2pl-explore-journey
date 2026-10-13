@@ -209,33 +209,28 @@ export class M35FixtureAuthority {
         telemetry?.observe("outbox_claim_batch_size", events.length);
         telemetry?.count("outbox_events_claimed", events.length);
         if (events.length === 0) return delivered;
-        for (const event of events) {
-          let delta: CommittedFixtureDelta;
-          const projectionStarted = Number(process.hrtime.bigint()) / 1e6;
-          try {
-            delta = this.#decodeEvent(event);
-            telemetry?.observe(
-              "projection_decode_ms",
-              Number(process.hrtime.bigint()) / 1e6 - projectionStarted,
-            );
-            if (delta.committedAtMs !== undefined)
-              telemetry?.observe(
-                "commit_to_claim_return_ms",
-                event.claimReturnedAtMs - delta.committedAtMs,
-              );
-          } catch (error) {
-            if (!(error instanceof InvalidOutboxProjection)) throw error;
+        try {
+          for (const event of events) {
+            let delta: CommittedFixtureDelta;
+            const projectionStarted = Number(process.hrtime.bigint()) / 1e6;
             try {
+              delta = this.#decodeEvent(event);
+              telemetry?.observe(
+                "projection_decode_ms",
+                Number(process.hrtime.bigint()) / 1e6 - projectionStarted,
+              );
+              if (delta.committedAtMs !== undefined)
+                telemetry?.observe(
+                  "commit_to_claim_return_ms",
+                  event.claimReturnedAtMs - delta.committedAtMs,
+                );
+            } catch (error) {
+              if (!(error instanceof InvalidOutboxProjection)) throw error;
               await recoverSubscribers();
               await this.#relay.quarantine(event.id, event.leaseToken);
               this.#commitTimes.delete(event.id);
               continue;
-            } catch (recoveryError) {
-              await this.#relay.release(event.id, event.leaseToken);
-              throw recoveryError;
             }
-          }
-          try {
             await publish(delta);
             const markStarted = Number(process.hrtime.bigint()) / 1e6;
             await this.#relay.markDelivered(event.id, event.leaseToken);
@@ -250,10 +245,21 @@ export class M35FixtureAuthority {
             telemetry?.count("outbox_events_delivered");
             this.#commitTimes.delete(event.id);
             delivered++;
-          } catch (error) {
-            await this.#relay.release(event.id, event.leaseToken);
-            throw error;
           }
+        } catch (error) {
+          // Release the failing event AND the unprocessed batch tail.
+          // The token fences this cleanup against a newer worker's lease.
+          try {
+            const released = await this.#relay.releaseClaim(
+              this.#campaignId,
+              events[0]!.leaseToken,
+            );
+            telemetry?.count("outbox_batch_leases_released", released);
+          } catch {
+            // DB outage still recovers by lease expiry; preserve the original failure.
+            telemetry?.count("outbox_batch_release_failures");
+          }
+          throw error;
         }
       }
     };

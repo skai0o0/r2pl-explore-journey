@@ -33,3 +33,7 @@ Press `Ctrl+C` in the game terminal to stop the game. The local browser and Coly
 - [M4-B integration report](docs/M4B_REPORT.md)
 
 The official school registry, campaign exploration cost, production identity, rewards, running integration, and production visibility policy are still pending owner decisions. This launcher cannot enable production gameplay.
+
+## Eight-school playable fixture (2026-10-14)
+
+Set R2PL_BOT_SIMULATION=1 and R2PL_BOT_DATABASE_URL to an explicitly disposable loopback r2pl_prep_test_* / r2pl_bot_test_* database, then run npm run play:schools. Open http://127.0.0.1:4176 (WebSocket2568). Sixteen local human aliases and24 bots share a persistent synthetic campaign and existing Three.js renderer. Credits/world are preserved on restart; bots run up to10 minutes and can exhaust their wallet/frontier. Full gameplay/production are not enabled. [Increment scope and verification](docs/COMPLETION_INCREMENT_01_2026-10-14.md), [remaining completion tasks](docs/COMPLETION_PROGRESS.md).

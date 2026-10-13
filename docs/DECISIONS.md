@@ -84,3 +84,7 @@ Owner continued the feasible development/preparation scope. Codex integrated dur
 ## 2026-10-13 owner-requested school bots
 
 Authorized synthetic multi-school development simulation: eight display aliases, generic fixture registry, isolated loopback PostgreSQL campaign, existing v1 exploration command and private replicas. Public shared/pairwise rendezvous represents overlap only; no approval of contest, defense, upkeep, final map or production slot mapping. [Guide](BOT_SIMULATION.md), [report and observed relay recovery issue](BOT_SIMULATION_REPORT_2026-10-13.md).
+
+## 2026-10-14 planned implementation increment
+
+Owner instruction Triển khai starts bounded development work from the completion plan. Relay failure cleanup and synthetic8-school playable/account bootstrap are implemented under existingv1/ruleVersion0/fixture-credit permissions. This is not signoff of pending economy, world layout, Knowledge/landmark rules, external running endpoints or Gift policy. [Increment and evidence](COMPLETION_INCREMENT_01_2026-10-14.md); [remaining parity gates](COMPLETION_PROGRESS.md).

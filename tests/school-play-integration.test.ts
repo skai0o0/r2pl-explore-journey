@@ -1,0 +1,144 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import test from "node:test";
+import { Pool } from "pg";
+import { BotPeer } from "../scripts/simulation/BotPeer.ts";
+import { botDatabase } from "../scripts/simulation/config.ts";
+import { cleanupBotFixture } from "../scripts/simulation/fixture.ts";
+import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
+import {
+  LEGACY_DEV_SESSION,
+  parseDevSession,
+} from "../shared/integration/devSession.ts";
+import { ACK_STATUS } from "../shared/protocol/m2.ts";
+
+test("dev session contract validates synthetic identities, homes and transport bounds", () => {
+  assert.deepEqual(parseDevSession(LEGACY_DEV_SESSION), LEGACY_DEV_SESSION);
+  assert.throws(() =>
+    parseDevSession({ ...LEGACY_DEV_SESSION, fixtureOnly: false }),
+  );
+  assert.throws(() =>
+    parseDevSession({ ...LEGACY_DEV_SESSION, websocketPort: 65536 }),
+  );
+  assert.throws(() =>
+    parseDevSession({
+      ...LEGACY_DEV_SESSION,
+      players: [LEGACY_DEV_SESSION.players[0], LEGACY_DEV_SESSION.players[0]],
+    }),
+  );
+  assert.throws(() =>
+    parseDevSession({
+      ...LEGACY_DEV_SESSION,
+      players: [{ ...LEGACY_DEV_SESSION.players[0], home: { x: 1000, z: 0 } }],
+    }),
+  );
+});
+const url = process.env.R2PL_PREPARATION_DATABASE_URL;
+test("eight-school playable server shares durable bot/student world with actor-private profiles and retry receipts", {
+  skip: !url && "Disposable PostgreSQL required",
+  timeout: 30000,
+}, async () => {
+  const pool = new Pool({ connectionString: botDatabase(url, "1"), max: 16 });
+  const campaignId = randomUUID();
+  let server: Awaited<ReturnType<typeof createSchoolPlayServer>> | undefined;
+  let peer: BotPeer | undefined;
+  try {
+    server = await createSchoolPlayServer(
+      pool,
+      { web: 0, websocket: 0 },
+      campaignId,
+    );
+    await assert.rejects(
+      createSchoolPlayServer(pool, { web: 0, websocket: 0 }, campaignId),
+      /already has a local writer/,
+    );
+    const base = `http://127.0.0.1:${server.webPort}`;
+    const config = parseDevSession(
+      await (await fetch(`${base}/api/fixture/bootstrap`)).json(),
+    );
+    assert.equal(config.players.length, 16);
+    assert.equal(new Set(config.players.map((p) => p.slot)).size, 8);
+    assert.equal(config.websocketPort, server.websocketPort);
+    assert.equal((await fetch(`${base}/api/fixture/me`)).status, 401);
+    assert.equal(
+      (
+        await fetch(`${base}/api/fixture/receipts`, {
+          headers: { Authorization: "Bearer forged" },
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (await fetch(`${base}/api/fixture/me`, { method: "POST" })).status,
+      405,
+    );
+    const actor = config.players[0]!;
+    const headers = { Authorization: `Bearer ${actor.token}` };
+    const before = await server.accounts.profile(actor.token);
+    assert(before?.ledgerConserved);
+    peer = new BotPeer(
+      `ws://127.0.0.1:${server.websocketPort}`,
+      actor.token,
+      server.fixture.schools[0]!,
+      "explorer",
+      987,
+    );
+    await peer.connect();
+    const intent = peer.planner.next("connector")!;
+    const key = Uint8Array.from(
+      Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
+    );
+    const ack = await peer.explore(intent.tile, key);
+    assert.equal(ack.status, ACK_STATUS.TEST_APPLIED);
+    assert.deepEqual(await peer.replay(intent.tile, key), ack);
+    const profile = (await (
+      await fetch(`${base}/api/fixture/me`, { headers })
+    ).json()) as {
+      balance: string;
+      ledgerConserved: boolean;
+      schoolSlot: number;
+    };
+    assert.equal(BigInt(profile.balance), BigInt(before.balance) - 1n);
+    assert.equal(profile.schoolSlot, 0);
+    assert.equal(profile.ledgerConserved, true);
+    const receipts = (await (
+      await fetch(`${base}/api/fixture/receipts`, { headers })
+    ).json()) as { receipts: { status: string; amount: string }[] };
+    assert.ok(
+      receipts.receipts.some(
+        (r) => r.status === "test_applied" && r.amount === "-1",
+      ),
+    );
+    const bots = server.startBots(1);
+    await bots;
+    const schoolStats = (await (
+      await fetch(`${base}/api/fixture/bots`, { headers })
+    ).json()) as { schoolSlot: number; bots: unknown[] };
+    assert.equal(schoolStats.schoolSlot, 0);
+    assert.equal(schoolStats.bots.length, 3);
+    assert.equal(await server.accounts.profile("forged"), null);
+    await peer.close();
+    peer = undefined;
+    await server.close();
+    server = undefined;
+    server = await createSchoolPlayServer(
+      pool,
+      { web: 0, websocket: 0 },
+      campaignId,
+    );
+    const restored = await server.accounts.profile(actor.token);
+    assert.equal(restored?.balance, profile.balance);
+    assert.equal(restored?.ledgerConserved, true);
+    const rebuilt = parseDevSession(
+      await (
+        await fetch(`http://127.0.0.1:${server.webPort}/api/fixture/bootstrap`)
+      ).json(),
+    );
+    assert.deepEqual(rebuilt.players, config.players);
+  } finally {
+    await peer?.close();
+    await server?.close();
+    await cleanupBotFixture(pool, campaignId);
+    await pool.end();
+  }
+});

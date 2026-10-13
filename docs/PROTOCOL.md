@@ -70,3 +70,7 @@ M2 accepts at most 64 chunks per connection, holds at most 128 outbound frames o
 ## Reward preparation command boundary — 2026-10-13
 
 Binary protocol v1 is unchanged. shared/rewards/commands.ts defines an internal JSON fixture DTO (UUID key, use_unistop/open_chest, targetId, fixture-rewards-v1) for direct service/demo tests only. It is not a network opcode or public endpoint. Binding identity comes from the server, not the DTO; unknown price/resource/school fields are rejected. Actor-private receipts contain requested command, status/reason, fixed or persisted sampled reward, server processing time and next availability. Preparation outbox storage has no public relay. Live transport/projection remains separately gated.
+
+## 2026-10-14 local playable bootstrap/account integration
+
+Binary protocolv1 is unchanged. The isolated school-play dev HTTP server exposes GET /api/fixture/bootstrap (fixtureOnly=true,version1,websocketPort and validated human players[token,label,schoolName,slot,home{x,z}]); GET /api/fixture/me, /api/fixture/receipts and /api/fixture/bots require a synthetic bearer token and return only own actor/profile/receipts or own-school bot aggregates. Tokens are local synthetic selectors, not production auth. Old play:local remains compatible through a404-only legacy bootstrap fallback. See shared/integration/devSession.ts and the increment report; no new gameplay command or inventory push protocol is enabled.

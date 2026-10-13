@@ -1,0 +1,296 @@
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { extname, resolve, sep } from "node:path";
+import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
+import type { Pool } from "pg";
+import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
+import { evaluateDevExplore } from "../../shared/gameplay/devRules.ts";
+import { ACK_STATUS } from "../../shared/protocol/m2.ts";
+import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
+import { DevAccountService } from "./DevAccountService.ts";
+import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
+
+/** One local dev writer per persistent campaign. Not distributed lease/fencing. */
+export async function createSchoolPlayServer(
+  pool: Pool,
+  ports: { web: number; websocket: number },
+  campaignId = SCHOOL_PLAY_CAMPAIGN,
+): Promise<Awaited<ReturnType<typeof startSchoolPlayServer>>> {
+  const writer = await pool.connect();
+  const key = `school-play:${campaignId}`;
+  let acquired = false;
+  try {
+    acquired = (
+      await writer.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS locked",
+        [key],
+      )
+    ).rows[0]!.locked;
+    if (!acquired)
+      throw new Error("Synthetic campaign already has a local writer");
+    const play = await startSchoolPlayServer(pool, ports, campaignId);
+    let closed = false;
+    const lost = () => {
+      void close().catch(() => {});
+    };
+    const close = async (): Promise<void> => {
+      if (closed) return;
+      closed = true;
+      writer.off("error", lost);
+      try {
+        await play.close();
+      } finally {
+        try {
+          await writer.query(
+            "SELECT pg_advisory_unlock(hashtextextended($1,0))",
+            [key],
+          );
+        } finally {
+          writer.release();
+        }
+      }
+    };
+    writer.on("error", lost);
+    return { ...play, close };
+  } catch (error) {
+    try {
+      if (acquired)
+        await writer.query(
+          "SELECT pg_advisory_unlock(hashtextextended($1,0))",
+          [key],
+        );
+    } finally {
+      writer.release();
+    }
+    throw error;
+  }
+}
+
+async function startSchoolPlayServer(
+  pool: Pool,
+  ports: { web: number; websocket: number },
+  campaignId?: string,
+) {
+  const fixture = await seedSchoolPlay(pool, campaignId);
+  const accounts = new DevAccountService(
+    pool,
+    fixture.campaignId,
+    fixture.actors,
+  );
+  const realtime = await createDurableSyntheticServer(
+    pool,
+    fixture.campaignId,
+    fixture.registry,
+    fixture.actors,
+    1n,
+    {},
+    undefined,
+    evaluateDevExplore,
+  );
+  await realtime.server.listen(ports.websocket, "127.0.0.1");
+  const address = realtime.transport.server?.address();
+  if (!address || typeof address === "string")
+    throw new Error("Missing WebSocket address");
+  const clientRoot = resolve(
+    fileURLToPath(new URL("../../dist/client/", import.meta.url)),
+  );
+  const mime: Record<string, string> = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".gltf": "model/gltf+json",
+    ".glb": "model/gltf-binary",
+  };
+  const peers: BotPeer[] = [];
+  let stopped = false;
+  let botTask: Promise<void> | undefined;
+  let botStatus = "idle";
+  const web = createServer(async (request, response) => {
+    response.setHeader("Cache-Control", "no-store");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      response.writeHead(405).end();
+      return;
+    }
+    const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+    const token = request.headers.authorization?.replace(/^Bearer /, "");
+    const json = (value: unknown) => {
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.end(
+        request.method === "HEAD" ? undefined : JSON.stringify(value),
+      );
+    };
+    try {
+      if (path === "/api/fixture/bootstrap") {
+        json({
+          fixtureOnly: true,
+          version: 1,
+          websocketPort: address.port,
+          players: fixture.players,
+        });
+        return;
+      }
+      if (
+        path === "/api/fixture/me" ||
+        path === "/api/fixture/receipts" ||
+        path === "/api/fixture/bots"
+      ) {
+        const profile = await accounts.profile(token);
+        if (!profile) {
+          response.writeHead(401).end();
+          return;
+        }
+        if (path === "/api/fixture/me") json(profile);
+        else if (path === "/api/fixture/receipts")
+          json({ fixtureOnly: true, receipts: await accounts.receipts(token) });
+        else
+          json({
+            fixtureOnly: true,
+            status: botStatus,
+            schoolSlot: profile.schoolSlot,
+            bots: peers
+              .filter((p) => p.school.slot === profile.schoolSlot)
+              .map((p) => ({
+                role: p.role,
+                applied: p.applied,
+                noChange: p.noChange,
+                rejected: p.rejected,
+              })),
+          });
+        return;
+      }
+      if (path === "/health") {
+        json({ fixtureOnly: true, schools: 8, botStatus });
+        return;
+      }
+      const file = resolve(
+        clientRoot,
+        path === "/" ? "index.html" : `.${decodeURIComponent(path)}`,
+      );
+      if (!file.startsWith(clientRoot + sep) && file !== clientRoot) {
+        response.writeHead(403).end();
+        return;
+      }
+      const bytes = await readFile(file);
+      response.setHeader(
+        "Content-Type",
+        mime[extname(file)] ?? "application/octet-stream",
+      );
+      // Existing UI presentation is retained; only its fixture roster note is corrected.
+      const body =
+        path === "/"
+          ? Buffer.from(
+              bytes
+                .toString()
+                .replace(
+                  "Two synthetic universities · four local test explorers",
+                  "Eight synthetic schools · 16 explorers · 24 bots",
+                ),
+            )
+          : bytes;
+      response.end(request.method === "HEAD" ? undefined : body);
+    } catch {
+      if (!response.headersSent)
+        response.writeHead(path.startsWith("/api/") ? 503 : 404);
+      response.end();
+    }
+  });
+  try {
+    await new Promise<void>((ready, reject) => {
+      web.once("error", reject);
+      web.listen(ports.web, "127.0.0.1", ready);
+    });
+  } catch (error) {
+    realtime.core.stopRelay();
+    await realtime.server.gracefullyShutdown(false);
+    throw error;
+  }
+  const webAddress = web.address();
+  if (!webAddress || typeof webAddress === "string")
+    throw new Error("Missing HTTP address");
+  const startBots = (durationSeconds = 600): Promise<void> => {
+    if (botTask) throw new Error("Bots already started");
+    if (
+      !Number.isFinite(durationSeconds) ||
+      durationSeconds < 1 ||
+      durationSeconds > 600
+    )
+      throw new RangeError("Invalid bot duration");
+    botStatus = "starting";
+    botTask = (async () => {
+      let roomId: string | undefined;
+      for (const actor of fixture.actors) {
+        if (actor.role === "human" || stopped) continue;
+        const peer = new BotPeer(
+          `ws://127.0.0.1:${address.port}`,
+          actor.token,
+          fixture.schools[actor.schoolSlot]!,
+          actor.role,
+          (20261013 ^ actor.ordinal) >>> 0,
+        );
+        peers.push(peer);
+        roomId = await peer.connect(roomId);
+      }
+      botStatus = "running";
+      const deadline = performance.now() + durationSeconds * 1000;
+      const rates = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5];
+      await Promise.all(
+        peers.map(async (peer) => {
+          while (!stopped && performance.now() < deadline) {
+            const intent = peer.planner.next(peer.role);
+            if (!intent) break;
+            const begun = performance.now();
+            const ack = await peer.explore(
+              intent.tile,
+              Uint8Array.from(
+                Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
+              ),
+            );
+            if (ack.status === ACK_STATUS.REJECTED) break;
+            const wait =
+              (1000 / rates[peer.school.slot]!) *
+              (0.8 + peer.planner.random() * 0.4);
+            await pause(
+              Math.min(
+                Math.max(0, wait - (performance.now() - begun)),
+                Math.max(0, deadline - performance.now()),
+              ),
+            );
+          }
+        }),
+      );
+      botStatus = "finished";
+    })()
+      .catch(() => {
+        botStatus = "failed";
+        stopped = true;
+      })
+      .finally(async () => {
+        await Promise.allSettled(peers.map((peer) => peer.close()));
+      });
+    return botTask;
+  };
+  const close = async (): Promise<void> => {
+    stopped = true;
+    await botTask;
+    await new Promise<void>((ready) => {
+      web.close(() => ready());
+      web.closeIdleConnections();
+    });
+    realtime.core.stopRelay();
+    await realtime.server.gracefullyShutdown(false);
+  };
+  return {
+    fixture,
+    accounts,
+    realtime,
+    webPort: webAddress.port,
+    websocketPort: address.port,
+    startBots,
+    close,
+  };
+}

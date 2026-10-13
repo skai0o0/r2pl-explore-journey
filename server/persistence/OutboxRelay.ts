@@ -77,6 +77,15 @@ export class OutboxRelay {
       throw new Error("Outbox lease replaced, delivered or missing");
   }
 
+  /** Best-effort batch cleanup; never clears a replaced lease or delivered event. */
+  async releaseClaim(campaignId: string, leaseToken: string): Promise<number> {
+    const result = await this.#pool.query(
+      "UPDATE r2pl_v2.outbox_events SET lease_until=NULL,lease_token=NULL WHERE campaign_id=$1 AND lease_token=$2 AND delivered_at IS NULL",
+      [campaignId, leaseToken],
+    );
+    return result.rowCount ?? 0;
+  }
+
   /** M3.5-only poison projection quarantine after affected subscribers resync. */
   async quarantine(id: string, leaseToken: string): Promise<void> {
     const client = await this.#pool.connect();
