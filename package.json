@@ -20,8 +20,10 @@
     "bench:postgres": "node --experimental-strip-types scripts/bench-postgres.ts",
     "play:local": "npm run build:client && node --experimental-strip-types scripts/play-local.ts",
     "report:size": "node scripts/report-size.mjs",
-    "test:preparation": "node --experimental-strip-types --test --test-concurrency=1 tests/integration-preparation.test.ts tests/running-preparation-postgres.test.ts",
-    "test:postgres": "node --experimental-strip-types scripts/test-postgres.ts"
+    "test:preparation": "node --experimental-strip-types --test --test-concurrency=1 tests/integration-preparation.test.ts tests/running-preparation-postgres.test.ts tests/reward-preparation-contract.test.ts tests/reward-preparation-postgres.test.ts",
+    "test:postgres": "node --experimental-strip-types scripts/test-postgres.ts",
+    "test:rewards": "node --experimental-strip-types --test --test-concurrency=1 tests/reward-preparation-contract.test.ts tests/reward-preparation-postgres.test.ts",
+    "demo:rewards": "node --experimental-strip-types scripts/demo-rewards.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.18",

@@ -103,3 +103,7 @@ Knowledge-only M4-D1 development can proceed after separately signed ruleVersion
 Owner authorized feasible code and blocked-feature infrastructure preparation with Gamenote V2 as the latest product idea reference. [Preparation report](INTEGRATION_PREPARATION_REPORT_2026-10-13.md): provider/identity contracts, exact reward references, cooldown helpers, synthetic PostgreSQL running reconciliation and guarded test runner delivered; 80/80 regression tests pass. External running API remains unavailable; no production economy or rewards enabled. This is infrastructure preparation, not completion of M5/M6 or a Knowledge v1 rollout.
 
 [M4-C browser smoke](M4C_BROWSER_SMOKE_2026-10-13.md) now records desktop exploration, two-session no-change/sync, reload and narrow-layout pointer evidence. Physical touch/pinch, full visual E2E and GPU/performance acceptance remain open. M3.6 hotspot launch blocker is unchanged. The increment stops for owner review.
+
+## 2026-10-13 durable reward preparation continuation
+
+Owner continued feasible dev/preparation. [Reward transaction report](REWARD_PREPARATION_REPORT_2026-10-13.md): Aspire UniStop durable roll/cooldown, actor-private fixed-reward Chest, atomic Key/inventory/ledger/outbox and crash/retry delivered in r2pl_prep only. 94/94 regression tests pass. Nitro/Predator Gift-bearing profiles fail closed before RNG; Chest gacha/Gifts remain gated. CLI demo is available; no client reward UI or v1 opcode was added. This is preparation, not M6 completion or production authorization. Stop for review.

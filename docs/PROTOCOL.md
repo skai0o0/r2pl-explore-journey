@@ -66,3 +66,7 @@ These lowercase hex strings include the CRC. Their tests are in `tests/m2-protoc
 ## Limits and next version
 
 M2 accepts at most 64 chunks per connection, holds at most 128 outbound frames or 1 MiB per connection, and disconnects a slow client on overflow. A per-session token bucket starts at 20 frames and refills at 10/s. These are **M2 test limits**, not approved production quotas. M1's earlier 256-subscription proposal was narrowed to 64 for bounded snapshot fanout. World and network format versions advance independently. M3 must define durable command envelope, campaign/rule identity, transaction-backed idempotency and committed ACK semantics without reusing the M2 test status.
+
+## Reward preparation command boundary — 2026-10-13
+
+Binary protocol v1 is unchanged. shared/rewards/commands.ts defines an internal JSON fixture DTO (UUID key, use_unistop/open_chest, targetId, fixture-rewards-v1) for direct service/demo tests only. It is not a network opcode or public endpoint. Binding identity comes from the server, not the DTO; unknown price/resource/school fields are rejected. Actor-private receipts contain requested command, status/reason, fixed or persisted sampled reward, server processing time and next availability. Preparation outbox storage has no public relay. Live transport/projection remains separately gated.

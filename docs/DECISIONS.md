@@ -76,3 +76,7 @@ Each new ADR records context, options, decision, consequences, owner approval if
 ## Owner authorization — 2026-10-13 integration preparation
 
 Owner instruction: prioritize feasible completion, use Gamenote V2 as the latest ideas and prepare infrastructure for blocked systems. Approved scope implemented: provider/identity contracts, normalized running reconciliation in isolated synthetic PostgreSQL, exact reward references/cooldown helpers, disposable test runner and browser verification. This supersedes previous docs-only scope for this increment. It does not approve production prices, API endpoints, running conversion, Gift awards, schema rollout or Knowledge mutation. [Report and remaining gates](INTEGRATION_PREPARATION_REPORT_2026-10-13.md).
+
+## 2026-10-13 continuation — durable synthetic rewards
+
+Owner continued the feasible development/preparation scope. Codex integrated durable Aspire UniStop and fixed-reward Chest transactions in isolated preparation storage. Exact Gift-bearing tables remain unchanged and inactive; no conditional redraw, production Key-tier mapping, stock or Gift eligibility was selected. Protocol v1 and PRODUCTION_DISABLED remain unchanged. [Report](REWARD_PREPARATION_REPORT_2026-10-13.md), 94/94 passing regression; ready for owner review.
