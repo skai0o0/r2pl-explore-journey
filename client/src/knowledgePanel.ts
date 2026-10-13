@@ -4,7 +4,10 @@ import { boundedKnowledgeMarkers, type WorldView } from "./worldView.ts";
 let mounted = false;
 
 /** In-memory tokens only; this panel is mounted solely by the opt-in launcher. */
-export async function mountKnowledgePanel(world: WorldView): Promise<void> {
+export async function mountKnowledgePanel(
+  world: WorldView,
+  selectedTileIndex: () => number | undefined,
+): Promise<void> {
   if (mounted) return;
   mounted = true;
   const get = <T extends HTMLElement>(id: string): T => {
@@ -27,7 +30,7 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
     | { caseId: string; contributionId: string; points: string }
     | undefined;
   let exploreEnabled = false;
-  let lastExplore: string | undefined;
+  let lastExplore: { commandId: string; tileIndex: number } | undefined;
   let generation = 0;
   let busy = false;
   let polling = false;
@@ -76,7 +79,16 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
       busy || active?.schoolSlot !== 1 || current?.case?.status !== "claiming";
     retry.disabled = busy || !last || active?.schoolSlot !== 1;
     sync.disabled = busy || !active;
-    explore.disabled = busy || !active || !exploreEnabled;
+    const picked = selectedTileIndex();
+    const legal =
+      picked !== undefined &&
+      Number.isInteger(picked) &&
+      picked >= 0 &&
+      picked < 1_000_000;
+    explore.disabled = busy || !active || !exploreEnabled || !legal;
+    explore.textContent = legal
+      ? "Explore selected QA tile #" + picked + " · 1 Point"
+      : "Select an isometric tile for Knowledge · 1 Point";
     exploreRetry.disabled = busy || !active || !exploreEnabled || !lastExplore;
   };
   const render = (state: QaStateV1): void => {
@@ -156,6 +168,7 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
       controls();
     }
   };
+  window.addEventListener("r2pl:selected-tile", controls);
   start.onclick = () => void command("/api/qa/scenario/start", {});
   contribute.onclick = () => {
     if (!current?.case || busy || active?.schoolSlot !== 1) return;
@@ -175,13 +188,22 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
   };
   sync.onclick = () => void command("/api/qa/sync", {});
   explore.onclick = () => {
-    lastExplore = crypto.randomUUID();
+    const tileIndex = selectedTileIndex();
+    if (
+      tileIndex === undefined ||
+      !Number.isInteger(tileIndex) ||
+      tileIndex < 0 ||
+      tileIndex >= 1_000_000
+    ) {
+      event("Choose an isometric tile before exploring Knowledge");
+      return;
+    }
+    lastExplore = { commandId: crypto.randomUUID(), tileIndex };
     controls();
-    void command("/api/qa/knowledge/explore", { commandId: lastExplore });
+    void command("/api/qa/knowledge/explore", lastExplore);
   };
   exploreRetry.onclick = () => {
-    if (lastExplore)
-      void command("/api/qa/knowledge/explore", { commandId: lastExplore });
+    if (lastExplore) void command("/api/qa/knowledge/explore", lastExplore);
   };
   try {
     const { fixtures } = await api<{

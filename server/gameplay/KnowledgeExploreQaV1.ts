@@ -10,7 +10,7 @@ export interface ExploreReceiptV1 {
   tileIndex: number | null;
 }
 
-/** Synthetic fixed-tile topology; constructed only after the gateway's QA guards. */
+/** Synthetic selected-tile topology; constructed only after the gateway's QA guards. */
 export class KnowledgeExploreQaV1 {
   private readonly pool: Pool;
   private readonly campaignId: string;
@@ -28,15 +28,19 @@ export class KnowledgeExploreQaV1 {
   async execute(
     fixture: QaFixtureV1,
     commandId: string,
+    tileIndex = 999999,
   ): Promise<ExploreReceiptV1> {
     if (
       !this.fixtures.includes(fixture) ||
+      typeof commandId !== "string" ||
+      !Number.isInteger(tileIndex) ||
+      tileIndex < 0 ||
+      tileIndex > 999999 ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
         commandId,
       )
     )
       throw new Error("Invalid verified QA command");
-    const tileIndex = 999999;
     const key = Buffer.from(commandId.replaceAll("-", ""), "hex");
     const hash = createHash("sha256")
       .update(`knowledge-explore-qa-v1:${fixture.schoolSlot}:${tileIndex}:1`)
@@ -44,7 +48,7 @@ export class KnowledgeExploreQaV1 {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      // Serialize fixed-tile claims and retries across all server instances.
+      // Serialize selected-tile claims and retries across all server instances.
       await client.query("SELECT id FROM campaigns WHERE id=$1 FOR UPDATE", [
         this.campaignId,
       ]);
@@ -66,7 +70,7 @@ export class KnowledgeExploreQaV1 {
         [this.campaignId, fixture.actorId, key, hash],
       );
       const occupied = await client.query(
-        "SELECT 1 FROM knowledge_ownership_tiles_v1 WHERE campaign_id=$1 AND tile_index=$2",
+        "SELECT 1 FROM knowledge_ownership_tiles_v1 WHERE campaign_id=$1 AND tile_index=$2 UNION ALL SELECT 1 FROM knowledge_cases_v1 c, jsonb_array_elements(c.snapshot->'tiles') t WHERE c.campaign_id=$1 AND (t->>'tileIndex')::integer=$2",
         [this.campaignId, tileIndex],
       );
       let result: ExploreReceiptV1 = {

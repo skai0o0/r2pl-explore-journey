@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { extname, resolve, sep } from "node:path";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { disposableDatabaseUrl } from "../../scripts/migrate-m4d2.ts";
 import { WORLD_TILE_COUNT } from "../../shared/world/constants.ts";
 import {
@@ -55,7 +55,11 @@ export interface QaBackendV1 {
     fixture: QaFixtureV1,
     input: { caseId: string; contributionId: string; points: string },
   ): Promise<KnowledgeReceiptV1>;
-  explore?(fixture: QaFixtureV1, commandId: string): Promise<ExploreReceiptV1>;
+  explore?(
+    fixture: QaFixtureV1,
+    commandId: string,
+    tileIndex?: number,
+  ): Promise<ExploreReceiptV1>;
   sync(): Promise<void>;
 }
 class HttpFailure extends Error {
@@ -208,14 +212,28 @@ export function createKnowledgeQaServer(
           return;
         }
         if (url.pathname === "/api/qa/knowledge/explore") {
-          keys(input, ["commandId"]);
+          keys(
+            input,
+            Object.hasOwn(input, "tileIndex")
+              ? ["commandId", "tileIndex"]
+              : ["commandId"],
+          );
           if (
             typeof input.commandId !== "string" ||
-            !uuid.test(input.commandId)
+            !uuid.test(input.commandId) ||
+            (Object.hasOwn(input, "tileIndex") &&
+              (typeof input.tileIndex !== "number" ||
+                !Number.isInteger(input.tileIndex) ||
+                input.tileIndex < 0 ||
+                input.tileIndex >= WORLD_TILE_COUNT))
           )
             throw new HttpFailure(400);
           if (!backend.explore) throw new HttpFailure(404);
-          const result = await backend.explore(fixture, input.commandId);
+          const result = await backend.explore(
+            fixture,
+            input.commandId,
+            input.tileIndex as number | undefined,
+          );
           send(200, { receipt: result, state: await backend.state(fixture) });
           return;
         }
@@ -305,7 +323,10 @@ export async function createPostgresKnowledgeQa(
       "005_m4d3b_shared_upkeep.sql",
     ];
     if (env.R2PL_M4FINAL_EXPLORE_QA === "1")
-      files.push("006_m4final_explore_qa.sql");
+      files.push(
+        "006_m4final_explore_qa.sql",
+        "007_m4_selected_qa_explore.sql",
+      );
     for (const [index, file] of files.entries()) {
       const sql = (
         await readFile(
@@ -387,15 +408,27 @@ export async function createPostgresKnowledgeQa(
     const backend: QaBackendV1 = {
       ...(explore
         ? {
-            explore: (fixture: QaFixtureV1, commandId: string) =>
-              explore.execute(fixture, commandId),
+            explore: (
+              fixture: QaFixtureV1,
+              commandId: string,
+              tileIndex?: number,
+            ) => explore.execute(fixture, commandId, tileIndex),
           }
         : {}),
       fixtures,
       async start() {
         if (starting) throw new HttpFailure(409);
         starting = true;
+        let selectionLock: PoolClient | undefined;
         try {
+          selectionLock = await pool.connect();
+          await selectionLock.query("BEGIN");
+          // Serialize with explore while allowing CaseStore foreign-key KEY SHARE
+          // checks on its separate connection during open().
+          await selectionLock.query(
+            "SELECT id FROM campaigns WHERE id=$1 FOR NO KEY UPDATE",
+            [campaignId],
+          );
           if (currentCase) {
             const prior = await pool.query<{ status: string }>(
               "SELECT status FROM knowledge_cases_v1 WHERE campaign_id=$1 AND case_id=$2",
@@ -418,7 +451,7 @@ export async function createPostgresKnowledgeQa(
             tiles.length < 3 && attempts < WORLD_TILE_COUNT;
             attempts++, cursor = (cursor + 1) % WORLD_TILE_COUNT
           )
-            if ((!explore || cursor !== 999999) && !occupied.has(cursor))
+            if (!occupied.has(cursor))
               tiles.push({
                 tileIndex: cursor,
                 incumbentSchoolSlot: tiles.length === 2 ? 1 : 0,
@@ -435,7 +468,12 @@ export async function createPostgresKnowledgeQa(
           currentCase = caseId;
           return result;
         } finally {
-          starting = false;
+          try {
+            await selectionLock?.query("ROLLBACK");
+          } finally {
+            selectionLock?.release();
+            starting = false;
+          }
         }
       },
       async contribute(fixture, input) {
@@ -547,7 +585,7 @@ export async function createPostgresKnowledgeQa(
   } catch {
     await pool.end();
     throw new Error(
-      "QA database startup failed; verify disposable configuration and migrations 1-5 (also 6 when explore is enabled)",
+      "QA database startup failed; verify disposable configuration and migrations 1-5 (also 6-7 when explore is enabled)",
     );
   }
 }

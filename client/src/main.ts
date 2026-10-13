@@ -288,7 +288,10 @@ const world = new WorldView(
   (tile) => {
     selected = tile;
     updateTile();
-    explore();
+    window.dispatchEvent(new Event("r2pl:selected-tile"));
+    // In Knowledge QA, selection must NOT also debit M3 fixture-credits.
+    // The original M3 Explore button remains separately available.
+    if (!integratedQa) explore();
   },
   () => scheduleSubscribe(),
   (hovered) => {
@@ -309,7 +312,7 @@ function announceCameraMode(log: boolean): void {
   if (log) activity(`${label} camera · press I to toggle view`);
 }
 
-if (integratedQa) void mountKnowledgePanel(world);
+if (integratedQa) void mountKnowledgePanel(world, () => selected?.index);
 
 announceCameraMode(true);
 
@@ -441,6 +444,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
+  window.dispatchEvent(new Event("r2pl:selected-tile"));
   world.setSchool(player.slot);
   updateTile();
   status("Connecting…", false);

@@ -166,7 +166,12 @@ test("UI mounts once outside camera shortcut and never paints Knowledge into chu
     read("../scripts/play-integrated-knowledge-qa.ts"),
   ]);
   assert.equal(html.match(/id="knowledge-panel"/g)?.length, 1);
-  assert.equal(main.match(/void mountKnowledgePanel\(world\)/g)?.length, 1);
+  assert.equal(
+    main.match(
+      /void mountKnowledgePanel\(world,\s*\(\) => selected\?\.index\)/g,
+    )?.length,
+    1,
+  );
   assert.match(main, /ws:\/\/\$\{location.hostname\}:2567/);
   assert.match(panel, /if \(mounted\) return/);
   assert.match(panel, /clearInterval/);
