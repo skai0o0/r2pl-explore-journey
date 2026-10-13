@@ -21,6 +21,8 @@
     "migrate:m4d3": "node --experimental-strip-types scripts/migrate-m4d3.ts",
     "migrate:m4d3b": "node --experimental-strip-types scripts/migrate-m4d3b.ts",
     "bench:postgres": "node --experimental-strip-types scripts/bench-postgres.ts",
+    "build:knowledge-qa": "vite build client/qa-knowledge --outDir ../../dist/knowledge-qa --emptyOutDir",
+    "play:knowledge-qa": "npm run build:knowledge-qa && node --experimental-strip-types scripts/play-knowledge-qa.ts",
     "play:local": "npm run build:client && node --experimental-strip-types scripts/play-local.ts",
     "report:size": "node scripts/report-size.mjs"
   },
