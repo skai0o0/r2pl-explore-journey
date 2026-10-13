@@ -1,0 +1,110 @@
+[
+  {
+    "elapsedSeconds": 0.001,
+    "logicalActions": 0,
+    "applied": 0,
+    "noChange": 0,
+    "uniqueTiles": 0,
+    "overlapTiles": 0,
+    "schoolTiles": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "elapsedSeconds": 5.041,
+    "logicalActions": 332,
+    "applied": 293,
+    "noChange": 35,
+    "uniqueTiles": 235,
+    "overlapTiles": 58,
+    "schoolTiles": [
+      11,
+      21,
+      26,
+      32,
+      39,
+      46,
+      53,
+      65
+    ]
+  },
+  {
+    "elapsedSeconds": 10.085,
+    "logicalActions": 673,
+    "applied": 596,
+    "noChange": 72,
+    "uniqueTiles": 425,
+    "overlapTiles": 171,
+    "schoolTiles": [
+      28,
+      40,
+      53,
+      68,
+      78,
+      95,
+      107,
+      127
+    ]
+  },
+  {
+    "elapsedSeconds": 15.088,
+    "logicalActions": 1001,
+    "applied": 901,
+    "noChange": 99,
+    "uniqueTiles": 598,
+    "overlapTiles": 303,
+    "schoolTiles": [
+      38,
+      63,
+      80,
+      100,
+      119,
+      145,
+      160,
+      196
+    ]
+  },
+  {
+    "elapsedSeconds": 20.088,
+    "logicalActions": 1331,
+    "applied": 1201,
+    "noChange": 130,
+    "uniqueTiles": 754,
+    "overlapTiles": 447,
+    "schoolTiles": [
+      51,
+      84,
+      104,
+      134,
+      158,
+      189,
+      218,
+      263
+    ]
+  },
+  {
+    "elapsedSeconds": 40.268,
+    "logicalActions": 1331,
+    "applied": 1201,
+    "noChange": 130,
+    "uniqueTiles": 754,
+    "overlapTiles": 447,
+    "schoolTiles": [
+      51,
+      84,
+      104,
+      134,
+      158,
+      189,
+      218,
+      263
+    ]
+  }
+]

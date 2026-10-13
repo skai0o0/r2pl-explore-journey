@@ -1,0 +1,30 @@
+{
+  "scope": "synthetic-admin-observer",
+  "capabilities": {
+    "exploration": true,
+    "schoolFilteredViews": true,
+    "knowledgeOverlap": true,
+    "contest": false,
+    "defense": false,
+    "upkeep": false,
+    "decay": false,
+    "landmarkGameplay": false,
+    "rewards": false
+  },
+  "elapsedSeconds": 5.066,
+  "logicalActions": 25,
+  "applied": 24,
+  "noChange": 1,
+  "uniqueTiles": 24,
+  "overlapTiles": 0,
+  "schoolTiles": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+  ]
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "elapsedSeconds": 2.903,
+    "logicalActions": 80,
+    "applied": 74,
+    "noChange": 6,
+    "uniqueTiles": 72,
+    "overlapTiles": 2,
+    "schoolTiles": [
+      3,
+      5,
+      6,
+      8,
+      11,
+      11,
+      14,
+      16
+    ]
+  }
+]

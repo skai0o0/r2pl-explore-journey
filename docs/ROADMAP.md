@@ -107,3 +107,7 @@ Owner authorized feasible code and blocked-feature infrastructure preparation wi
 ## 2026-10-13 durable reward preparation continuation
 
 Owner continued feasible dev/preparation. [Reward transaction report](REWARD_PREPARATION_REPORT_2026-10-13.md): Aspire UniStop durable roll/cooldown, actor-private fixed-reward Chest, atomic Key/inventory/ledger/outbox and crash/retry delivered in r2pl_prep only. 94/94 regression tests pass. Nitro/Predator Gift-bearing profiles fail closed before RNG; Chest gacha/Gifts remain gated. CLI demo is available; no client reward UI or v1 opcode was added. This is preparation, not M6 completion or production authorization. Stop for review.
+
+## 2026-10-13 eight-school bot simulation
+
+Owner requested multi-speed school bots. [Simulator guide](BOT_SIMULATION.md) and [measured report](BOT_SIMULATION_REPORT_2026-10-13.md) deliver private-school WebSocket exploration, eight-way rendezvous/overlap plus pairwise layouts, retry/reconnect and PostgreSQL integrity checks. 102/102 regression passes. Full contest/defense/upkeep and production roster/layout remain gated; no protocol change or M5/M6 completion. First fast workload exposed lease-recovery delay, preserved in the report; a repeat passed with a 45s drain window. Ready for owner review.

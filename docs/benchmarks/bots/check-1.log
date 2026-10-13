@@ -1,0 +1,7 @@
+{
+  "status": "fulfilled",
+  "value": {
+    "code": 1,
+    "output": "scripts\\simulate-school-bots.ts format ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n  × Formatter would have printed the following content:\n  \n    367 367 │         metrics: {\n    368 368 │           ackLatencyMs: latencySummary(peers.flatMap((p) => p.latencies)),\n    369     │ - ········ownReplicaVisibilityMs:·latencySummary(visible.flatMap((v)·=>·v.samples)),\n        369 │ + ········ownReplicaVisibilityMs:·latencySummary(\n        370 │ + ··········visible.flatMap((v)·=>·v.samples),\n        371 │ + ········),\n    370 372 │           missingVisibleSamples: visible.reduce((n, v) => n + v.missing, 0),\n    371 373 │           retries: peers.reduce((n, p) => n + p.retries, 0),\n  \n\nChecked 85 files in 58ms. No fixes applied.\nFound 1 error.\ncheck ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n  × Some errors were emitted while running checks.\n  \n\n"
+  }
+}

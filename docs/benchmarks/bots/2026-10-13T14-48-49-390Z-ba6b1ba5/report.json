@@ -1,0 +1,465 @@
+{
+  "version": 1,
+  "scope": "synthetic-admin-simulation",
+  "status": "completed",
+  "termination": "duration",
+  "runId": "2026-10-13T14-48-49-390Z-ba6b1ba5",
+  "campaignId": "70c71152-f285-451d-8103-98dd9d1371cc",
+  "retainedDatabaseData": false,
+  "capabilities": {
+    "exploration": true,
+    "schoolFilteredViews": true,
+    "knowledgeOverlap": true,
+    "contest": false,
+    "defense": false,
+    "upkeep": false,
+    "decay": false,
+    "landmarkGameplay": false,
+    "rewards": false
+  },
+  "limitations": [
+    "Knowledge overlap uses fixture-credit ruleVersion 0; not a production shared contest.",
+    "No contest/defense/upkeep/decay command exists in protocol v1.",
+    "School labels are presentation aliases; IDs/slots/layout are synthetic, not production onboarding.",
+    "Same-process server and generator on one host; no launch capacity claim."
+  ],
+  "options": {
+    "duration": 30,
+    "botsPerSchool": 3,
+    "rates": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2,
+      3,
+      5
+    ],
+    "preset": "mixed",
+    "layout": "contact",
+    "seed": 20261013,
+    "credits": 500,
+    "maxActions": 10000,
+    "retryEvery": 10,
+    "reconnectEvery": 20,
+    "output": "C:\\Users\\Nem\\Desktop\\explore-journey\\docs\\benchmarks\\bots",
+    "regionSize": 128,
+    "keepData": false
+  },
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "release": "10.0.26200",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "totalMemoryBytes": 34164097024,
+    "topology": "same-process durable server + WebSocket bots"
+  },
+  "elapsedSeconds": 30.006,
+  "logicalActions": 1244,
+  "wireCommands": 1409,
+  "intents": {
+    "expand": 515,
+    "rendezvous": 631,
+    "revisit": 98
+  },
+  "coverage": {
+    "uniqueTiles": 758,
+    "overlapTiles": 373,
+    "pairCounts": {
+      "2:3": 33,
+      "4:5": 102,
+      "6:7": 234,
+      "0:1": 4
+    },
+    "schoolTiles": [
+      20,
+      40,
+      61,
+      82,
+      121,
+      167,
+      241,
+      399
+    ]
+  },
+  "integrity": {
+    "schoolViewsConverged": true,
+    "ackMapMatchesDatabase": true,
+    "walletConservation": true,
+    "idempotencyRecords": true,
+    "outboxDrained": true,
+    "ownVisibleSamplesComplete": true
+  },
+  "metrics": {
+    "ackLatencyMs": {
+      "count": 1409,
+      "p50": 19.297,
+      "p95": 48.215,
+      "p99": 66.662,
+      "max": 106.137
+    },
+    "ownReplicaVisibilityMs": {
+      "count": 1131,
+      "p50": 28.354,
+      "p95": 69.773,
+      "p99": 98.571,
+      "max": 135.607
+    },
+    "missingVisibleSamples": 0,
+    "retries": 165,
+    "reconnects": 52,
+    "resyncs": 0,
+    "m2FramesReceived": 5156,
+    "m2BytesReceived": 2845355
+  },
+  "schools": [
+    {
+      "label": "HCMUT",
+      "fixtureId": "fixture-school-0",
+      "slot": 0,
+      "requestedPerBotRate": 0.25,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 20,
+      "noChange": 3,
+      "rejected": 0,
+      "knowledgeTiles": 20
+    },
+    {
+      "label": "HCMCOU",
+      "fixtureId": "fixture-school-1",
+      "slot": 1,
+      "requestedPerBotRate": 0.5,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 40,
+      "noChange": 3,
+      "rejected": 0,
+      "knowledgeTiles": 40
+    },
+    {
+      "label": "DTU",
+      "fixtureId": "fixture-school-2",
+      "slot": 2,
+      "requestedPerBotRate": 0.75,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 61,
+      "noChange": 5,
+      "rejected": 0,
+      "knowledgeTiles": 61
+    },
+    {
+      "label": "DHHP",
+      "fixtureId": "fixture-school-3",
+      "slot": 3,
+      "requestedPerBotRate": 1,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 82,
+      "noChange": 8,
+      "rejected": 0,
+      "knowledgeTiles": 82
+    },
+    {
+      "label": "HSU",
+      "fixtureId": "fixture-school-4",
+      "slot": 4,
+      "requestedPerBotRate": 1.5,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 121,
+      "noChange": 14,
+      "rejected": 0,
+      "knowledgeTiles": 121
+    },
+    {
+      "label": "HUCE",
+      "fixtureId": "fixture-school-5",
+      "slot": 5,
+      "requestedPerBotRate": 2,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 167,
+      "noChange": 11,
+      "rejected": 0,
+      "knowledgeTiles": 167
+    },
+    {
+      "label": "NTU",
+      "fixtureId": "fixture-school-6",
+      "slot": 6,
+      "requestedPerBotRate": 3,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 241,
+      "noChange": 26,
+      "rejected": 0,
+      "knowledgeTiles": 241
+    },
+    {
+      "label": "HCMIU",
+      "fixtureId": "fixture-school-7",
+      "slot": 7,
+      "requestedPerBotRate": 5,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 399,
+      "noChange": 43,
+      "rejected": 0,
+      "knowledgeTiles": 399
+    }
+  ],
+  "serverMetrics": {
+    "counters": {
+      "relay_poll_triggers": 2725,
+      "outbox_claim_queries": 2514,
+      "outbox_events_claimed": 1131,
+      "connections": 76,
+      "outbound_frames": 5156,
+      "outbound_bytes": 2845355,
+      "inbound_frames": 1485,
+      "snapshots_enqueued": 306,
+      "subscription_changes": 76,
+      "durable_commands": 1244,
+      "fanout_recipients": 3365,
+      "outbox_events_delivered": 1131,
+      "durable_retries": 165,
+      "disconnects": 52,
+      "durable_gap_snapshots": 2
+    },
+    "histograms": {
+      "outbox_claim_query_ms": {
+        "count": 2514,
+        "p50": 1.3916999995708466,
+        "p95": 5.714300001040101,
+        "p99": 7.598299998790026,
+        "max": 26.060600001364946
+      },
+      "outbox_claim_batch_size": {
+        "count": 2514,
+        "p50": 0,
+        "p95": 2,
+        "p99": 3,
+        "max": 6
+      },
+      "socket_buffered_bytes": {
+        "count": 5156,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "outbound_queue_depth": {
+        "count": 5156,
+        "p50": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "sector_queue_depth": {
+        "count": 2844,
+        "p50": 1,
+        "p95": 3,
+        "p99": 4,
+        "max": 5
+      },
+      "sector_queue_wait_ms": {
+        "count": 2844,
+        "p50": 0.014100000000325963,
+        "p95": 22.16489999999976,
+        "p99": 38.94580000000133,
+        "max": 78.20780000000013
+      },
+      "sector_snapshot_queue_wait_ms": {
+        "count": 304,
+        "p50": 0.002099999997881241,
+        "p95": 1.4357999999992899,
+        "p99": 13.590200000002369,
+        "max": 28.464599999999336
+      },
+      "sector_execute_ms": {
+        "count": 2844,
+        "p50": 1.8167999999996027,
+        "p95": 31.88449999999648,
+        "p99": 45.14570000000094,
+        "max": 64.51200000000063
+      },
+      "sector_snapshot_execute_ms": {
+        "count": 304,
+        "p50": 1.129399999999805,
+        "p95": 3.382100000000719,
+        "p99": 5.7423000000017055,
+        "max": 7.10570000000007
+      },
+      "sector_command_queue_wait_ms": {
+        "count": 1409,
+        "p50": 0.03649999999834108,
+        "p95": 27.781800000000658,
+        "p99": 43.524999999999636,
+        "max": 78.20780000000013
+      },
+      "sector_command_execute_ms": {
+        "count": 1409,
+        "p50": 12.006800000000112,
+        "p95": 38.170900000000984,
+        "p99": 49.646999999999025,
+        "max": 64.51200000000063
+      },
+      "durable_pool_wait_ms": {
+        "count": 1409,
+        "p50": 0.04830000000038126,
+        "p95": 0.38580000000001746,
+        "p99": 0.9297999999998865,
+        "max": 47.50249999999869
+      },
+      "durable_transaction_ms": {
+        "count": 1409,
+        "p50": 11.797699999999168,
+        "p95": 37.01169999999911,
+        "p99": 48.36670000000231,
+        "max": 64.21680000000015
+      },
+      "durable_chunk_lock_ms": {
+        "count": 1409,
+        "p50": 0.3919999999998254,
+        "p95": 1.9007000000019616,
+        "p99": 2.9473000000007232,
+        "max": 7.170400000000882
+      },
+      "commit_to_ack_enqueue_ms": {
+        "count": 1409,
+        "p50": 0.056899999999586726,
+        "p95": 0.2180999999982305,
+        "p99": 0.288300000000163,
+        "max": 0.9768000000003667
+      },
+      "command_ack_ms": {
+        "count": 1409,
+        "p50": 17.97729999999865,
+        "p95": 46.58099999999831,
+        "p99": 63.3663000000015,
+        "max": 102.75570000000153
+      },
+      "ack_delivery_ms": {
+        "count": 1409,
+        "p50": 0.1202000000012049,
+        "p95": 0.5146999999997206,
+        "p99": 0.8632999999999811,
+        "max": 2.6556999999993423
+      },
+      "projection_decode_ms": {
+        "count": 1131,
+        "p50": 0.010399999096989632,
+        "p95": 0.03460000082850456,
+        "p99": 0.057600000873208046,
+        "max": 0.1749999988824129
+      },
+      "commit_to_claim_return_ms": {
+        "count": 1130,
+        "p50": 2.0377999991178513,
+        "p95": 16.31099999882281,
+        "p99": 28.542299998924136,
+        "max": 50.4886000007391
+      },
+      "sector_relay_queue_wait_ms": {
+        "count": 1131,
+        "p50": 0.003400000001420267,
+        "p95": 15.964200000000346,
+        "p99": 30.241000000001804,
+        "max": 73.47859999999855
+      },
+      "delta_encode_ms": {
+        "count": 1131,
+        "p50": 0.009300000001530861,
+        "p95": 0.030400000001463923,
+        "p99": 0.049399999999877764,
+        "max": 2.2510000000002037
+      },
+      "fanout_candidates": {
+        "count": 1131,
+        "p50": 3,
+        "p95": 3,
+        "p99": 3,
+        "max": 3
+      },
+      "fanout_enqueue_ms": {
+        "count": 1131,
+        "p50": 0.014599999998608837,
+        "p95": 0.047200000000884756,
+        "p99": 0.06720000000132131,
+        "max": 1.0599999999976717
+      },
+      "commit_to_delta_enqueue_ms": {
+        "count": 1130,
+        "p50": 4.368200000375509,
+        "p95": 28.60329999960959,
+        "p99": 40.06160000152886,
+        "max": 76.83799999952316
+      },
+      "sector_relay_execute_ms": {
+        "count": 1131,
+        "p50": 0.1489000000001397,
+        "p95": 0.5659000000014203,
+        "p99": 0.9557999999997264,
+        "max": 2.6278999999994994
+      },
+      "delta_delivery_ms": {
+        "count": 3365,
+        "p50": 0.13479999999981374,
+        "p95": 0.5161000000007334,
+        "p99": 0.8796000000002095,
+        "max": 2.4435000000012224
+      },
+      "outbox_mark_delivered_ms": {
+        "count": 1131,
+        "p50": 0.6207999996840954,
+        "p95": 1.9895999990403652,
+        "p99": 3.0212999992072582,
+        "max": 8.06559999845922
+      },
+      "outbox_claim_to_delivered_ms": {
+        "count": 1131,
+        "p50": 1.581700000911951,
+        "p95": 19.9660000000149,
+        "p99": 34.34190000034869,
+        "max": 76.06790000014007
+      }
+    }
+  },
+  "failures": []
+}

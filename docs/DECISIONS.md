@@ -80,3 +80,7 @@ Owner instruction: prioritize feasible completion, use Gamenote V2 as the latest
 ## 2026-10-13 continuation — durable synthetic rewards
 
 Owner continued the feasible development/preparation scope. Codex integrated durable Aspire UniStop and fixed-reward Chest transactions in isolated preparation storage. Exact Gift-bearing tables remain unchanged and inactive; no conditional redraw, production Key-tier mapping, stock or Gift eligibility was selected. Protocol v1 and PRODUCTION_DISABLED remain unchanged. [Report](REWARD_PREPARATION_REPORT_2026-10-13.md), 94/94 passing regression; ready for owner review.
+
+## 2026-10-13 owner-requested school bots
+
+Authorized synthetic multi-school development simulation: eight display aliases, generic fixture registry, isolated loopback PostgreSQL campaign, existing v1 exploration command and private replicas. Public shared/pairwise rendezvous represents overlap only; no approval of contest, defense, upkeep, final map or production slot mapping. [Guide](BOT_SIMULATION.md), [report and observed relay recovery issue](BOT_SIMULATION_REPORT_2026-10-13.md).
