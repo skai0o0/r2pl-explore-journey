@@ -7,17 +7,29 @@ const BASE = "aws-0-ap-southeast-1.pooler.supabase.com";
 
 test("M4-D2 allows only approved Supabase QA pooler, TLS required", () => {
   const approved = `postgresql://postgres.${QA_REF}:test-password@${BASE}:5432/postgres?sslmode=require`;
-  assert.equal(disposableDatabaseUrl(approved), approved);
+  assert.equal(
+    disposableDatabaseUrl(approved),
+    approved.replace("sslmode=require", "sslmode=verify-full"),
+  );
   const direct = `postgresql://postgres:test-password@db.${QA_REF}.supabase.co:5432/postgres?sslmode=require`;
-  assert.equal(disposableDatabaseUrl(direct), direct);
+  assert.equal(
+    disposableDatabaseUrl(direct),
+    direct.replace("sslmode=require", "sslmode=verify-full"),
+  );
   const officialUri = approved.replace("?sslmode=require", "");
-  assert.equal(disposableDatabaseUrl(officialUri), approved);
+  assert.equal(
+    disposableDatabaseUrl(officialUri),
+    approved.replace("sslmode=require", "sslmode=verify-full"),
+  );
   assert.equal(
     disposableDatabaseUrl(disposableDatabaseUrl(officialUri)),
-    approved,
+    approved.replace("sslmode=require", "sslmode=verify-full"),
   );
   const officialDirect = direct.replace("?sslmode=require", "");
-  assert.equal(disposableDatabaseUrl(officialDirect), direct);
+  assert.equal(
+    disposableDatabaseUrl(officialDirect),
+    direct.replace("sslmode=require", "sslmode=verify-full"),
+  );
   assert.throws(() =>
     disposableDatabaseUrl(
       approved.replace("sslmode=require", "sslmode=disable"),

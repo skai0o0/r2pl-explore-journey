@@ -38,9 +38,15 @@ export function disposableDatabaseUrl(value: string): string {
       "Allowed targets: local disposable PostgreSQL or exact r2pl-m4d-qa Supabase database over TLS",
     );
   }
-  // Supabase Connect often omits sslmode. Upgrade QA URI to TLS, never silently disable it.
-  if (qa && modes.length === 0) {
-    url.searchParams.set("sslmode", "require");
+  // Explicit verify-full avoids version-dependent require/verify-ca semantics.
+  // The CA must be trusted by Node (e.g., via NODE_EXTRA_CA_CERTS with the
+  // root certificate downloaded from the authenticated Supabase dashboard).
+  if (qa) {
+    if (url.searchParams.has("uselibpqcompat"))
+      throw new Error(
+        "QA connections may not override strict TLS verification",
+      );
+    url.searchParams.set("sslmode", "verify-full");
     return url.toString();
   }
   return value;
