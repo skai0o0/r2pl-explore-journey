@@ -44,6 +44,21 @@
         <p id="action-status" data-kind="normal">Click or tap a tile to explore</p>
       </section>
       <section class="activity-panel glass" aria-label="Recent actions"><p class="eyebrow">EXPEDITION LOG <span><b id="pending-count">0</b> pending</span></p><ul id="activity-list"></ul></section>
+      <details id="knowledge-panel" class="knowledge-panel glass" hidden>
+        <summary>DEV Knowledge QA - separate read-only overlay</summary>
+        <p>M3 fixture-world remains separate. Knowledge scores cover synthetic projection only; no million-tile import.</p>
+        <label>Knowledge identity <select id="qa-player"></select></label>
+        <p id="qa-wallet">Personal Points: pending</p><p id="qa-case">No case</p>
+        <p id="qa-deadlines"></p><p id="qa-scores"></p>
+        <button id="qa-start" type="button" disabled>Begin synthetic succession (School 0)</button>
+        <label>Points <input id="qa-points" type="number" min="1" max="50" value="1" /></label>
+        <button id="qa-contribute" type="button" disabled>Contribute (School 1)</button>
+        <button id="qa-retry" type="button" disabled>Retry same UUID</button>
+        <button id="qa-sync" type="button" disabled>Project / Sync</button>
+        <p id="qa-status" role="status"></p><p id="qa-overlay-count"></p>
+        <ul id="qa-tiles" aria-label="Read-only Knowledge markers"></ul>
+        <ul id="qa-events" aria-label="Recent Knowledge QA events"></ul>
+      </details>
       <footer class="status-strip glass"><span class="strip-hint">DRAG TO PAN · SCROLL TO ZOOM · CLICK TO EXPLORE</span><span id="strip-hover" class="strip-hover">CURSOR: — / —</span><span><b id="viewport-count">0</b> local chunks · server-authoritative fog</span></footer>
       <div class="fixture-banner">DEVELOPMENT FIXTURE · Synthetic credits and exploration rule v0 · No rewards or official school mapping</div>
     </main>

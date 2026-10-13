@@ -13,6 +13,7 @@ import {
   REASON,
 } from "../../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import { mountKnowledgePanel } from "./knowledgePanel.ts";
 import {
   deriveDevCreditState,
   type PickedTile,
@@ -69,6 +70,13 @@ const ui = {
   hover: get<HTMLElement>("strip-hover"),
 };
 
+const integratedQa = await fetch("/api/qa/integrated-mode", {
+  cache: "no-store",
+})
+  .then(
+    async (response) => response.ok && (await response.json()).enabled === true,
+  )
+  .catch(() => false);
 const sdk = new ColyseusSDK(`ws://${location.hostname}:2567`);
 let player: Player =
   players.find(
@@ -300,6 +308,8 @@ function announceCameraMode(log: boolean): void {
   );
   if (log) activity(`${label} camera · press I to toggle view`);
 }
+
+if (integratedQa) void mountKnowledgePanel(world);
 
 announceCameraMode(true);
 

@@ -22,6 +22,33 @@ export interface PickedTile {
   readonly local: number;
 }
 
+export interface KnowledgeMarker {
+  tileIndex: number;
+  title: string;
+}
+export function boundedKnowledgeMarkers(
+  tiles: readonly { tileIndex: number; schoolSlots: number[] }[],
+): KnowledgeMarker[] {
+  const seen = new Set<number>();
+  return tiles
+    .filter((t) => {
+      if (
+        !Number.isInteger(t.tileIndex) ||
+        t.tileIndex < 0 ||
+        t.tileIndex >= WORLD_WIDTH * WORLD_HEIGHT ||
+        seen.has(t.tileIndex)
+      )
+        return false;
+      seen.add(t.tileIndex);
+      return true;
+    })
+    .slice(0, 48)
+    .map((t) => ({
+      tileIndex: t.tileIndex,
+      title: `QA tile ${t.tileIndex}: Schools ${t.schoolSlots.filter((s) => s === 0 || s === 1).join(", ") || "none"}`,
+    }));
+}
+
 export type CameraMode = "isometric" | "top-down";
 
 export type DevCreditState = "unknown" | "free" | "affordable" | "insufficient";
@@ -516,7 +543,31 @@ export class WorldView {
     this.#render();
   }
 
+  #knowledgeMarkers: { marker: KnowledgeMarker; element: HTMLElement }[] = [];
+  setKnowledgeQaOverlay(markers: readonly KnowledgeMarker[]): void {
+    for (const item of this.#knowledgeMarkers) item.element.remove();
+    this.#knowledgeMarkers = markers
+      .slice(0, 48)
+      .filter(
+        (m) =>
+          Number.isInteger(m.tileIndex) &&
+          m.tileIndex >= 0 &&
+          m.tileIndex < WORLD_WIDTH * WORLD_HEIGHT,
+      )
+      .map((marker) => {
+        const element = document.createElement("div");
+        element.className = "knowledge-qa-marker";
+        element.textContent = "?";
+        element.title = marker.title;
+        element.setAttribute("aria-label", marker.title);
+        this.#host.append(element);
+        return { marker, element };
+      });
+    this.#render();
+  }
+
   dispose(): void {
+    this.setKnowledgeQaOverlay([]);
     window.clearTimeout(this.#revealTimer);
     window.clearTimeout(this.#rejectTimer);
     if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
@@ -1019,6 +1070,14 @@ export class WorldView {
     this.#renderer.setSize(width, height, false);
     this.#syncCamera(width, height);
     this.#updateReticles();
+    for (const { marker, element } of this.#knowledgeMarkers)
+      Object.assign(
+        element.style,
+        this.#position(
+          (marker.tileIndex % WORLD_WIDTH) + 0.5,
+          Math.floor(marker.tileIndex / WORLD_WIDTH) + 0.5,
+        ),
+      );
     this.#renderer.render(this.#scene, this.#camera);
 
     markers.forEach((marker, index) => {

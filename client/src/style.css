@@ -985,3 +985,46 @@ body[data-school="dusk"] .tile-panel button small {
     font-size: 22px;
   }
 }
+
+.knowledge-panel {
+  position: absolute;
+  top: 90px;
+  right: 18px;
+  width: min(350px, calc(100vw - 36px));
+  max-height: 65vh;
+  overflow: auto;
+  padding: 14px;
+  z-index: 30;
+  color: #f5d8ff;
+  border: 1px solid #d58aff;
+}
+.knowledge-panel[hidden] {
+  display: none;
+}
+.knowledge-panel summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+.knowledge-panel p {
+  margin: 10px 0;
+  font-size: 12px;
+}
+.knowledge-panel :is(button, select, input) {
+  margin: 4px 0;
+  padding: 6px;
+  max-width: 100%;
+}
+.knowledge-panel ul {
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.knowledge-qa-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: #d58aff;
+  font-size: 24px;
+  pointer-events: none;
+  z-index: 4;
+  text-shadow: 0 0 3px #000;
+}
