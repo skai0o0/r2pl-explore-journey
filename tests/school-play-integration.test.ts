@@ -6,6 +6,7 @@ import { BotPeer } from "../scripts/simulation/BotPeer.ts";
 import { botDatabase } from "../scripts/simulation/config.ts";
 import { cleanupBotFixture } from "../scripts/simulation/fixture.ts";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
+import { cleanupSchoolRewards } from "../server/integration/SchoolRewardFixture.ts";
 import {
   LEGACY_DEV_SESSION,
   parseDevSession,
@@ -138,6 +139,7 @@ test("eight-school playable server shares durable bot/student world with actor-p
   } finally {
     await peer?.close();
     await server?.close();
+    await cleanupSchoolRewards(pool, campaignId);
     await cleanupBotFixture(pool, campaignId);
     await pool.end();
   }

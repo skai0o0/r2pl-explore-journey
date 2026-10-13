@@ -37,3 +37,7 @@ The official school registry, campaign exploration cost, production identity, re
 ## Eight-school playable fixture (2026-10-14)
 
 Set R2PL_BOT_SIMULATION=1 and R2PL_BOT_DATABASE_URL to an explicitly disposable loopback r2pl_prep_test_* / r2pl_bot_test_* database, then run npm run play:schools. Open http://127.0.0.1:4176 (WebSocket2568). Sixteen local human aliases and24 bots share a persistent synthetic campaign and existing Three.js renderer. Credits/world are preserved on restart; bots run up to10 minutes and can exhaust their wallet/frontier. Full gameplay/production are not enabled. [Increment scope and verification](docs/COMPLETION_INCREMENT_01_2026-10-14.md), [remaining completion tasks](docs/COMPLETION_PROGRESS.md).
+
+## Shared dev reward/account API (increment02)
+
+play:schools also provisions synthetic Aspire/fixed Chest, starter Key1 and private inventory/catalog/receipt events. Reward Points use the same fixture-credit wallet as exploration; real running conversion/Gifts remain inactive. With the same R2PL_BOT_SIMULATION/R2PL_BOT_DATABASE_URL variables, npm run demo:play-rewards runs an isolated real HTTP/WebSocket loop and cleans only its random fixtures. Existing main gameplay UI has no reward buttons yet; see docs/FRONTEND_REWARD_HANDOFF_2026-10-14.md and docs/COMPLETION_INCREMENT_02_2026-10-14.md.

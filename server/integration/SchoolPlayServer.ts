@@ -11,6 +11,8 @@ import { ACK_STATUS } from "../../shared/protocol/m2.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import { DevAccountService } from "./DevAccountService.ts";
 import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
+import { provisionSchoolRewards } from "./SchoolRewardFixture.ts";
+import { SchoolRewardHttp } from "./SchoolRewardHttp.ts";
 
 /** One local dev writer per persistent campaign. Not distributed lease/fencing. */
 export async function createSchoolPlayServer(
@@ -74,6 +76,8 @@ async function startSchoolPlayServer(
   campaignId?: string,
 ) {
   const fixture = await seedSchoolPlay(pool, campaignId);
+  await provisionSchoolRewards(pool, fixture);
+  const rewardHttp = new SchoolRewardHttp(pool, fixture);
   const accounts = new DevAccountService(
     pool,
     fixture.campaignId,
@@ -112,12 +116,26 @@ async function startSchoolPlayServer(
   const web = createServer(async (request, response) => {
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
+    let url: URL;
+    try {
+      url = new URL(request.url ?? "/", "http://127.0.0.1");
+    } catch {
+      response.writeHead(400).end();
+      return;
+    }
+    const path = url.pathname;
+    const token = request.headers.authorization?.replace(/^Bearer /, "");
+    if (
+      path === "/api/fixture/rewards" ||
+      path === "/api/fixture/rewards/events"
+    ) {
+      await rewardHttp.handle(request, response, url, token);
+      return;
+    }
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405).end();
       return;
     }
-    const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
-    const token = request.headers.authorization?.replace(/^Bearer /, "");
     const json = (value: unknown) => {
       response.setHeader("Content-Type", "application/json; charset=utf-8");
       response.end(
@@ -199,6 +217,7 @@ async function startSchoolPlayServer(
       response.end();
     }
   });
+  web.requestTimeout = 10000;
   try {
     await new Promise<void>((ready, reject) => {
       web.once("error", reject);

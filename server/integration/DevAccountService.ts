@@ -29,19 +29,29 @@ export class DevAccountService {
     openingBalance: string;
     ledgerNet: string;
     ledgerConserved: boolean;
+    inventory: {
+      credits: string;
+      crystals: string;
+      treasureMaps: string;
+      keys: string;
+    };
   } | null> {
     const actor = token ? this.#actors.get(token) : undefined;
     if (!actor) return null;
-    const row = (
+    const rows = (
       await this.#pool.query<{
+        resource: string;
         balance: string;
         opening_balance: string;
         ledger_net: string;
       }>(
-        "SELECT balance::text,opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.ledger_entries l WHERE l.campaign_id=w.campaign_id AND l.actor_id=w.actor_id AND l.resource=w.resource),0)::text AS ledger_net FROM r2pl_v2.wallet_accounts w JOIN r2pl_v2.campaign_schools s ON s.campaign_id=w.campaign_id AND s.slot=$3 WHERE w.campaign_id=$1 AND w.actor_id=$2 AND w.resource='fixture-credit'",
+        "SELECT w.resource,w.balance::text,w.opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.ledger_entries l WHERE l.campaign_id=w.campaign_id AND l.actor_id=w.actor_id AND l.resource=w.resource),0)::text AS ledger_net FROM r2pl_v2.wallet_accounts w JOIN r2pl_v2.campaign_schools s ON s.campaign_id=w.campaign_id AND s.slot=$3 WHERE w.campaign_id=$1 AND w.actor_id=$2 AND w.resource IN ('fixture-credit','fixture-crystals','fixture-treasure-map','fixture-key')",
         [this.#campaignId, actor.actorId, actor.schoolSlot],
       )
-    ).rows[0];
+    ).rows;
+    const row = rows.find((r) => r.resource === "fixture-credit");
+    const balance = (resource: string) =>
+      rows.find((r) => r.resource === resource)?.balance ?? "0";
     if (!row) return null;
     return {
       name: actor.name,
@@ -53,9 +63,17 @@ export class DevAccountService {
       resource: "fixture-credit",
       openingBalance: row.opening_balance,
       ledgerNet: row.ledger_net,
-      ledgerConserved:
-        BigInt(row.balance) ===
-        BigInt(row.opening_balance) + BigInt(row.ledger_net),
+      ledgerConserved: rows.every(
+        (r) =>
+          BigInt(r.balance) ===
+          BigInt(r.opening_balance) + BigInt(r.ledger_net),
+      ),
+      inventory: {
+        credits: balance("fixture-credit"),
+        crystals: balance("fixture-crystals"),
+        treasureMaps: balance("fixture-treasure-map"),
+        keys: balance("fixture-key"),
+      },
     };
   }
   async receipts(
@@ -71,7 +89,7 @@ export class DevAccountService {
         resource: string;
         amount: string;
       }>(
-        "SELECT c.status,'fixture-credit'::text AS resource,COALESCE(l.amount,0)::text AS amount FROM r2pl_v2.command_results c LEFT JOIN r2pl_v2.ledger_entries l ON l.campaign_id=c.campaign_id AND l.actor_id=c.actor_id AND l.command_key=c.command_key AND l.resource='fixture-credit' WHERE c.campaign_id=$1 AND c.actor_id=$2 ORDER BY c.created_at DESC LIMIT 10",
+        "SELECT c.status,COALESCE(l.resource,'fixture-credit')::text AS resource,COALESCE(l.amount,0)::text AS amount FROM r2pl_v2.command_results c LEFT JOIN r2pl_v2.ledger_entries l ON l.campaign_id=c.campaign_id AND l.actor_id=c.actor_id AND l.command_key=c.command_key WHERE c.campaign_id=$1 AND c.actor_id=$2 ORDER BY c.created_at DESC LIMIT 10",
         [this.#campaignId, actor.actorId],
       )
     ).rows;

@@ -21,6 +21,11 @@ import {
 import type { CampaignBinding } from "./CampaignProvider.ts";
 import { assertBinding } from "./PgRunningPreparation.ts";
 
+import type {
+  PreparationResource,
+  RewardWalletAdapter,
+} from "./RewardWalletAdapter.ts";
+
 const resources = {
   points: "fixture-points",
   crystals: "fixture-crystals",
@@ -42,13 +47,14 @@ export interface RewardPreparationResult {
   readonly kind: "committed" | "replay";
   readonly receipt: RewardReceipt;
 }
-/** Synthetic authoritative transaction adapter only; never mounted in the live room/API.
+/** Synthetic authoritative transaction adapter only; may be mounted only in the guarded synthetic school-play API.
  * Inventory, discovery and Key catalog are fixtures, not production tier mappings.
  */
 export class PgRewardPreparation {
   readonly #pool: Pool;
   readonly #ticket: () => number;
   readonly #clock: (() => number) | undefined;
+  readonly #wallet: RewardWalletAdapter | undefined;
   constructor(
     pool: Pool,
     config: {
@@ -56,6 +62,7 @@ export class PgRewardPreparation {
       readonly ruleVersion: typeof REWARD_PREPARATION_VERSION;
       readonly ticketSource?: () => number;
       readonly clock?: () => number;
+      readonly wallet?: RewardWalletAdapter;
     },
   ) {
     if (
@@ -66,6 +73,7 @@ export class PgRewardPreparation {
     this.#pool = pool;
     this.#ticket = config.ticketSource ?? (() => randomInt(1000));
     this.#clock = config.clock;
+    this.#wallet = config.wallet;
   }
   async apply(
     binding: CampaignBinding,
@@ -74,7 +82,15 @@ export class PgRewardPreparation {
     assertBinding(binding);
     binding = Object.freeze({ ...binding });
     const command = parseRewardCommand(input);
-    const hash = createHash("sha256").update(JSON.stringify(command)).digest();
+    const hash = createHash("sha256")
+      .update(
+        JSON.stringify(
+          this.#wallet
+            ? { walletVersion: this.#wallet.version, command }
+            : command,
+        ),
+      )
+      .digest();
     const db = await this.#pool.connect();
     try {
       await db.query("BEGIN");
@@ -109,6 +125,7 @@ export class PgRewardPreparation {
         await db.query("COMMIT");
         return { kind: "replay", receipt: previous.rows[0].result };
       }
+      await this.#wallet?.reserve(db, binding, command, hash);
       // Discovery first: hidden and nonexistent target IDs have the same actor-private result.
       const discovered = await db.query(
         "SELECT 1 FROM r2pl_prep.reward_discoveries WHERE campaign_id=$1 AND actor_id=$2 AND target_id=$3 FOR SHARE",
@@ -188,12 +205,17 @@ export class PgRewardPreparation {
         );
         if (claimed.rowCount) rejection = "NOT_AVAILABLE";
         else {
-          const key = await db.query<{ balance: string }>(
-            "SELECT balance FROM r2pl_prep.reward_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-key' FOR UPDATE",
-            [binding.campaignId, binding.actorId],
-          );
-          if (!key.rows[0] || BigInt(key.rows[0].balance) < 1n)
-            rejection = "KEY_REQUIRED";
+          const keyBalance = this.#wallet
+            ? await this.#wallet.keyBalance(db, binding)
+            : BigInt(
+                (
+                  await db.query<{ balance: string }>(
+                    "SELECT balance FROM r2pl_prep.reward_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-key' FOR UPDATE",
+                    [binding.campaignId, binding.actorId],
+                  )
+                ).rows[0]?.balance ?? "0",
+              );
+          if (keyBalance < 1n) rejection = "KEY_REQUIRED";
           else reward = parseFixtureReward(target.fixed_reward);
         }
       }
@@ -219,12 +241,15 @@ export class PgRewardPreparation {
       if (!rejection) {
         if (!reward) throw new Error("Missing planned fixture reward");
         if (command.kind === "open_chest") {
-          const spend = await db.query(
-            "UPDATE r2pl_prep.reward_accounts SET balance=balance-1 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-key' AND balance>=1 RETURNING balance",
-            [binding.campaignId, binding.actorId],
-          );
-          if (spend.rowCount !== 1)
-            throw new Error("Fixture Key spend lost serialization");
+          if (this.#wallet) await this.#wallet.spendKey(db, binding);
+          else {
+            const spend = await db.query(
+              "UPDATE r2pl_prep.reward_accounts SET balance=balance-1 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-key' AND balance>=1 RETURNING balance",
+              [binding.campaignId, binding.actorId],
+            );
+            if (spend.rowCount !== 1)
+              throw new Error("Fixture Key spend lost serialization");
+          }
           await this.#ledger(db, binding, command, "fixture-key", "spend", -1n);
           await db.query(
             "INSERT INTO r2pl_prep.reward_chest_claims(campaign_id,target_id,actor_id,command_key) VALUES($1,$2,$3,$4)",
@@ -241,15 +266,23 @@ export class PgRewardPreparation {
             [binding.campaignId, binding.actorId, command.targetId, now],
           );
         const resource = resources[reward.kind];
-        await db.query(
-          "INSERT INTO r2pl_prep.reward_accounts(campaign_id,actor_id,resource,balance) VALUES($1,$2,$3,$4) ON CONFLICT(campaign_id,actor_id,resource) DO UPDATE SET balance=r2pl_prep.reward_accounts.balance+EXCLUDED.balance",
-          [
-            binding.campaignId,
-            binding.actorId,
+        if (this.#wallet)
+          await this.#wallet.grant(
+            db,
+            binding,
             resource,
-            reward.quantity.toString(),
-          ],
-        );
+            BigInt(reward.quantity),
+          );
+        else
+          await db.query(
+            "INSERT INTO r2pl_prep.reward_accounts(campaign_id,actor_id,resource,balance) VALUES($1,$2,$3,$4) ON CONFLICT(campaign_id,actor_id,resource) DO UPDATE SET balance=r2pl_prep.reward_accounts.balance+EXCLUDED.balance",
+            [
+              binding.campaignId,
+              binding.actorId,
+              resource,
+              reward.quantity.toString(),
+            ],
+          );
         await this.#ledger(
           db,
           binding,
@@ -269,6 +302,7 @@ export class PgRewardPreparation {
           ],
         );
       }
+      await this.#wallet?.finish(db, binding, command, receipt);
       await db.query("COMMIT");
       return { kind: "committed", receipt };
     } catch (error) {
@@ -282,10 +316,12 @@ export class PgRewardPreparation {
     db: PoolClient,
     binding: CampaignBinding,
     command: RewardPreparationCommand,
-    resource: string,
+    resource: PreparationResource,
     kind: "spend" | "grant",
     amount: bigint,
   ): Promise<void> {
+    if (this.#wallet)
+      return this.#wallet.ledger(db, binding, command, resource, kind, amount);
     await db.query(
       "INSERT INTO r2pl_prep.reward_ledger(campaign_id,actor_id,command_key,resource,entry_kind,amount) VALUES($1,$2,$3,$4,$5,$6)",
       [
