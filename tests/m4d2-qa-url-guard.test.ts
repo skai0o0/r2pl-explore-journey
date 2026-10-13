@@ -10,9 +10,20 @@ test("M4-D2 allows only approved Supabase QA pooler, TLS required", () => {
   assert.equal(disposableDatabaseUrl(approved), approved);
   const direct = `postgresql://postgres:test-password@db.${QA_REF}.supabase.co:5432/postgres?sslmode=require`;
   assert.equal(disposableDatabaseUrl(direct), direct);
-  assert.throws(() =>
-    disposableDatabaseUrl(approved.replace("sslmode=require", "")),
+  const officialUri = approved.replace("?sslmode=require", "");
+  assert.equal(disposableDatabaseUrl(officialUri), approved);
+  assert.equal(
+    disposableDatabaseUrl(disposableDatabaseUrl(officialUri)),
+    approved,
   );
+  const officialDirect = direct.replace("?sslmode=require", "");
+  assert.equal(disposableDatabaseUrl(officialDirect), direct);
+  assert.throws(() =>
+    disposableDatabaseUrl(
+      approved.replace("sslmode=require", "sslmode=disable"),
+    ),
+  );
+  assert.throws(() => disposableDatabaseUrl(`${approved}&sslmode=disable`));
 });
 
 test("M4-D2 rejects historical land-rush-prototype and arbitrary cloud databases", () => {

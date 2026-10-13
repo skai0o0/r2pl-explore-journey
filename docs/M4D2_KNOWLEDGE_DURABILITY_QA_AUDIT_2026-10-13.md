@@ -5,7 +5,7 @@
 ## Implemented in isolated QA integration
 
 - SQL 003_m4d2_knowledge_durable.sql creates 6 private r2pl_v2 tables: immutable cases, command receipts, accepted contributions, durable refund obligations, unique debit/refund journal and private effect outbox. All six RLS enabled; no API anonymous/authenticated grants; trigger search_path pinned. SHA256 migration checksum stored as version 3.
-- Node script migrate-m4d2.ts verifies idempotent migration and fail-closed target guard: only explicitly named disposable loopback databases OR the exact owner-approved Supabase QA reference asthukrgcnbskbhhjiiu over SSL Session pooler/direct port 5432. Legacy land-rush-prototype is forbidden. npm run migrate:m4d2 triggers it.
+- Node script migrate-m4d2.ts verifies idempotent migration and fail-closed target guard: only explicitly named disposable loopback databases OR the exact owner-approved Supabase QA reference asthukrgcnbskbhhjiiu over SSL Session pooler/direct port 5432. Official Supabase QA URI missing sslmode is normalized to sslmode=require before any connection; explicit SSL disable, wrong project or transaction port 6543 is rejected. Legacy land-rush-prototype is forbidden. npm run migrate:m4d2 triggers it.
 - KnowledgeCaseStoreV1.ts is development-only: serialized case and wallet locks, authorized payer, capped accepted fees, strict 2h/48h cutoff, one-time success, exact refund liabilities, bounded transactional refund worker, original account credit and idempotent replay/ACK results. Ownership effects remain private outbox obligations; no real map ownership writer yet.
 - KnowledgeWireAdapterV1.ts filters server-owned snapshots/outbox deltas, verifies actor/school sessions, role-specific visibility, private chest/receipts, replay deduplication and resync. NOT connected to production Colyseus gateway.
 - New tests: m4d2-knowledge-wire-adapter.test.ts (24 PASS), m4d2-qa-url-guard.test.ts (3 PASS), m4d2-knowledge-durable.test.ts (new PostgreSQL K15-K20 suite; unverified since MCP lacks database URL).
@@ -35,7 +35,7 @@ Use the SAME PowerShell terminal that already contains R2PL_TEST_DATABASE_URL, t
 
 1. cd C:\Users\AMTECH\Desktop\explore-journey\agent-worktrees\m4d2-integration
 2. Check the variable targets QA project asthukrgcnbskbhhjiiu, never land-rush-prototype; DO NOT display the password.
-3. URI must include sslmode=require and port 5432 (Session pooler), never 6543.
+3. Use port 5432 (Session pooler), never 6543. The guard automatically adds sslmode=require when an approved Supabase QA URI omits it; explicit disabled TLS remains prohibited.
 4. npm run migrate:m4d2
 5. node --experimental-strip-types --test tests/m4d2-knowledge-durable.test.ts
 6. npm test

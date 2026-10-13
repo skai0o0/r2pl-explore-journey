@@ -23,17 +23,25 @@ export function disposableDatabaseUrl(value: string): string {
   const supabaseSession =
     url.hostname.endsWith(".pooler.supabase.com") &&
     url.username === `postgres.${qaRef}`;
+  const modes = url.searchParams.getAll("sslmode");
+  const tlsModeAcceptable =
+    modes.length <= 1 &&
+    (modes.length === 0 ||
+      ["require", "verify-ca", "verify-full"].includes(modes[0] ?? ""));
   const qa =
     (supabaseDirect || supabaseSession) &&
     (url.port === "" || url.port === "5432") &&
     url.pathname === "/postgres" &&
-    ["require", "verify-ca", "verify-full"].includes(
-      url.searchParams.get("sslmode") ?? "",
-    );
+    tlsModeAcceptable;
   if (!local && !qa) {
     throw new Error(
       "Allowed targets: local disposable PostgreSQL or exact r2pl-m4d-qa Supabase database over TLS",
     );
+  }
+  // Supabase Connect often omits sslmode. Upgrade QA URI to TLS, never silently disable it.
+  if (qa && modes.length === 0) {
+    url.searchParams.set("sslmode", "require");
+    return url.toString();
   }
   return value;
 }
@@ -43,7 +51,8 @@ export async function migrateM4D2(pool: Pool): Promise<void> {
   const configuredUrl = pool.options.connectionString;
   if (typeof configuredUrl !== "string")
     throw new Error("Explicit disposable connection URL required");
-  disposableDatabaseUrl(configuredUrl);
+  if (disposableDatabaseUrl(configuredUrl) !== configuredUrl)
+    throw new Error("Database connection pool must use normalized TLS QA URI");
   const sql = (
     await readFile(
       new URL(
