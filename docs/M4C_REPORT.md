@@ -65,3 +65,7 @@ The manual visual E2E gate is unmet until these checks are executed and recorded
 ## Closure statement
 
 **M4-C code delivered, final visual E2E acceptance pending.** M4-D0 is a decision-freeze planning stage only and is not yet owner approved. Do not activate candidate contest, decay, Landmark, scoring, reward or production visibility rules until the applicable owner decisions are recorded in the authoritative specification documents.
+
+## 2026-10-13 browser smoke addendum
+
+[New live browser evidence](M4C_BROWSER_SMOKE_2026-10-13.md) verifies desktop camera/model/navigation, durable exploration, two-session sync/no-change, reload and narrow-layout pointer exploration. Earlier UNVERIFIED statements above describe the 2026-10-11 audit session. Full acceptance remains pending physical touch/pinch, remaining visual scenarios and named-device GPU/frame/memory measurements. No mobile screenshot artifact is claimed because capture was unreliable.

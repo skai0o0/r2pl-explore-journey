@@ -1,5 +1,7 @@
 # M4-D1 Readiness Audit and Execution Backlog — Knowledge Rules v1
 
+> **2026-10-13 scope update:** Owner now authorizes feasible development and blocked-integration preparation, prioritizing Gamenote V2 for conflicting product ideas. [Preparation increment](INTEGRATION_PREPARATION_REPORT_2026-10-13.md) delivers contracts, synthetic running transactions and reward references. The historical no-implementation wording below applies to the earlier Knowledge stage; it does not prohibit this authorized infrastructure work. No Knowledge state machine, production ruleVersion or live mutation has been activated.
+
 Audit date: 2026-10-12. Git base: 7a08738e83b3735d43d064340b7959b0a59f5b0c, branch codex/m4a-playable. Read-only code inspection and limited baseline validation; documentation changed separately. Target canonical spec: docs/M4D0_KNOWLEDGE_RULES_V1_FREEZE_CANDIDATE_2026-10-12.md. This audit is NOT authorization for M4-D1 or production.
 
 ## 1. Verified code findings and evidence

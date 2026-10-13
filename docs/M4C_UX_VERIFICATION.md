@@ -223,3 +223,7 @@ The following checklist specifies exact reproduction steps to be performed again
 3. **Synthetic Rule v0 Boundary:**
    - *Status:* Working as intended.
    - *Detail:* Exploration cost logic strictly uses development rule version 0 with fixture credits; real student auth and production rules remain disabled.
+
+## 2026-10-13 browser smoke addendum
+
+[New live browser evidence](M4C_BROWSER_SMOKE_2026-10-13.md) verifies desktop camera/model/navigation, durable exploration, two-session sync/no-change, reload and narrow-layout pointer exploration. Earlier UNVERIFIED statements above describe the 2026-10-11 audit session. Full acceptance remains pending physical touch/pinch, remaining visual scenarios and named-device GPU/frame/memory measurements. No mobile screenshot artifact is claimed because capture was unreliable.

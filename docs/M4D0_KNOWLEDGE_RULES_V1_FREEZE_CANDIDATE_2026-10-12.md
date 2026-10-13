@@ -1,5 +1,7 @@
 # Knowledge Rules v1 — Canonical Freeze Candidate (M4-D0)
 
+> **2026-10-13 scope update:** Owner now authorizes feasible development and blocked-integration preparation, prioritizing Gamenote V2 for conflicting product ideas. [Preparation increment](INTEGRATION_PREPARATION_REPORT_2026-10-13.md) delivers contracts, synthetic running transactions and reward references. The historical no-implementation wording below applies to the earlier Knowledge stage; it does not prohibit this authorized infrastructure work. No Knowledge state machine, production ruleVersion or live mutation has been activated.
+
 Date: 2026-10-12
 Status: OWNER-DIRECTED CANDIDATE + TECH-LEAD CHOICES. Not an approved immutable production ruleVersion. Does not authorize M4-D1, migrations, timers, or production mutation.
 Authority: explicit 2026-10-12 owner answers culminating in docs/M4D0_OWNER_ALIGNMENT_ROUND4_2026-10-12.md. The owner explicitly rejects a 6-hour grace period and a non-resetting two-hour fade. Earlier Rev2, 24H contest, D01-D34, SC01-SC70, Gamenote and pure candidate code are historical only where they contradict this document.
