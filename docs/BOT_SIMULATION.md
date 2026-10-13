@@ -55,3 +55,9 @@ Kiểm tra cuối: CRC/revision của projection riêng, ACK map khớp durable 
 Phạm vi hiện chạy ruleVersion 0, cost 1 fixture-credit. Giao lưu hiện là cùng tiến tới điểm hẹn và overlapping knowledge. Contest, defense, upkeep, decay, Landmark, running feed và reward UI chưa nằm trong luồng bot. --require-full-gameplay=true dừng trước mutation nếu cần các tính năng này. Không khẳng định mô phỏng đầy đủ luật cuối trong Gamenote; phải bổ sung adapter qua command server đã được duyệt khi gameplay tương ứng hoàn thiện. Không mở khóa production, M5/M6 hay protocol v1 mới.
 
 Test bot riêng: npm run test:bots (network test cần R2PL_PREPARATION_DATABASE_URL). Regression PostgreSQL đầy đủ: đặt R2PL_TEST_DATABASE_URL vào r2pl_prep_test_* rồi npm run test:postgres.
+
+## Xem bot trực tiếp trên UI dev
+
+Với hai biến môi trường bot ở trên, chạy npm run play:bots rồi mở http://127.0.0.1:4175. Trang quan sát synthetic hiển thị cả 8 trường, bản đồ ACK và số ô từng trường; có zoom gần/cận cảnh/toàn vùng. UI poll mỗi giây, bản đồ được simulator chụp khoảng 5 giây. Mặc định 24 bot, mixed/gather, chạy 600 giây, 10000 credits/bot, không deliberate reconnect. Có thể đổi các option simulator, ví dụ npm run play:bots -- --duration=120 --preset=fast. Server quan sát tiếp tục phục vụ kết quả sau khi lượt chơi kết thúc; Ctrl+C dừng server. Cổng WebSocket vẫn do simulator tự chọn, không chiếm server M4-A 2567/4173. Không có endpoint sửa gameplay hoặc kết nối database production.
+
+2026-10-13 browser smoke: Edge mở trang thành công; số hành động tăng từ 418 lúc 10s lên 1668 lúc 40s, bản đồ từ 180 lên 553 ô, cả 8 trường hiện số liệu. Đây là observer dashboard riêng, chưa tích hợp vào UI người chơi 3D.

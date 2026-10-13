@@ -25,7 +25,8 @@
     "test:rewards": "node --experimental-strip-types --test --test-concurrency=1 tests/reward-preparation-contract.test.ts tests/reward-preparation-postgres.test.ts",
     "demo:rewards": "node --experimental-strip-types scripts/demo-rewards.ts",
     "sim:bots": "node --experimental-strip-types scripts/simulate-school-bots.ts",
-    "test:bots": "node --experimental-strip-types --test --test-concurrency=1 tests/school-bot-planner.test.ts tests/school-bot-network.test.ts"
+    "test:bots": "node --experimental-strip-types --test --test-concurrency=1 tests/school-bot-planner.test.ts tests/school-bot-network.test.ts",
+    "play:bots": "node --experimental-strip-types scripts/play-school-bots.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.18",
