@@ -273,7 +273,9 @@ test("M3.5 concurrent wallet and hot-chunk commands keep contiguous school views
 }, async () => {
   const pool = new Pool({
     connectionString: url,
-    max: 16,
+    // QA Supavisor Session pooler allows 15 sessions; keep headroom for relays.
+    // Still exercises 30 concurrent writes queued through eight DB clients.
+    max: 8,
     options: "-c search_path=r2pl_v2,public",
   });
   const campaignId = randomUUID(),
