@@ -97,7 +97,13 @@ export function attachIntegratedRoutes(
     response.setHeader("Content-Type", "application/json; charset=utf-8");
     response.setHeader("X-Content-Type-Options", "nosniff");
     if (request.url === "/api/qa/integrated-mode") {
-      response.end(JSON.stringify({ enabled: true, fixtureOnly: true }));
+      response.end(
+        JSON.stringify({
+          enabled: true,
+          fixtureOnly: true,
+          exploreEnabled: process.env.R2PL_M4FINAL_EXPLORE_QA === "1",
+        }),
+      );
       return;
     }
     void profile(request.headers.authorization?.replace(/^Bearer /, ""))

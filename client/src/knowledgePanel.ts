@@ -18,12 +18,16 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
   const contribute = get<HTMLButtonElement>("contribute");
   const retry = get<HTMLButtonElement>("retry");
   const sync = get<HTMLButtonElement>("sync");
+  const explore = get<HTMLButtonElement>("explore");
+  const exploreRetry = get<HTMLButtonElement>("explore-retry");
   const points = get<HTMLInputElement>("points");
   let active: { token: string; schoolSlot: number } | undefined;
   let current: QaStateV1 | undefined;
   let last:
     | { caseId: string; contributionId: string; points: string }
     | undefined;
+  let exploreEnabled = false;
+  let lastExplore: string | undefined;
   let generation = 0;
   let busy = false;
   let polling = false;
@@ -72,6 +76,8 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
       busy || active?.schoolSlot !== 1 || current?.case?.status !== "claiming";
     retry.disabled = busy || !last || active?.schoolSlot !== 1;
     sync.disabled = busy || !active;
+    explore.disabled = busy || !active || !exploreEnabled;
+    exploreRetry.disabled = busy || !active || !exploreEnabled || !lastExplore;
   };
   const render = (state: QaStateV1): void => {
     current = state;
@@ -168,6 +174,15 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
     if (last) void command("/api/qa/knowledge/contribute", last);
   };
   sync.onclick = () => void command("/api/qa/sync", {});
+  explore.onclick = () => {
+    lastExplore = crypto.randomUUID();
+    controls();
+    void command("/api/qa/knowledge/explore", { commandId: lastExplore });
+  };
+  exploreRetry.onclick = () => {
+    if (lastExplore)
+      void command("/api/qa/knowledge/explore", { commandId: lastExplore });
+  };
   try {
     const { fixtures } = await api<{
       fixtures: { token: string; label: string; schoolSlot: number }[];
@@ -181,12 +196,19 @@ export async function mountKnowledgePanel(world: WorldView): Promise<void> {
       option.textContent = fixture.label;
       select.append(option);
     }
+    const mode = await api<{ exploreEnabled?: boolean }>(
+      "/api/qa/integrated-mode",
+    );
+    exploreEnabled = mode.exploreEnabled === true;
+    explore.hidden = !exploreEnabled;
+    exploreRetry.hidden = !exploreEnabled;
     active = fixtures[0];
     select.onchange = () => {
       active = fixtures.find((f) => f.token === select.value);
       generation++;
       current = undefined;
       last = undefined;
+      lastExplore = undefined;
       get("wallet").textContent = "Personal Points: loading";
       get("events").replaceChildren();
       get("case").textContent = "Loading selected identity";

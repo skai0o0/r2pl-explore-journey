@@ -7,6 +7,10 @@ import { Pool } from "pg";
 import { disposableDatabaseUrl } from "../../scripts/migrate-m4d2.ts";
 import { WORLD_TILE_COUNT } from "../../shared/world/constants.ts";
 import {
+  type ExploreReceiptV1,
+  KnowledgeExploreQaV1,
+} from "../gameplay/KnowledgeExploreQaV1.ts";
+import {
   KnowledgeCaseStoreV1,
   type KnowledgeReceiptV1,
 } from "../persistence/KnowledgeCaseStoreV1.ts";
@@ -51,6 +55,7 @@ export interface QaBackendV1 {
     fixture: QaFixtureV1,
     input: { caseId: string; contributionId: string; points: string },
   ): Promise<KnowledgeReceiptV1>;
+  explore?(fixture: QaFixtureV1, commandId: string): Promise<ExploreReceiptV1>;
   sync(): Promise<void>;
 }
 class HttpFailure extends Error {
@@ -202,6 +207,18 @@ export function createKnowledgeQaServer(
           });
           return;
         }
+        if (url.pathname === "/api/qa/knowledge/explore") {
+          keys(input, ["commandId"]);
+          if (
+            typeof input.commandId !== "string" ||
+            !uuid.test(input.commandId)
+          )
+            throw new HttpFailure(400);
+          if (!backend.explore) throw new HttpFailure(404);
+          const result = await backend.explore(fixture, input.commandId);
+          send(200, { receipt: result, state: await backend.state(fixture) });
+          return;
+        }
         if (url.pathname === "/api/qa/sync") {
           keys(input, []);
           await backend.sync();
@@ -287,6 +304,8 @@ export async function createPostgresKnowledgeQa(
       "004_m4d3_knowledge_projection.sql",
       "005_m4d3b_shared_upkeep.sql",
     ];
+    if (env.R2PL_M4FINAL_EXPLORE_QA === "1")
+      files.push("006_m4final_explore_qa.sql");
     for (const [index, file] of files.entries()) {
       const sql = (
         await readFile(
@@ -303,10 +322,12 @@ export async function createPostgresKnowledgeQa(
           createHash("sha256").update(sql).digest(),
         )
       )
-        throw new Error("QA migrations 1-5 must be installed and verified");
+        throw new Error(
+          `QA migrations 1-${files.length} must be installed and verified`,
+        );
     }
     const campaignId = randomUUID();
-    const fixtures = [0, 1].map((schoolSlot) => ({
+    const fixtures: QaFixtureV1[] = [0, 1].map((schoolSlot) => ({
       schoolSlot,
       actorId: randomUUID(),
       token: randomBytes(32).toString("hex"),
@@ -359,7 +380,17 @@ export async function createPostgresKnowledgeQa(
     );
     let currentCase: string | null = null;
     let starting = false;
+    const explore =
+      env.R2PL_M4FINAL_EXPLORE_QA === "1"
+        ? new KnowledgeExploreQaV1(pool, campaignId, fixtures)
+        : undefined;
     const backend: QaBackendV1 = {
+      ...(explore
+        ? {
+            explore: (fixture: QaFixtureV1, commandId: string) =>
+              explore.execute(fixture, commandId),
+          }
+        : {}),
       fixtures,
       async start() {
         if (starting) throw new HttpFailure(409);
@@ -387,7 +418,7 @@ export async function createPostgresKnowledgeQa(
             tiles.length < 3 && attempts < WORLD_TILE_COUNT;
             attempts++, cursor = (cursor + 1) % WORLD_TILE_COUNT
           )
-            if (!occupied.has(cursor))
+            if ((!explore || cursor !== 999999) && !occupied.has(cursor))
               tiles.push({
                 tileIndex: cursor,
                 incumbentSchoolSlot: tiles.length === 2 ? 1 : 0,
@@ -408,6 +439,7 @@ export async function createPostgresKnowledgeQa(
         }
       },
       async contribute(fixture, input) {
+        if (!fixtures.includes(fixture)) throw new HttpFailure(401);
         if (input.caseId !== currentCase) throw new HttpFailure(404);
         return store.contribute({
           campaignId,
@@ -427,6 +459,7 @@ export async function createPostgresKnowledgeQa(
           if (!(await projector.projectNext(campaignId))) break;
       },
       async state(fixture) {
+        if (!fixtures.includes(fixture)) throw new HttpFailure(401);
         const visibleCase = currentCase;
         const connection = await pool.connect();
         try {
@@ -452,8 +485,8 @@ export async function createPostgresKnowledgeQa(
             tile_index: number;
             active_school_mask: number;
           }>(
-            "SELECT tile_index,active_school_mask FROM knowledge_ownership_tiles_v1 WHERE campaign_id=$1 ORDER BY tile_index",
-            [campaignId],
+            "SELECT tile_index,(active_school_mask & $2)::integer AS active_school_mask FROM knowledge_ownership_tiles_v1 WHERE campaign_id=$1 AND (active_school_mask & $2)<>0 ORDER BY tile_index",
+            [campaignId, 1 << fixture.schoolSlot],
           );
           const scores = await connection.query<{
             school_slot: number;
@@ -489,7 +522,7 @@ export async function createPostgresKnowledgeQa(
                 : null,
             tiles: tiles.rows.map((row) => ({
               tileIndex: row.tile_index,
-              schoolSlots: [0, 1].filter(
+              schoolSlots: [fixture.schoolSlot].filter(
                 (slot) => (row.active_school_mask & (1 << slot)) !== 0,
               ),
             })),
@@ -514,7 +547,7 @@ export async function createPostgresKnowledgeQa(
   } catch {
     await pool.end();
     throw new Error(
-      "QA database startup failed; verify disposable configuration and migrations 1-5",
+      "QA database startup failed; verify disposable configuration and migrations 1-5 (also 6 when explore is enabled)",
     );
   }
 }
