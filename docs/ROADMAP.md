@@ -111,3 +111,7 @@ Owner continued feasible dev/preparation. [Reward transaction report](REWARD_PRE
 ## 2026-10-13 eight-school bot simulation
 
 Owner requested multi-speed school bots. [Simulator guide](BOT_SIMULATION.md) and [measured report](BOT_SIMULATION_REPORT_2026-10-13.md) deliver private-school WebSocket exploration, eight-way rendezvous/overlap plus pairwise layouts, retry/reconnect and PostgreSQL integrity checks. 102/102 regression passes. Full contest/defense/upkeep and production roster/layout remain gated; no protocol change or M5/M6 completion. First fast workload exposed lease-recovery delay, preserved in the report; a repeat passed with a 45s drain window. Ready for owner review.
+
+## 2026-10-13 completion planning — owner requests at least V1 parity
+
+[Completion implementation plan](V2_COMPLETION_PLAN_2026-10-13.md) defines G-V1 (all core player/operator journeys on the actual Three.js UI, eight schools, synthetic external adapters where necessary) and G-FULL (approved complete campaign integration, rewards/LiveOps and measured production readiness). PV01–PV18 map the read-only V1 feature floor to R0–R9 work packages, dependencies and acceptance evidence. Next proposed increment: reconcile current spec + outbox/reconnect investigation, then unified account/command/private relay and eight-school playable integration. This is planning authorization, not acceptance of gameplay rules, M5 activation, production migrations or launch; existing review gates remain.
