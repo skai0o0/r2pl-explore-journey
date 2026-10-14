@@ -31,6 +31,7 @@ import {
   MODEL_PLACEMENTS,
   type ModelPlacement,
 } from "./assetRegistry.ts";
+import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import { LandscapeEffects } from "./landscape.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 
@@ -389,7 +390,6 @@ export class WorldView {
   readonly #markers: readonly WorldMarker[];
   readonly #assetMounts: AssetMount[] = [];
   readonly #assetRoots: THREE.Group[] = [];
-  readonly #modelSupports: THREE.Mesh[] = [];
   readonly #privateObjects = new THREE.Group();
   readonly #beacons = new THREE.Group();
   readonly #unistopMeshes = new Map<string, THREE.Object3D>();
@@ -530,31 +530,7 @@ export class WorldView {
     const assetLoader = new ModelAssetLoader();
     void fetchModelManifest();
     for (const placement of layout.placements ?? MODEL_PLACEMENTS) {
-      // The synthetic fixture glTFs are intentionally flat. Keep their loaded
-      // geometry visible while giving the preview a small amount of real depth.
-      const supportHeight = placement.asset === "hq" ? 3 : 5;
-      const support = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          placement.asset === "hq" ? 6.5 : 7.5,
-          placement.asset === "hq" ? 7.5 : 6,
-          supportHeight,
-          placement.asset === "hq" ? 6 : 8,
-        ),
-        new THREE.MeshBasicMaterial({
-          color: placement.asset === "hq" ? 0x315e52 : 0x5b4775,
-        }),
-      );
-      support.rotation.x = Math.PI / 2;
-      support.position.set(
-        placement.worldX - WORLD_WIDTH / 2,
-        WORLD_HEIGHT / 2 - placement.worldZ,
-        supportHeight / 2 + 0.06,
-      );
-      this.#scene.add(support);
-      this.#modelSupports.push(support);
-
       const assetRoot = new THREE.Group();
-      assetRoot.position.z = supportHeight;
       this.#scene.add(assetRoot);
       this.#assetRoots.push(assetRoot);
 
@@ -573,18 +549,12 @@ export class WorldView {
             ? getLandmarkModelUrl(placement.id)
             : MODEL_ASSETS[placement.asset].url;
 
-      const fallback =
-        placement.asset === "hq"
-          ? new THREE.Mesh(
-              new THREE.BoxGeometry(1, 1, 0.08),
-              new THREE.MeshBasicMaterial({
-                color: school ? school.color : 0x8bd9b4,
-              }),
-            )
-          : new THREE.Mesh(
-              new THREE.CircleGeometry(0.5, 4),
-              new THREE.MeshBasicMaterial({ color: 0xc3a5eb }),
-            );
+      const footprint = layout.objects?.find((o) => o.id === placement.id);
+      const fallback = createProceduralBuilding(
+        placement.asset,
+        school?.color ?? 0xc3a5eb,
+        footprint,
+      );
       const mount = mountModelAsset(
         assetRoot,
         assetLoader,
@@ -597,13 +567,6 @@ export class WorldView {
           colorHex: school?.color,
         },
       );
-      mount.ready.then((status) => {
-        if (status === "loaded") {
-          support.visible = false;
-          assetRoot.position.z = 0;
-          this.#render();
-        }
-      });
       this.#assetMounts.push(mount);
     }
 
@@ -621,20 +584,12 @@ export class WorldView {
         o.ownerSchoolSlot !== undefined
           ? (SCHOOLS[o.ownerSchoolSlot]?.color ?? baseColor)
           : baseColor;
-      const fallback = new THREE.Mesh(
-        o.kind === "chest"
-          ? new THREE.BoxGeometry(o.width, o.height, 2)
-          : new THREE.CylinderGeometry(2, 3, 8, 6),
-        new THREE.MeshBasicMaterial({ color }),
-      );
+      const fallback = createProceduralBuilding(o.kind, color, o, o.tier);
       if (o.kind === "unistop") {
-        fallback.rotation.x = Math.PI / 2;
         this.#unistopMeshes.set(o.id, fallback);
       } else {
         this.#chestMeshes.set(o.id, fallback);
       }
-      fallback.position.set(o.x - 500, 500 - o.z, o.kind === "chest" ? 1 : 4);
-      this.#scene.add(fallback);
 
       const modelUrl =
         o.kind === "unistop" && o.tier
@@ -652,7 +607,7 @@ export class WorldView {
             asset: "hq",
             worldX: o.x,
             worldZ: o.z,
-            scale: o.kind === "chest" ? 2 : 4,
+            scale: 1,
             rotationZ: 0,
           },
           fallback,
@@ -675,6 +630,9 @@ export class WorldView {
           }
         });
         this.#assetMounts.push(mount);
+      } else {
+        fallback.position.set(o.x - 500, 500 - o.z, 0.12);
+        this.#scene.add(fallback);
       }
     }
     for (const marker of this.#markers) {
@@ -761,12 +719,6 @@ export class WorldView {
     this.#assetMounts.length = 0;
     for (const root of this.#assetRoots) this.#scene.remove(root);
     this.#assetRoots.length = 0;
-    for (const support of this.#modelSupports) {
-      this.#scene.remove(support);
-      support.geometry.dispose();
-      (support.material as THREE.Material).dispose();
-    }
-    this.#modelSupports.length = 0;
   }
 
   get cameraMode(): CameraMode {
@@ -862,7 +814,11 @@ export class WorldView {
             o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
               ? (SCHOOLS[o.ownerSchoolSlot]?.color ?? baseColor)
               : baseColor;
-          if (mesh instanceof THREE.Mesh && mesh.material && "color" in mesh.material) {
+          if (
+            mesh instanceof THREE.Mesh &&
+            mesh.material &&
+            "color" in mesh.material
+          ) {
             (mesh.material as THREE.MeshBasicMaterial).color.set(color);
           }
           tintModelFactionMaterials(mesh, color);

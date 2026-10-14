@@ -261,15 +261,17 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
     getUniStopModelUrl,
     isModelAvailable,
   } = await import("../client/src/assetRegistry.ts");
-  const {
-    setChestLidRotation,
-    tintModelFactionMaterials,
-  } = await import("../client/src/assetPipeline.ts");
+  const { setChestLidRotation, tintModelFactionMaterials } = await import(
+    "../client/src/assetPipeline.ts"
+  );
 
   // Model URL conventions
   assert.equal(getHqModelUrl("hcmut"), "/models/hqs/hcmut_hq.glb");
   assert.equal(getHqModelUrl("hcmiu"), "/models/hqs/hcmiu_hq.glb");
-  assert.equal(getLandmarkModelUrl("fansipan"), "/models/landmarks/fansipan.glb");
+  assert.equal(
+    getLandmarkModelUrl("fansipan"),
+    "/models/landmarks/fansipan.glb",
+  );
   assert.equal(
     getLandmarkModelUrl("thanglong"),
     "/models/landmarks/hoangthanhthanglong.glb",
@@ -278,8 +280,14 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
     getLandmarkModelUrl("cairang"),
     "/models/landmarks/chonoicairang.glb",
   );
-  assert.equal(getUniStopModelUrl("aspire"), "/models/unistops/unistop_aspire.glb");
-  assert.equal(getUniStopModelUrl("nitro"), "/models/unistops/unistop_nitro.glb");
+  assert.equal(
+    getUniStopModelUrl("aspire"),
+    "/models/unistops/unistop_aspire.glb",
+  );
+  assert.equal(
+    getUniStopModelUrl("nitro"),
+    "/models/unistops/unistop_nitro.glb",
+  );
   assert.equal(
     getUniStopModelUrl("predator"),
     "/models/unistops/unistop_predator.glb",
@@ -294,7 +302,10 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
   // Skip if unavailable immediately uses fallback without calling loader
   let loaderCalled = false;
   const scene = new THREE.Scene();
-  const fallback = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+  const fallback = new THREE.Mesh(
+    new THREE.BoxGeometry(),
+    new THREE.MeshBasicMaterial(),
+  );
   const mount = mountModelAsset(
     scene,
     {
@@ -318,7 +329,10 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
   const root = new THREE.Group();
   const meshFaction = new THREE.Mesh(
     new THREE.BufferGeometry(),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, name: "Mat_Faction_Primary" }),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      name: "Mat_Faction_Primary",
+    }),
   );
   const meshAccent = new THREE.Mesh(
     new THREE.BufferGeometry(),
@@ -359,11 +373,8 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
 });
 
 test("Hotfix: PBR lighting material tuning, target footprint spans, and Z-up auto-fit GLB placement", async () => {
-  const {
-    applyGlbModelPlacement,
-    getTargetFootprintSpan,
-    tunePbrMaterials,
-  } = await import("../client/src/assetPipeline.ts");
+  const { applyGlbModelPlacement, getTargetFootprintSpan, tunePbrMaterials } =
+    await import("../client/src/assetPipeline.ts");
 
   // 1. Target footprint spans
   assert.equal(getTargetFootprintSpan({ id: "hq-hcmut", asset: "hq" }), 20);
@@ -443,3 +454,56 @@ test("Hotfix: PBR lighting material tuning, target footprint spans, and Z-up aut
   assert.ok(Math.abs(maxSpan - 20) < 0.01);
 });
 
+test("world-unit procedural fallbacks stay Z-up through missing and rejected GLB mounts", async () => {
+  const { createProceduralBuilding } = await import(
+    "../client/src/proceduralBuildings.ts"
+  );
+  for (const kind of ["hq", "landmark", "unistop", "chest"] as const) {
+    for (const skipIfUnavailable of [true, false]) {
+      const footprint =
+        kind === "hq"
+          ? { width: 20, height: 20 }
+          : kind === "landmark"
+            ? { width: 40, height: 40 }
+            : kind === "unistop"
+              ? { width: 10, height: 2 }
+              : { width: 2, height: 2 };
+      const fallback = createProceduralBuilding(
+        kind,
+        "#0062ff",
+        footprint,
+        "predator",
+      );
+      const placement = {
+        id: kind,
+        asset: "hq" as const,
+        worldX: 200,
+        worldZ: 300,
+        scale: 20,
+        rotationZ: 0,
+      };
+      const mount = mountModelAsset(
+        new THREE.Scene(),
+        { loadInstance: () => Promise.reject(new Error("missing")) },
+        "/missing.glb",
+        placement,
+        fallback,
+        () => {},
+        { skipIfUnavailable },
+      );
+      assert.equal(await mount.ready, "fallback");
+      assert.deepEqual(fallback.rotation.toArray().slice(0, 3), [0, 0, 0]);
+      assert.deepEqual(fallback.scale.toArray(), [1, 1, 1]);
+      const bounds = new THREE.Box3().setFromObject(fallback);
+      const size = bounds.getSize(new THREE.Vector3());
+      const center = bounds.getCenter(new THREE.Vector3());
+      assert.ok(size.x <= footprint.width + 0.00001);
+      assert.ok(size.y <= footprint.height + 0.00001);
+      assert.ok(Math.abs(center.x + 300) < 0.00001);
+      assert.ok(Math.abs(center.y - 200) < 0.00001);
+      assert.ok(Math.abs(bounds.min.z - 0.12) < 0.00001);
+      assert.ok(size.z > (kind === "chest" ? 1 : 7));
+      mount.dispose();
+    }
+  }
+});

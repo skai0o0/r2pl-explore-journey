@@ -88,11 +88,7 @@ export function applyGlbModelPlacement(
   // 5. Wrap in group positioned at world tile and rotated by placement.rotationZ around Z
   const wrapper = new THREE.Group();
   wrapper.name = `${placement.id}-glb-wrapper`;
-  wrapper.position.set(
-    placement.worldX - 500,
-    500 - placement.worldZ,
-    0,
-  );
+  wrapper.position.set(placement.worldX - 500, 500 - placement.worldZ, 0);
   wrapper.rotation.set(0, 0, placement.rotationZ);
   wrapper.add(model);
 
@@ -105,7 +101,9 @@ export function applyModelPlacement(
 ): void {
   object.position.set(placement.worldX - 500, 500 - placement.worldZ, 0.12);
   object.rotation.set(0, 0, placement.rotationZ);
-  object.scale.setScalar(placement.scale);
+  // Procedural geometry already uses world units; GLB fitting belongs exclusively
+  // to applyGlbModelPlacement. Never multiply a footprint by the legacy asset scale.
+  object.scale.setScalar(1);
 }
 
 export function tintModelFactionMaterials(
@@ -131,7 +129,10 @@ export function tintModelFactionMaterials(
 
 export function setChestLidRotation(root: THREE.Object3D, open: boolean): void {
   root.traverse((node) => {
-    if (node.name === "Chest_Lid" || /(?:chest.*lid|lid.*chest)/i.test(node.name)) {
+    if (
+      node.name === "Chest_Lid" ||
+      /(?:chest.*lid|lid.*chest)/i.test(node.name)
+    ) {
       node.rotation.x = open ? -Math.PI / 3 : 0;
     }
   });
