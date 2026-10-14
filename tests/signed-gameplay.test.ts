@@ -23,8 +23,8 @@ test("signed config publishes exact roster, footprints, costs and unnormalized r
   );
   assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "hq").length, 8);
   assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "landmark").length, 10);
-  assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "unistop").length, 24);
-  assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "chest").length, 24);
+  assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "unistop").length, 15);
+  assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "chest").length, 15);
   for (const source of [GAME_CONFIG.rewards.unistop, GAME_CONFIG.rewards.chest])
     for (const table of Object.values(source))
       assert.equal(
@@ -68,7 +68,7 @@ test("signed routes keep chests private, persist Running into playable wallet, r
     const world = (await (await fetch(`${base}/api/fixture/world`)).json()) as {
       objects: { kind: string }[];
     };
-    assert.equal(world.objects.length, 42);
+    assert.equal(world.objects.length, 33);
     assert(world.objects.every((o) => o.kind !== "chest"));
     assert.equal((await fetch(`${base}/api/game`)).status, 401);
     assert.equal((await fetch(`${base}/api/admin`)).status, 403);
@@ -99,7 +99,7 @@ test("signed routes keep chests private, persist Running into playable wallet, r
       landmarks: { pot: number }[];
     };
     assert.equal(view.weeklyKm, 1);
-    assert.equal(view.chests.length, 3);
+    assert.equal(view.chests.length, 0);
     assert.equal(view.keys.aspire, "1");
     assert.equal(
       (
@@ -151,10 +151,14 @@ test("signed routes keep chests private, persist Running into playable wallet, r
     await pool.end();
   }
 });
-async function path(pool: Pool, campaign: string, slot: number): Promise<void> {
-  const x = 480,
-    z = 450,
-    id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
+async function path(
+  pool: Pool,
+  campaign: string,
+  slot: number,
+  x = 480,
+  z = 450,
+): Promise<void> {
+  const id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
   await pool.query(
     "INSERT INTO r2pl_v2.world_chunk_heads(campaign_id,chunk_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
     [campaign, id],
@@ -204,20 +208,48 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
       ...(amount ? { amount } : {}),
       ...(guess ? { guess } : {}),
     });
-    let result = await g.command(a, cmd("spin", "dev-predator-0"));
+
+    // 1. unistop_predator_1 is initially neutral -> rejected with KNOWLEDGE_PATH_REQUIRED
+    assert.equal(
+      (await g.command(a, cmd("spin", "unistop_predator_1"))).reason,
+      "KNOWLEDGE_PATH_REQUIRED",
+    );
+    // School A (slot 0) expands knowledge into footprint of unistop_predator_1 (450, 500)
+    await path(pool, campaign, 0, 450, 500);
+
+    // 2. Student a from School A spins captured unistop_predator_1 -> applied
+    let result = await g.command(a, cmd("spin", "unistop_predator_1"));
     assert.deepEqual(result.reward, {
       kind: "crystals",
       quantity: 4,
       weight: 5,
     });
+    // Student a immediately spins again -> rejected with COOLDOWN
     assert.equal(
-      (await g.command(a, cmd("spin", "dev-predator-0"))).reason,
+      (await g.command(a, cmd("spin", "unistop_predator_1"))).reason,
       "COOLDOWN",
     );
-    const chest = "chest-predator-0";
+    // Rival school student tries to spin -> rejected with KNOWLEDGE_PATH_REQUIRED
+    assert.equal(
+      (await g.command(rival, cmd("spin", "unistop_predator_1"))).reason,
+      "KNOWLEDGE_PATH_REQUIRED",
+    );
+    // Student b from School A has their own personal cooldown -> applied
+    const studentBResult = await g.command(
+      b,
+      cmd("spin", "unistop_predator_1"),
+    );
+    assert.equal(studentBResult.status, "applied");
+
+    // 3. Finite Chest winner under race conditions (Predator chest consumes key-predator)
+    const predatorChest = "chest_predator_1";
+    await pool.query(
+      "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3),($1,$4,$3)",
+      [campaign, a.actorId, predatorChest, b.actorId],
+    );
     const winners = await Promise.all([
-      g.command(a, cmd("open", chest)),
-      g.command(b, cmd("open", chest)),
+      g.command(a, cmd("open", predatorChest)),
+      g.command(b, cmd("open", predatorChest)),
     ]);
     assert.equal(winners.filter((r) => r.status === "applied").length, 1);
     assert.equal(
@@ -229,22 +261,28 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
       "CHEST_COLLECTED",
     );
     assert.equal(
-      (await g.command(rival, cmd("open", "chest-aspire-0"))).reason,
+      (await g.command(rival, cmd("open", "chest_aspire_1"))).reason,
       "CHEST_NOT_DISCOVERED",
     );
+
+    // 4. Treasure Map on unistop_aspire_1 reveals an uncollected Aspire chest
+    await path(pool, campaign, 0, 532, 301);
     roll = 960;
-    const map = await g.command(a, cmd("spin", "dev-aspire-0"));
+    const map = await g.command(a, cmd("spin", "unistop_aspire_1"));
     assert.equal(map.reward?.kind, "treasure_map");
     assert(map.discovery);
-    assert((await g.view(a)).chests.some((c) => c.id === map.discovery!.id));
-    assert(!(await g.view(b)).chests.some((c) => c.id === map.discovery!.id));
+    const aspireChest = map.discovery.id;
+    assert((await g.view(a)).chests.some((c) => c.id === aspireChest));
+    assert(!(await g.view(b)).chests.some((c) => c.id === aspireChest));
+
+    // 5. Staging Gift entitlement on chest opening (consumes key-aspire)
     await g.command(a, cmd("running", undefined, 1000));
     await pool.query(
       "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'gift-stock','aspire',$2)",
       [campaign, JSON.stringify({ remaining: 1 })],
     );
     roll = 999;
-    const giftCommand = cmd("open", "chest-aspire-0");
+    const giftCommand = cmd("open", aspireChest);
     const gift = await g.command(a, giftCommand);
     assert.equal(gift.reward?.kind, "gift");
     assert.deepEqual(await g.command(a, giftCommand), gift);

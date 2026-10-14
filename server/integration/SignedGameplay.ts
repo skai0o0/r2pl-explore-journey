@@ -11,6 +11,7 @@ import {
   GAME_CONFIG,
   LANDMARKS,
   type RewardOutcome,
+  SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
 import {
@@ -46,7 +47,8 @@ const rejectionMessages: Record<string, string> = {
   COOLDOWN: "Lượt tại trạm này đang hồi",
   CHEST_COLLECTED: "Chest đã được thu thập",
   CHEST_NOT_DISCOVERED: "Bạn chưa tìm thấy Chest này",
-  KNOWLEDGE_PATH_REQUIRED: "Knowledge của trường cần chạm địa danh",
+  KNOWLEDGE_PATH_REQUIRED:
+    "Chỉ sinh viên trường sở hữu Trạm tiếp tế mới được nhận đồ!",
   GUESS_COOLDOWN: "Chưa hết thời gian chờ đoán lại",
   UNKNOWN_OBJECT: "Đối tượng đã thay đổi; tải bản đồ mới",
   "Upkeep not due": "Cluster đang trong 24 giờ miễn upkeep",
@@ -184,6 +186,86 @@ export class SignedGameplay {
       }
     return false;
   }
+  async captureReachedStops(db: PoolClient): Promise<void> {
+    const stops = (
+      await db.query<{ id: string; data: WorldObject }>(
+        "SELECT id, data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind'='unistop'",
+        [this.fixture.campaignId],
+      )
+    ).rows;
+    if (!stops.length) return;
+
+    for (const { id, data: stop } of stops) {
+      const present: number[] = [];
+      for (let s = 0; s < 8; s++) {
+        if (await this.path(db, stop, s)) present.push(s);
+      }
+
+      const arrivals = await this.state<Record<string, number>>(
+        db,
+        "unistop-arrivals",
+        id,
+        {},
+      );
+      let changedArrivals = false;
+      const now = Date.now();
+      for (const s of present) {
+        if (arrivals[String(s)] === undefined) {
+          arrivals[String(s)] = now;
+          changedArrivals = true;
+        }
+      }
+      for (const key of Object.keys(arrivals)) {
+        if (!present.includes(Number(key))) {
+          delete arrivals[key];
+          changedArrivals = true;
+        }
+      }
+
+      let nextOwner: number | null = null;
+      if (
+        stop.ownerSchoolSlot !== null &&
+        stop.ownerSchoolSlot !== undefined &&
+        present.includes(stop.ownerSchoolSlot)
+      ) {
+        nextOwner = stop.ownerSchoolSlot;
+      } else if (present.length > 0) {
+        nextOwner = present
+          .slice()
+          .sort(
+            (a, b) => (arrivals[String(a)] ?? 0) - (arrivals[String(b)] ?? 0),
+          )[0]!;
+      }
+
+      if (stop.ownerSchoolSlot !== nextOwner) {
+        const updated: WorldObject = {
+          ...stop,
+          ownerSchoolSlot: nextOwner,
+          ownerSchoolId: nextOwner !== null ? SCHOOLS[nextOwner]!.id : null,
+        };
+        await db.query(
+          "UPDATE r2pl_v2.game_world_objects SET data=$1 WHERE campaign_id=$2 AND id=$3",
+          [JSON.stringify(updated), this.fixture.campaignId, id],
+        );
+      }
+      if (changedArrivals) {
+        await this.save(db, "unistop-arrivals", id, arrivals);
+      }
+    }
+  }
+  async syncStops(): Promise<void> {
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN");
+      await this.captureReachedStops(db);
+      await db.query("COMMIT");
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
+  }
   async initialize(): Promise<void> {
     for (const actor of this.fixture.actors.filter((a) => a.role === "human"))
       for (const tier of ["aspire", "nitro", "predator"])
@@ -200,7 +282,8 @@ export class SignedGameplay {
   async view(actor: SchoolPlayActor): Promise<GameView> {
     const db = await this.pool.connect();
     try {
-      await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      await db.query("BEGIN");
+      await this.captureReachedStops(db);
       const wallets = (
         await db.query<{ resource: string; balance: string }>(
           "SELECT resource,balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2",
@@ -546,9 +629,11 @@ export class SignedGameplay {
       {},
     );
     if (kind === "unistop") {
+      await this.captureReachedStops(db);
+      const currentStop = (await this.object(db, o.id)) ?? o;
       if (
         !GAME_CONFIG.staging.stationsUnlocked &&
-        !(await this.path(db, o, a.schoolSlot))
+        currentStop.ownerSchoolSlot !== a.schoolSlot
       )
         throw new RuleRejection("KNOWLEDGE_PATH_REQUIRED");
       if ((cooldowns[o.id] ?? 0) > now) throw new RuleRejection("COOLDOWN");

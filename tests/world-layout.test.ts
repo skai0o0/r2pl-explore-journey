@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { directionLabel } from "../client/src/ui/compassCard.ts";
 import {
-  FIRST_LANDMARK_BY_SLOT,
   LANDMARKS,
   SCHOOLS,
   STAGING_OBJECTS,
@@ -68,52 +67,49 @@ test("stepping-stone layout: no overlap and fully inside the world", () => {
     }
 });
 
-test("Aspire UniStop and Chest are 15-20 tiles off every HQ edge", () => {
+test("15 neutral UniStops (8 Aspire, 5 Nitro, 2 Predator) and 15 neutral Chests: all neutral and valid stepping stones", () => {
+  const unistops = STAGING_OBJECTS.filter((o) => o.kind === "unistop");
+  const chests = STAGING_OBJECTS.filter((o) => o.kind === "chest");
+  assert.equal(unistops.length, 15);
+  assert.equal(chests.length, 15);
+  assert.equal(unistops.filter((o) => o.tier === "aspire").length, 8);
+  assert.equal(unistops.filter((o) => o.tier === "nitro").length, 5);
+  assert.equal(unistops.filter((o) => o.tier === "predator").length, 2);
+  assert.equal(chests.filter((o) => o.tier === "aspire").length, 8);
+  assert.equal(chests.filter((o) => o.tier === "nitro").length, 5);
+  assert.equal(chests.filter((o) => o.tier === "predator").length, 2);
+
+  for (const u of unistops) {
+    assert.equal(u.ownerSchoolSlot, null);
+    assert.equal(u.ownerSchoolId, null);
+  }
+
   for (const s of SCHOOLS) {
     const hq = byId(`hq-${s.id}`);
-    for (const id of [`dev-aspire-${s.slot}`, `chest-aspire-${s.slot}`]) {
-      const g = gap(hq, byId(id));
-      // Chest hangs 6 tiles off its station, so only the station is held to the band.
-      if (id.startsWith("dev-"))
-        assert.ok(g >= 15 && g <= 20, `${id} edge gap ${g}`);
-      else assert.ok(g >= 10 && g <= 26, `${id} edge gap ${g}`);
-    }
-  }
-});
-
-test("Nitro UniStop and Chest lie 40-50 tiles out on the way to the first Landmark", () => {
-  for (const s of SCHOOLS) {
-    const hq = byId(`hq-${s.id}`);
-    const lm = byId(FIRST_LANDMARK_BY_SLOT[s.slot]!);
-    const nitro = byId(`dev-nitro-${s.slot}`);
-    const chest = byId(`chest-nitro-${s.slot}`);
-    const out = Math.hypot(nitro.x - hq.x, nitro.z - hq.z);
-    assert.ok(out >= 40 && out <= 50, `${nitro.id} ${out}`);
+    const nearestAspire = unistops
+      .filter((u) => u.tier === "aspire")
+      .map((u) => ({ u, g: gap(hq, u) }))
+      .sort((a, b) => a.g - b.g)[0]!;
     assert.ok(
-      Math.hypot(nitro.x - lm.x, nitro.z - lm.z) <
-        Math.hypot(hq.x - lm.x, hq.z - lm.z),
-      `${nitro.id} heads toward ${lm.id}`,
+      nearestAspire.g >= 15 && nearestAspire.g <= 20,
+      `${s.id} nearest aspire stop gap ${nearestAspire.g}`,
     );
-    assert.ok(Math.hypot(chest.x - nitro.x, chest.z - nitro.z) <= 8);
+
+    const nearestChest = chests
+      .filter((c) => c.tier === "aspire")
+      .map((c) => ({ c, g: gap(hq, c) }))
+      .sort((a, b) => a.g - b.g)[0]!;
     assert.ok(
-      Math.hypot(nitro.x - hq.x, nitro.z - hq.z) >
-        Math.hypot(
-          byId(`dev-aspire-${s.slot}`).x - hq.x,
-          byId(`dev-aspire-${s.slot}`).z - hq.z,
-        ),
-      "Nitro is farther than Aspire",
+      nearestChest.g >= 10 && nearestChest.g <= 26,
+      `${s.id} nearest aspire chest gap ${nearestChest.g}`,
     );
   }
-});
 
-test("8 Predator UniStops and Chests ring the central Landmarks inside 430..570", () => {
-  const predators = STAGING_OBJECTS.filter((o) => o.tier === "predator");
-  assert.equal(predators.length, 16);
-  for (const o of predators) {
-    assert.ok(o.x >= 430 && o.x <= 570 && o.z >= 430 && o.z <= 570, o.id);
+  for (const p of [...unistops, ...chests].filter(
+    (o) => o.tier === "predator",
+  )) {
+    assert.ok(p.x >= 430 && p.x <= 570 && p.z >= 430 && p.z <= 570, p.id);
   }
-  assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "unistop").length, 24);
-  assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "chest").length, 24);
 });
 
 test("compass direction labels follow map orientation (z grows southwards)", () => {

@@ -64,20 +64,29 @@ export const durationText = (seconds: number) =>
   `${Math.ceil(seconds / 60)} phút`;
 /** Signed V2: school contact or staging unlock is supplied by server; weekly km affects Gift only. */
 export function uniStopAvailability(
-  _owner: string,
-  _school: string,
+  owner: string | null | undefined,
+  school: string,
   cooldown: number,
   now: number,
   ready: boolean,
 ): {
-  status: "syncing" | "cooldown" | "ready";
+  status: "syncing" | "unowned" | "foreign" | "cooldown" | "ready";
   remainingSeconds: number;
   canClaim: boolean;
 } {
+  if (!ready) {
+    return { status: "syncing", remainingSeconds: 0, canClaim: false };
+  }
+  if (!owner) {
+    return { status: "unowned", remainingSeconds: 0, canClaim: false };
+  }
+  if (owner !== school) {
+    return { status: "foreign", remainingSeconds: 0, canClaim: false };
+  }
   const remainingSeconds = Math.max(0, Math.ceil((cooldown - now) / 1000));
   return {
-    status: !ready ? "syncing" : remainingSeconds ? "cooldown" : "ready",
+    status: remainingSeconds > 0 ? "cooldown" : "ready",
     remainingSeconds,
-    canClaim: ready && !remainingSeconds,
+    canClaim: remainingSeconds === 0,
   };
 }

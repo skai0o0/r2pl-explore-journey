@@ -349,7 +349,7 @@ export const GAME_CONFIG = {
     weekStartsOn: 1,
   },
   staging: {
-    stationsUnlocked: true,
+    stationsUnlocked: false,
     initialPoints: 1000,
     initialBotPoints: 5000,
     initialCrystals: 1000,
@@ -367,6 +367,8 @@ export interface WorldObject {
   readonly name: string;
   readonly schoolSlot?: number;
   readonly tier?: RewardProfile;
+  readonly ownerSchoolSlot?: number | null;
+  readonly ownerSchoolId?: string | null;
 }
 /** Nearest (clockwise) ring Landmark each school pushes toward first. */
 export const FIRST_LANDMARK_BY_SLOT: readonly string[] = [
@@ -379,51 +381,348 @@ export const FIRST_LANDMARK_BY_SLOT: readonly string[] = [
   "phongnha",
   "nuibaden",
 ];
-/** Predator stations ring the two central Landmarks (430..570 block). */
-const PREDATOR_STATIONS: readonly { readonly x: number; readonly z: number }[] =
-  [
-    { x: 500, z: 480 },
-    { x: 550, z: 440 },
-    { x: 560, z: 500 },
-    { x: 550, z: 560 },
-    { x: 500, z: 515 },
-    { x: 450, z: 560 },
-    { x: 440, z: 500 },
-    { x: 450, z: 440 },
-  ];
-/** Stepping-stone ring layout: Aspire 15–20 tiles off the HQ edge, Nitro ~45 tiles toward the first Landmark. */
-export function steppingStonePlacement(
-  slot: number,
-  tier: RewardProfile,
-): {
-  readonly unistop: { readonly x: number; readonly z: number };
-  readonly chest: { readonly x: number; readonly z: number };
-} {
-  const school = SCHOOLS[slot]!;
-  if (tier === "predator") {
-    const p = PREDATOR_STATIONS[slot]!;
-    return { unistop: p, chest: { x: p.x, z: p.z + 6 } };
-  }
-  const landmark = LANDMARKS.find(
-    (l) => l.id === FIRST_LANDMARK_BY_SLOT[slot],
-  )!;
-  const dx = landmark.x - school.hq.x;
-  const dz = landmark.z - school.hq.z;
-  // Aspire: rectangle gap of 17 tiles between the HQ edge and the UniStop footprint (dominant axis).
-  // Nitro: 45 tiles (Euclidean) from the HQ centre, on the way to the first Landmark.
-  const alongHalf =
-    Math.abs(dx) >= Math.abs(dz)
-      ? GAME_CONFIG.footprints.unistop.width / 2
-      : GAME_CONFIG.footprints.unistop.height / 2;
-  const aspireReach = GAME_CONFIG.footprints.hq.width / 2 + 17 + alongHalf;
-  const scale =
-    tier === "aspire"
-      ? aspireReach / Math.max(Math.abs(dx), Math.abs(dz))
-      : 45 / Math.hypot(dx, dz);
-  const x = Math.round(school.hq.x + dx * scale);
-  const z = Math.round(school.hq.z + dz * scale);
-  return { unistop: { x, z }, chest: { x, z: z + 6 } };
-}
+/** Default 15 neutral UniStops: 8 Aspire outer, 5 Nitro middle, 2 Predator central. */
+export const NEUTRAL_UNISTOPS: readonly WorldObject[] = [
+  // 8 Aspire in outer ring (stepping stones near each school)
+  {
+    id: "unistop_aspire_1",
+    kind: "unistop",
+    name: "UniStop - Aspire #1",
+    x: 532,
+    z: 301,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_2",
+    kind: "unistop",
+    name: "UniStop - Aspire #2",
+    x: 660,
+    z: 373,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_3",
+    kind: "unistop",
+    name: "UniStop - Aspire #3",
+    x: 701,
+    z: 528,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_4",
+    kind: "unistop",
+    name: "UniStop - Aspire #4",
+    x: 623,
+    z: 661,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_5",
+    kind: "unistop",
+    name: "UniStop - Aspire #5",
+    x: 468,
+    z: 699,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_6",
+    kind: "unistop",
+    name: "UniStop - Aspire #6",
+    x: 340,
+    z: 627,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_7",
+    kind: "unistop",
+    name: "UniStop - Aspire #7",
+    x: 299,
+    z: 472,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_aspire_8",
+    kind: "unistop",
+    name: "UniStop - Aspire #8",
+    x: 377,
+    z: 339,
+    width: 10,
+    height: 2,
+    tier: "aspire",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  // 5 Nitro in middle ring
+  {
+    id: "unistop_nitro_1",
+    kind: "unistop",
+    name: "UniStop - Nitro #1",
+    x: 500,
+    z: 360,
+    width: 10,
+    height: 2,
+    tier: "nitro",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_nitro_2",
+    kind: "unistop",
+    name: "UniStop - Nitro #2",
+    x: 630,
+    z: 460,
+    width: 10,
+    height: 2,
+    tier: "nitro",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_nitro_3",
+    kind: "unistop",
+    name: "UniStop - Nitro #3",
+    x: 580,
+    z: 600,
+    width: 10,
+    height: 2,
+    tier: "nitro",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_nitro_4",
+    kind: "unistop",
+    name: "UniStop - Nitro #4",
+    x: 420,
+    z: 600,
+    width: 10,
+    height: 2,
+    tier: "nitro",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_nitro_5",
+    kind: "unistop",
+    name: "UniStop - Nitro #5",
+    x: 370,
+    z: 460,
+    width: 10,
+    height: 2,
+    tier: "nitro",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  // 2 Predator in central area (430..570)
+  {
+    id: "unistop_predator_1",
+    kind: "unistop",
+    name: "UniStop - Predator #1",
+    x: 450,
+    z: 500,
+    width: 10,
+    height: 2,
+    tier: "predator",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+  {
+    id: "unistop_predator_2",
+    kind: "unistop",
+    name: "UniStop - Predator #2",
+    x: 550,
+    z: 500,
+    width: 10,
+    height: 2,
+    tier: "predator",
+    ownerSchoolSlot: null,
+    ownerSchoolId: null,
+  },
+];
+/** Default 15 neutral Chests: 8 Aspire outer, 5 Nitro middle, 2 Predator central. */
+export const NEUTRAL_CHESTS: readonly WorldObject[] = [
+  // 8 Aspire Chests
+  {
+    id: "chest_aspire_1",
+    kind: "chest",
+    name: "Rương Aspire #1",
+    x: 532,
+    z: 307,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_2",
+    kind: "chest",
+    name: "Rương Aspire #2",
+    x: 660,
+    z: 379,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_3",
+    kind: "chest",
+    name: "Rương Aspire #3",
+    x: 701,
+    z: 534,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_4",
+    kind: "chest",
+    name: "Rương Aspire #4",
+    x: 623,
+    z: 667,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_5",
+    kind: "chest",
+    name: "Rương Aspire #5",
+    x: 468,
+    z: 705,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_6",
+    kind: "chest",
+    name: "Rương Aspire #6",
+    x: 340,
+    z: 633,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_7",
+    kind: "chest",
+    name: "Rương Aspire #7",
+    x: 299,
+    z: 478,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  {
+    id: "chest_aspire_8",
+    kind: "chest",
+    name: "Rương Aspire #8",
+    x: 377,
+    z: 345,
+    width: 2,
+    height: 2,
+    tier: "aspire",
+  },
+  // 5 Nitro Chests
+  {
+    id: "chest_nitro_1",
+    kind: "chest",
+    name: "Rương Nitro #1",
+    x: 500,
+    z: 366,
+    width: 2,
+    height: 2,
+    tier: "nitro",
+  },
+  {
+    id: "chest_nitro_2",
+    kind: "chest",
+    name: "Rương Nitro #2",
+    x: 630,
+    z: 466,
+    width: 2,
+    height: 2,
+    tier: "nitro",
+  },
+  {
+    id: "chest_nitro_3",
+    kind: "chest",
+    name: "Rương Nitro #3",
+    x: 580,
+    z: 606,
+    width: 2,
+    height: 2,
+    tier: "nitro",
+  },
+  {
+    id: "chest_nitro_4",
+    kind: "chest",
+    name: "Rương Nitro #4",
+    x: 420,
+    z: 606,
+    width: 2,
+    height: 2,
+    tier: "nitro",
+  },
+  {
+    id: "chest_nitro_5",
+    kind: "chest",
+    name: "Rương Nitro #5",
+    x: 370,
+    z: 466,
+    width: 2,
+    height: 2,
+    tier: "nitro",
+  },
+  // 2 Predator Chests
+  {
+    id: "chest_predator_1",
+    kind: "chest",
+    name: "Rương Predator #1",
+    x: 450,
+    z: 506,
+    width: 2,
+    height: 2,
+    tier: "predator",
+  },
+  {
+    id: "chest_predator_2",
+    kind: "chest",
+    name: "Rương Predator #2",
+    x: 550,
+    z: 506,
+    width: 2,
+    height: 2,
+    tier: "predator",
+  },
+];
 export const STAGING_OBJECTS: readonly WorldObject[] = [
   ...SCHOOLS.map((s) => ({
     id: `hq-${s.id}`,
@@ -442,34 +741,8 @@ export const STAGING_OBJECTS: readonly WorldObject[] = [
     z: l.z,
     ...GAME_CONFIG.footprints.landmark,
   })),
-  ...SCHOOLS.flatMap((s) =>
-    (["aspire", "nitro", "predator"] as const).map((tier) => {
-      const p = steppingStonePlacement(s.slot, tier);
-      return {
-        id: `dev-${tier}-${s.slot}`,
-        kind: "unistop" as const,
-        name: `${s.shortName} ${tier}`,
-        x: p.unistop.x,
-        z: p.unistop.z,
-        ...GAME_CONFIG.footprints.unistop,
-        tier,
-      };
-    }),
-  ),
-  ...SCHOOLS.flatMap((s) =>
-    (["aspire", "nitro", "predator"] as const).map((tier) => {
-      const p = steppingStonePlacement(s.slot, tier);
-      return {
-        id: `chest-${tier}-${s.slot}`,
-        kind: "chest" as const,
-        name: `Chest ${tier}`,
-        x: p.chest.x,
-        z: p.chest.z,
-        ...GAME_CONFIG.footprints.chest,
-        tier,
-      };
-    }),
-  ),
+  ...NEUTRAL_UNISTOPS,
+  ...NEUTRAL_CHESTS,
 ];
 export function objectAt(
   x: number,

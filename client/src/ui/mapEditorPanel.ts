@@ -93,6 +93,19 @@ export class MapEditorPanel {
         <button class="map-editor-tab-btn" data-tab="chest">Chests</button>
       </div>
 
+      <div class="map-editor-add-row" style="padding: 6px 12px; display: flex; gap: 6px; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <select id="meditor-add-template" style="flex: 1; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 4px; padding: 4px 6px; font-size: 11px;">
+          <option value="">+ Thêm đối tượng mới...</option>
+          <option value="unistop:aspire">UniStop - Aspire</option>
+          <option value="unistop:nitro">UniStop - Nitro</option>
+          <option value="unistop:predator">UniStop - Predator</option>
+          <option value="chest:aspire">Chest - Aspire</option>
+          <option value="chest:nitro">Chest - Nitro</option>
+          <option value="chest:predator">Chest - Predator</option>
+        </select>
+        <button type="button" id="meditor-add-btn" class="btn-editor-secondary" style="padding: 4px 8px; font-size: 11px; white-space: nowrap;">Đặt lên map</button>
+      </div>
+
       <div class="map-editor-list" id="meditor-list"></div>
 
       <div class="map-editor-actions">
@@ -181,6 +194,50 @@ export class MapEditorPanel {
       ?.addEventListener("click", () => {
         this.applyToServer();
       });
+
+    // Add Object button
+    this.element
+      .querySelector("#meditor-add-btn")
+      ?.addEventListener("click", () => {
+        const select = this.element.querySelector(
+          "#meditor-add-template",
+        ) as HTMLSelectElement;
+        const val = select?.value;
+        if (!val) return;
+        const [type, tier] = val.split(":") as [
+          "unistop" | "chest",
+          "aspire" | "nitro" | "predator",
+        ];
+        this.addObjectFromTemplate(type, tier);
+        select.value = "";
+      });
+  }
+
+  private addObjectFromTemplate(
+    type: "unistop" | "chest",
+    tier: "aspire" | "nitro" | "predator",
+  ): void {
+    const count =
+      Array.from(this.items.values()).filter(
+        (i) => i.type === type && i.tier === tier,
+      ).length + 1;
+    const id = `${type}_${tier}_${Date.now().toString(36)}`;
+    const name =
+      type === "unistop"
+        ? `UniStop - ${tier.toUpperCase()} #${count}`
+        : `Rương ${tier.toUpperCase()} #${count}`;
+    const newItem: MapEditorItem = {
+      id,
+      type,
+      tier,
+      name,
+      x: 500,
+      y: 500,
+      unassigned: true,
+    };
+    this.items.set(id, newItem);
+    this.renderList();
+    this.startRelocate(newItem);
   }
 
   public updateData(
@@ -309,15 +366,26 @@ export class MapEditorPanel {
           <span class="editor-item-name">${item.name}</span>
           <span class="editor-item-coords">${item.unassigned ? "Chưa bố trí — chọn Đặt vị trí" : `[X: ${item.x}, Z: ${item.y}]`}</span>
         </div>
-        <button class="editor-relocate-btn ${isRelocating ? "active" : ""}" data-relocate-id="${item.id}" title="Click vào bản đồ 3D để di dời">
-          ${Icons.crosshair(12)}
-          <span>${isRelocating ? "ĐANG CHỜ CLICK..." : "Di dời"}</span>
-        </button>
+        <div class="editor-item-actions" style="display: flex; gap: 4px; align-items: center;">
+          <button class="editor-relocate-btn ${isRelocating ? "active" : ""}" data-relocate-id="${item.id}" title="Click vào bản đồ 3D để di dời">
+            ${Icons.crosshair(12)}
+            <span>${isRelocating ? "ĐANG CHỜ CLICK..." : "Di dời"}</span>
+          </button>
+          ${
+            item.type === "unistop" || item.type === "chest"
+              ? `<button class="editor-delete-btn" data-delete-id="${item.id}" title="Xóa đối tượng" style="background: none; border: 1px solid #ef4444; color: #ef4444; border-radius: 4px; padding: 2px 6px; font-size: 11px; cursor: pointer;">✕</button>`
+              : ""
+          }
+        </div>
       `;
 
       // Select item on row click
       row.addEventListener("click", (e) => {
-        if ((e.target as HTMLElement).closest(".editor-relocate-btn")) return;
+        if (
+          (e.target as HTMLElement).closest(".editor-relocate-btn") ||
+          (e.target as HTMLElement).closest(".editor-delete-btn")
+        )
+          return;
         this.selectItem(item);
       });
 
@@ -328,6 +396,17 @@ export class MapEditorPanel {
       relocateBtn?.addEventListener("click", (e) => {
         e.stopPropagation();
         this.startRelocate(item);
+      });
+
+      // Delete button click
+      const deleteBtn = row.querySelector(".editor-delete-btn") as HTMLElement;
+      deleteBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.items.delete(item.id);
+        if (this.selectedItemId === item.id) this.selectedItemId = null;
+        if (this.relocatingItemId === item.id) this.relocatingItemId = null;
+        this.renderList();
+        this.callbacks.onNotification?.(`Đã xóa "${item.name}"!`, "info");
       });
 
       this.listEl.appendChild(row);

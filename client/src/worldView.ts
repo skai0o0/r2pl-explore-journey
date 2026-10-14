@@ -382,6 +382,7 @@ export class WorldView {
   readonly #modelSupports: THREE.Mesh[] = [];
   readonly #privateObjects = new THREE.Group();
   readonly #beacons = new THREE.Group();
+  readonly #unistopMeshes = new Map<string, THREE.Mesh>();
   readonly #landscape: LandscapeEffects;
   readonly #mist: THREE.Mesh;
   readonly #mistTexture: THREE.CanvasTexture;
@@ -553,19 +554,28 @@ export class WorldView {
 
     for (const o of layout.objects ?? []) {
       if (o.kind !== "unistop" && o.kind !== "chest") continue;
-      const color =
+      const baseColor =
         o.tier === "aspire"
           ? 0x72d8ca
           : o.tier === "nitro"
             ? 0xef7253
             : 0xa084ff;
+      const color =
+        o.kind === "unistop" &&
+        o.ownerSchoolSlot !== null &&
+        o.ownerSchoolSlot !== undefined
+          ? (SCHOOLS[o.ownerSchoolSlot]?.color ?? baseColor)
+          : baseColor;
       const mesh = new THREE.Mesh(
         o.kind === "chest"
           ? new THREE.BoxGeometry(o.width, o.height, 2)
           : new THREE.CylinderGeometry(2, 3, 8, 6),
         new THREE.MeshBasicMaterial({ color }),
       );
-      if (o.kind === "unistop") mesh.rotation.x = Math.PI / 2;
+      if (o.kind === "unistop") {
+        mesh.rotation.x = Math.PI / 2;
+        this.#unistopMeshes.set(o.id, mesh);
+      }
       mesh.position.set(o.x - 500, 500 - o.z, o.kind === "chest" ? 1 : 4);
       this.#scene.add(mesh);
     }
@@ -736,6 +746,27 @@ export class WorldView {
       beam.position.set(marker.x - 500, 500 - marker.z, 0);
       beam.userData.beacon = true;
       this.#beacons.add(beam);
+    }
+    this.#render();
+  }
+  updateObjects(objects: readonly WorldObject[]): void {
+    for (const o of objects) {
+      if (o.kind === "unistop") {
+        const mesh = this.#unistopMeshes.get(o.id);
+        if (mesh) {
+          const baseColor =
+            o.tier === "aspire"
+              ? 0x72d8ca
+              : o.tier === "nitro"
+                ? 0xef7253
+                : 0xa084ff;
+          const color =
+            o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
+              ? (SCHOOLS[o.ownerSchoolSlot]?.color ?? baseColor)
+              : baseColor;
+          (mesh.material as THREE.MeshBasicMaterial).color.set(color);
+        }
+      }
     }
     this.#render();
   }

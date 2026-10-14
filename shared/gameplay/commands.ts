@@ -88,7 +88,7 @@ export function parseGameCommand(input: unknown): GameCommand {
     throw new TypeError("Invalid command");
   if (
     v.target !== undefined &&
-    (typeof v.target !== "string" || !/^[a-z0-9-]{1,100}$/.test(v.target))
+    (typeof v.target !== "string" || !/^[a-z0-9_-]{1,100}$/.test(v.target))
   )
     throw new TypeError("Invalid target");
   if (

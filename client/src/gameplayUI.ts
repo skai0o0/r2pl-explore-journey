@@ -153,17 +153,22 @@ export class GameplayUI {
     if (o.kind === "landmark") {
       const d = this.data(o.id);
       if (d) this.landmark.open(d);
-    } else if (o.kind === "unistop" && o.tier && this.player && this.view)
+    } else if (o.kind === "unistop" && o.tier && this.player && this.view) {
+      const ownerId =
+        o.ownerSchoolId ??
+        (o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
+          ? SCHOOLS[o.ownerSchoolSlot]?.id
+          : null);
       this.unistop.open({
         id: o.id,
         tier: o.tier,
-        ownerSchoolId: SCHOOLS[this.player.slot]!.id,
+        ownerSchoolId: ownerId,
         schoolId: SCHOOLS[this.player.slot]!.id,
         cooldownUntil: this.view.cooldowns[o.id] ?? 0,
         profileReady: true,
         hasWeeklyRunningPoints: this.view.weeklyKm > 0,
       });
-    else if (o.kind === "chest") {
+    } else if (o.kind === "chest") {
       this.chestDialog?.close();
       this.chestDialog?.remove();
       const dialog = document.createElement("dialog");
@@ -216,6 +221,26 @@ export class GameplayUI {
       if (id && this.landmark.isVisible()) {
         const d = this.data(id);
         if (d) this.landmark.update(d);
+      }
+      const stopId = this.unistop.getStopId();
+      if (stopId && this.unistop.isOpen()) {
+        const o = this.objects.find((x) => x.id === stopId);
+        if (o && o.tier) {
+          const ownerId =
+            o.ownerSchoolId ??
+            (o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
+              ? SCHOOLS[o.ownerSchoolSlot]?.id
+              : null);
+          this.unistop.update({
+            id: o.id,
+            tier: o.tier,
+            ownerSchoolId: ownerId,
+            schoolId: SCHOOLS[this.player.slot]!.id,
+            cooldownUntil: view.cooldowns[o.id] ?? 0,
+            profileReady: true,
+            hasWeeklyRunningPoints: view.weeklyKm > 0,
+          });
+        }
       }
       const unseen = [...view.events]
         .reverse()

@@ -323,7 +323,10 @@ export class MiniMap {
           : o.kind === "landmark"
             ? "#eecb72"
             : o.kind === "unistop"
-              ? "#6ce2dc"
+              ? o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
+                ? (SCHOOLS.find((s) => s.slot === o.ownerSchoolSlot)?.color ??
+                  "#6ce2dc")
+                : "#94a3b8"
               : "#eaa678";
       ctx.fillRect(o.x * scale - 2, o.z * scale - 2, 4, 4);
     }

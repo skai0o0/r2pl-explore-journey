@@ -14,7 +14,7 @@ import {
   seedHeadquarters,
   seedWorldObjects,
 } from "./SchoolHeadquarters.ts";
-export const SCHOOL_PLAY_CAMPAIGN = "97000000-0000-4000-8000-000000000000";
+export const SCHOOL_PLAY_CAMPAIGN = "98000000-0000-4000-8000-000000000000";
 export interface SchoolPlayActor extends DevIdentity {
   readonly role: "human" | BotRole;
   readonly ordinal: number;
@@ -39,7 +39,7 @@ export async function seedSchoolPlay(
     throw new RangeError("Invalid fixture campaign");
   const code =
     campaignId === SCHOOL_PLAY_CAMPAIGN
-      ? "school-play-rule1-layout2-20261014"
+      ? "school-play-rule1-layout3-20261014"
       : `bot-sim-${campaignId}`;
   const { schools, headquarters } = schoolPlayLayout();
   const actors: SchoolPlayActor[] = [];
@@ -118,18 +118,6 @@ export async function seedSchoolPlay(
     if (created.rowCount === 1)
       await seedHeadquarters(db, campaignId, headquarters);
     await seedWorldObjects(db, campaignId);
-    for (const actor of actors.filter((a) => a.role === "human")) {
-      const starter = await db.query(
-        "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'starter-discoveries',$2,'{}') ON CONFLICT DO NOTHING RETURNING 1",
-        [campaignId, actor.actorId],
-      );
-      if (!starter.rowCount) continue;
-      for (const tier of ["aspire", "nitro", "predator"])
-        await db.query(
-          "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-          [campaignId, actor.actorId, `chest-${tier}-${actor.schoolSlot}`],
-        );
-    }
     const savedHQs = (
       await db.query<{ data: WorldObject }>(
         "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind'='hq'",

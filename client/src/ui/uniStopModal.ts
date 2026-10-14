@@ -9,7 +9,7 @@ import {
 export interface UniStopView {
   id: string;
   tier: UniStopTier;
-  ownerSchoolId: string;
+  ownerSchoolId?: string | null | undefined;
   schoolId: string;
   cooldownUntil: number;
   profileReady: boolean;
@@ -148,7 +148,10 @@ export class UniStopModal {
       config = UNISTOP_CONFIGS[d.tier],
       state = this.availability();
     this.title.textContent = config.name;
-    this.owner.textContent = `Trường giữ trạm: ${SCHOOL_ROSTER[d.ownerSchoolId]?.name || "Chưa có trường giữ trạm"}`;
+    this.owner.textContent =
+      d.ownerSchoolId && SCHOOL_ROSTER[d.ownerSchoolId]
+        ? `Trường giữ trạm: ${SCHOOL_ROSTER[d.ownerSchoolId]?.name}`
+        : "Trạng thái: Trạm trung lập (Mở đường chạm trạm để trường chiếm giữ)";
     this.status.textContent = this.pending
       ? "Đang nhận kết quả tiếp tế…"
       : {

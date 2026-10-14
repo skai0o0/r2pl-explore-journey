@@ -509,13 +509,35 @@ function refreshRanking(): void {
 }
 refreshRanking();
 window.setInterval(refreshRanking, 5000);
-const layoutDigest = JSON.stringify(publicWorld);
+const layoutDigest = JSON.stringify(publicWorld.map((o) => o.id));
 window.setInterval(() => {
   void fetch("/api/fixture/world", { cache: "no-store" })
     .then((r) => r.json())
     .then((v: { objects: WorldObject[] }) => {
+      let changed = false;
+      for (const obj of v.objects) {
+        const found = publicWorld.find((p) => p.id === obj.id);
+        if (found) {
+          if (
+            found.ownerSchoolSlot !== obj.ownerSchoolSlot ||
+            found.ownerSchoolId !== obj.ownerSchoolId
+          ) {
+            (
+              found as { ownerSchoolSlot?: number | null | undefined }
+            ).ownerSchoolSlot = obj.ownerSchoolSlot;
+            (
+              found as { ownerSchoolId?: string | null | undefined }
+            ).ownerSchoolId = obj.ownerSchoolId;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        miniMap.setObjects(publicWorld);
+        world.updateObjects(publicWorld);
+      }
       if (
-        JSON.stringify(v.objects) !== layoutDigest &&
+        JSON.stringify(v.objects.map((o) => o.id)) !== layoutDigest &&
         !document.querySelector(".layout-update")
       ) {
         const update = document.createElement("button");

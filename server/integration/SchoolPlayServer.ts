@@ -305,6 +305,7 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/world") {
+        await gameplay.syncStops();
         const rows = await pool.query<{ data: unknown }>(
           "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind' <> 'chest' ORDER BY id",
           [fixture.campaignId],

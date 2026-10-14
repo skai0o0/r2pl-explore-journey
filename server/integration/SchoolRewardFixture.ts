@@ -64,6 +64,35 @@ export async function provisionSchoolRewards(
         ],
       );
     }
+    // Neutral UniStops: 8 Aspire, 5 Nitro, 2 Predator
+    const neutralUniStops = [
+      ...Array.from({ length: 8 }, (_, i) => ({ id: `unistop_aspire_${i + 1}`, profile: "aspire" })),
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `unistop_nitro_${i + 1}`, profile: "nitro" })),
+      ...Array.from({ length: 2 }, (_, i) => ({ id: `unistop_predator_${i + 1}`, profile: "predator" })),
+    ];
+    for (const stop of neutralUniStops) {
+      await db.query(
+        "INSERT INTO r2pl_prep.reward_targets(campaign_id,target_id,kind,rule_version,profile) VALUES($1,$2,'unistop',$3,$4) ON CONFLICT DO NOTHING",
+        [fixture.campaignId, stop.id, REWARD_PREPARATION_VERSION, stop.profile],
+      );
+    }
+    // Neutral Chests: 8 Aspire, 5 Nitro, 2 Predator
+    const neutralChests = [
+      ...Array.from({ length: 8 }, (_, i) => ({ id: `chest_aspire_${i + 1}` })),
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `chest_nitro_${i + 1}` })),
+      ...Array.from({ length: 2 }, (_, i) => ({ id: `chest_predator_${i + 1}` })),
+    ];
+    for (const chest of neutralChests) {
+      await db.query(
+        "INSERT INTO r2pl_prep.reward_targets(campaign_id,target_id,kind,rule_version,fixed_reward) VALUES($1,$2,'chest',$3,$4) ON CONFLICT DO NOTHING",
+        [
+          fixture.campaignId,
+          chest.id,
+          REWARD_PREPARATION_VERSION,
+          JSON.stringify({ kind: "points", quantity: 2 }),
+        ],
+      );
+    }
     // Existing immutable targets must match the published dev fixture exactly.
     for (const school of fixture.schools) {
       const ids = ["aspire", "nitro", "predator", "chest"].map(

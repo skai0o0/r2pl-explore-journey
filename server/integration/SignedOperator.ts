@@ -129,7 +129,7 @@ export class SignedOperator {
         if (
           !o ||
           typeof o !== "object" ||
-          !/^[a-z0-9-]{1,100}$/.test(o.id) ||
+          !/^[a-z0-9_-]{1,100}$/.test(o.id) ||
           ids.has(o.id) ||
           !["hq", "landmark", "unistop", "chest"].includes(o.kind) ||
           typeof o.name !== "string" ||
@@ -150,6 +150,8 @@ export class SignedOperator {
                 "height",
                 "schoolSlot",
                 "tier",
+                "ownerSchoolSlot",
+                "ownerSchoolId",
               ].includes(k),
           )
         )
