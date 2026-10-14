@@ -34,6 +34,8 @@ export interface LandmarkModalData {
   guessedBySchoolId?: string | undefined;
   guessedSchools?: any;
   guessCooldownUntil?: number | undefined;
+  distanceToPerimeter?: number;
+  closestFrontier?: { x: number; z: number };
   // Aliases for compatibility
   currentFuel?: number | undefined;
   maxFuel?: number | undefined;
@@ -45,6 +47,7 @@ export interface LandmarkModalCallbacks {
   onContributeFuel?: (landmarkId: string, amount: number) => void;
   onGuessLandmark?: (landmarkId: string, guess: string) => void;
   onFocusLandmark?: (x: number, y: number) => void;
+  onGuidePath?: (x: number, y: number) => void;
   onConvertPoints?: (amount: number) => void;
 }
 
@@ -398,6 +401,65 @@ export class LandmarkModal {
             </div>
           </div>
 
+          <!-- Requirements Checklist -->
+          <div class="requirements-checklist-card">
+            <div class="checklist-header">
+              <span class="checklist-title">ĐIỀU KIỆN TƯƠNG TÁC ĐÈN HIỆU KỲ QUAN</span>
+            </div>
+
+            <!-- Item 1: Territory connection -->
+            <div class="checklist-item ${data.hasPath !== false ? "ok" : "fail"}">
+              <span class="check-icon">${data.hasPath !== false ? "✅" : "❌"}</span>
+              <div class="check-info">
+                <strong>Kết nối Tri thức của trường:</strong>
+                <span>${
+                  data.hasPath !== false
+                    ? "Vùng Tri thức của trường đã chạm công trình (Được phép nạp Tinh Thể)"
+                    : `Chưa chạm vùng Tri thức${data.distanceToPerimeter ? ` (Cách rìa gần nhất ${data.distanceToPerimeter} ô)` : ""} — Cần mở đường chạm viền 40×40 để nạp Tinh Thể`
+                }</span>
+                ${
+                  data.hasPath === false && data.x !== undefined && data.y !== undefined
+                    ? `
+                  <div class="check-action-row">
+                    <button type="button" class="btn-check-guide" id="btn-guide-landmark">
+                      🧭 Dẫn đường mở ô tới đây
+                    </button>
+                  </div>
+                `
+                    : ""
+                }
+              </div>
+            </div>
+
+            <!-- Item 2: Landmark Guessing -->
+            <div class="checklist-item ${mySchoolGuessed ? "ok" : isUnderCooldown ? "wait" : "warn"}">
+              <span class="check-icon">${mySchoolGuessed ? "✅" : isUnderCooldown ? "⏳" : "💡"}</span>
+              <div class="check-info">
+                <strong>Giải đố Địa danh (+10% Tinh Thể = +${guessBonus} Tinh Thể):</strong>
+                <span>${
+                  mySchoolGuessed
+                    ? `Trường bạn đã giải đố thành công! (+${guessBonus} Tinh Thể đã cộng)`
+                    : isUnderCooldown
+                      ? `Đoán sai: Đang trong thời gian chờ thử lại (${mm}:${ss})`
+                      : `Chưa giải đố (Dự đoán tên địa danh bên dưới để nhận +${guessBonus} Tinh Thể)`
+                }</span>
+              </div>
+            </div>
+
+            <!-- Item 3: Crystal comparison vs Overtake target -->
+            <div class="checklist-item ${isLit && data.litBySchoolId === data.playerSchoolId ? "ok" : "warn"}">
+              <span class="check-icon">${isLit && data.litBySchoolId === data.playerSchoolId ? "⚡" : "🎯"}</span>
+              <div class="check-info">
+                <strong>Tiến độ Tinh thể trường bạn vs Mốc Đèn hiệu:</strong>
+                <span>Trường bạn đã nạp <strong>${myCrystals}</strong> / Mốc cần: <strong>${targetCrystals}</strong> Tinh thể ${
+                  isLit && data.litBySchoolId === data.playerSchoolId
+                    ? "— Trường bạn đang thắp sáng Đèn Hiệu!"
+                    : `(Cần nạp thêm ${Math.max(0, targetCrystals - myCrystals)} Tinh Thể để vượt)`
+                }</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 2. Crystal Progress Bar -->
           <div class="lm-progress-block">
             <div class="lm-progress-header">
@@ -664,6 +726,14 @@ export class LandmarkModal {
       if (e.key === "Enter") {
         e.preventDefault();
         doSubmitGuess();
+      }
+    });
+
+    const guideBtn = this.overlay.querySelector("#btn-guide-landmark");
+    guideBtn?.addEventListener("click", () => {
+      if (this.currentData?.x !== undefined && this.currentData?.y !== undefined) {
+        this.close();
+        this.callbacks.onGuidePath?.(this.currentData.x, this.currentData.y);
       }
     });
   }

@@ -1,5 +1,7 @@
 import type { DevRewardTarget } from "../../shared/rewards/playable.ts";
 import { RewardSession, type RewardState } from "./rewardSession.ts";
+import { CarouselModal } from "./ui/carouselModal.ts";
+import type { LootItem } from "./ui/v1Adapters.ts";
 
 const element = <T extends HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -22,6 +24,8 @@ export class RewardsPanel {
   readonly #dialog = element<HTMLDialogElement>("rewards-dialog");
   readonly #open = element<HTMLButtonElement>("inventory-button");
   readonly #session: RewardSession;
+  readonly #carousel = new CarouselModal();
+  #lastShownKey = "";
   #label = "";
   constructor(
     enabled: boolean,
@@ -89,6 +93,38 @@ export class RewardsPanel {
       ? `Mã lệnh: ${state.pending.key}`
       : "";
     const receipt = state.receipt;
+    if (
+      receipt &&
+      receipt.status === "applied" &&
+      receipt.reward &&
+      receipt.command.key !== this.#lastShownKey
+    ) {
+      this.#lastShownKey = receipt.command.key;
+      const kind = receipt.reward.kind;
+      const isChest = receipt.command.targetId.startsWith("chest");
+      const winner: LootItem = {
+        id: `${kind}-${receipt.reward.quantity}`,
+        name: `${rewardNames[kind]} ×${receipt.reward.quantity}`,
+        type: kind === "crystals" ? "crystal" : kind,
+        description: "Phần thưởng nhận từ Kho & phần thưởng.",
+        rarity: receipt.reward.quantity >= 4 ? "epic" : "common",
+        amount: receipt.reward.quantity,
+        weight: 1,
+      };
+      const items: LootItem[] = Array.from({ length: 30 }, (_, i) =>
+        i === 24
+          ? winner
+          : { ...winner, id: `${winner.id}-${i}` },
+      );
+      this.#carousel.spin({
+        title: isChest ? "RƯƠNG KHO BÁU" : "TRẠM TIẾP TẾ",
+        sourceType: isChest ? "chest" : "unistop",
+        tier: "aspire",
+        items,
+        winningIndex: 24,
+        winningItem: winner,
+      });
+    }
     element("reward-receipt").textContent = receipt
       ? receipt.status === "applied" && receipt.reward
         ? `Đã nhận ${receipt.reward.quantity} ${rewardNames[receipt.reward.kind]} · ${receipt.command.targetId} · ${new Date(receipt.processedAtMs).toLocaleTimeString()}`

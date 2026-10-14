@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check shared server client tests scripts",
     "format": "biome check --write shared server client tests scripts",
+    "dev:server": "node --experimental-strip-types scripts/play-dev.ts",
+    "dev": "vite --port 5173",
     "test": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.ts",
     "build:client": "vite build client --outDir ../dist/client --emptyOutDir",
     "build": "npm run typecheck && npm run build:client",

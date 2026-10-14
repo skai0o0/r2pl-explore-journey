@@ -16,8 +16,14 @@ import {
 } from "../../shared/gameplay/landmarkPuzzle.ts";
 import type { DevPlayer } from "../../shared/integration/devSession.ts";
 import { CarouselModal } from "./ui/carouselModal.ts";
+import { ChestModal } from "./ui/chestModal.ts";
 import { LandmarkModal } from "./ui/landmarkModal.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
+import {
+  notifyActionError,
+  notifyActionSuccess,
+  notifyGameEvent,
+} from "./ui/notifications.ts";
 import {
   campaignDisplayText,
   objectDisplayName,
@@ -31,7 +37,16 @@ export class GameplayUI {
   private generation = 0;
   private refreshRequest = 0;
   private busy = false;
-  private chestDialog: HTMLDialogElement | undefined;
+  private chestModal = new ChestModal({
+    onOpenChest: (id) => void this.command({ action: "open", target: id }),
+    onFindKey: (tier) => {
+      const stop = this.objects.find(
+        (o) => o.kind === "unistop" && o.tier === tier,
+      );
+      if (stop) this.focus(stop.x, stop.z);
+    },
+    onGuidePath: (x, z) => this.onGuidePath?.(x, z),
+  });
   private panel = document.createElement("details");
   private seen = new Set<string>();
   private landmark = new LandmarkModal({
@@ -40,10 +55,13 @@ export class GameplayUI {
     onGuessLandmark: (id, guess) =>
       void this.command({ action: "guess", target: id, guess }),
     onFocusLandmark: (x, z) => this.focus(x, z),
+    onGuidePath: (x, z) => this.onGuidePath?.(x, z),
   });
-  private unistop = new UniStopModal(
-    (id) => void this.command({ action: "spin", target: id }),
-  );
+  private unistop = new UniStopModal({
+    onClaim: (id) => void this.command({ action: "spin", target: id }),
+    onGuidePath: (x, z) => this.onGuidePath?.(x, z),
+    onSyncRunning: () => this.onSyncRunning?.(),
+  });
   private carousel = new CarouselModal();
   constructor(
     private objects: readonly WorldObject[],
@@ -54,6 +72,8 @@ export class GameplayUI {
     private onChestOpened?: (id: string) => void,
     private devMode = false,
     private visibleObject: (object: WorldObject) => boolean = () => true,
+    private onGuidePath?: (x: number, z: number) => void,
+    private onSyncRunning?: () => void,
   ) {
     this.panel.className = "gameplay-menu";
     this.panel.innerHTML =
@@ -120,7 +140,7 @@ export class GameplayUI {
       this.landmark.isVisible() ||
       this.unistop.isOpen() ||
       this.carousel.isOpen() ||
-      !!this.chestDialog?.open
+      this.chestModal.isVisible()
     );
   }
   select(player: DevPlayer): void {
@@ -131,9 +151,7 @@ export class GameplayUI {
     this.landmark.close();
     this.unistop.close();
     this.carousel.close();
-    this.chestDialog?.close();
-    this.chestDialog?.remove();
-    this.chestDialog = undefined;
+    this.chestModal.close();
     NotificationBanner.clearAll();
     this.seen = new Set(
       JSON.parse(
@@ -180,7 +198,7 @@ export class GameplayUI {
     if (o.kind === "landmark") {
       const d = this.data(o.id);
       if (d) this.landmark.open(d);
-    } else if (o.kind === "unistop" && o.tier && this.player && this.view) {
+    } else if (o.kind === "unistop" && o.tier && this.player) {
       const ownerId =
         o.ownerSchoolId ??
         (o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
@@ -189,41 +207,26 @@ export class GameplayUI {
       this.unistop.open({
         id: o.id,
         tier: o.tier,
+        x: o.x,
+        z: o.z,
         ownerSchoolId: ownerId,
         schoolId: SCHOOLS[this.player.slot]!.id,
-        cooldownUntil: this.view.cooldowns[o.id] ?? 0,
+        cooldownUntil: this.view?.cooldowns[o.id] ?? 0,
         profileReady: true,
-        hasWeeklyRunningPoints: this.view.weeklyKm > 0,
+        hasWeeklyRunningPoints: (this.view?.weeklyKm ?? 0) > 0,
       });
-    } else if (o.kind === "chest") {
-      this.chestDialog?.close();
-      this.chestDialog?.remove();
-      const dialog = document.createElement("dialog");
-      this.chestDialog = dialog;
-      dialog.className = "chest-dialog";
-      const title = document.createElement("h2");
-      title.textContent = this.objectName(o);
-      const info = document.createElement("p");
-      info.textContent = `Mở rương: ${GAME_CONFIG.rewards.chestKeyCost} Chìa Khóa ${o.tier}`;
-      const button = document.createElement("button");
-      button.textContent = "Mở rương";
-      button.disabled =
-        !o.tier ||
-        Number(this.view?.keys[o.tier] ?? 0) < GAME_CONFIG.rewards.chestKeyCost;
-      button.onclick = () => {
-        dialog.close();
-        dialog.remove();
-        void this.command({ action: "open", target: o.id });
-      };
-      const close = document.createElement("button");
-      close.textContent = "Đóng";
-      close.onclick = () => {
-        dialog.close();
-        dialog.remove();
-      };
-      dialog.append(title, info, button, close);
-      document.body.append(dialog);
-      dialog.showModal();
+    } else if (o.kind === "chest" && o.tier && this.player) {
+      const keysCount = Number(this.view?.keys[o.tier] ?? 0);
+      const claimed = (this.view?.chests.find((c) => c.id === o.id) as any)?.claimed ?? false;
+      this.chestModal.open({
+        id: o.id,
+        tier: o.tier as "aspire" | "nitro" | "predator",
+        x: o.x,
+        z: o.z,
+        keysCount,
+        claimed,
+        discovered: true,
+      });
     }
   }
   async refresh(): Promise<void> {
@@ -354,6 +357,7 @@ export class GameplayUI {
 
       if (receipt.reward) {
         this.unistop.close();
+        this.chestModal.close();
         const o =
           this.objects.find((o) => o.id === c.target) ??
           this.view?.chests.find((o) => o.id === c.target);
@@ -371,6 +375,12 @@ export class GameplayUI {
                   ]!,
                 ),
           );
+        const giftCode =
+          receipt.reward.kind === "gift"
+            ? (receipt.giftCode ??
+              `R2PL-GIFT-${c.key.substring(0, 6).toUpperCase()}`)
+            : undefined;
+
         this.carousel.spin({
           title: o ? this.objectName(o) : "Phần thưởng",
           sourceType: c.action === "open" ? "chest" : "unistop",
@@ -378,20 +388,103 @@ export class GameplayUI {
           items,
           winningIndex: 24,
           winningItem: winner,
+          discoveryCoords: receipt.discovery
+            ? { x: receipt.discovery.x, z: receipt.discovery.z }
+            : undefined,
+          onViewTreasureMap: (coords) => this.focus(coords.x, coords.z),
+          giftCode,
         });
+
+        if (receipt.reward.kind === "gift") {
+          notifyGameEvent("real_gift_viral", {
+            student_name: this.player?.label ?? "Bạn",
+            gift_name: "Quà Hiện Vật Predator",
+            gift_code: giftCode ?? "",
+          });
+        } else if (receipt.reward.kind === "treasure_map") {
+          notifyGameEvent(
+            "map_found",
+            {
+              chest_tier: (o?.tier ?? "aspire").toUpperCase(),
+              x: receipt.discovery?.x ?? 0,
+              z: receipt.discovery?.z ?? 0,
+            },
+            () => {
+              if (receipt.discovery)
+                this.focus(receipt.discovery.x, receipt.discovery.z);
+            },
+          );
+        } else if (receipt.reward.kind === "key") {
+          notifyGameEvent("key_found", {
+            chest_tier: (o?.tier ?? "aspire").toUpperCase(),
+          });
+        }
+
         if (c.action === "open" && c.target) {
           this.onChestOpened?.(c.target);
+          notifyGameEvent(
+            "chest_opened_big",
+            {
+              chest_tier: (o?.tier ?? "aspire").toUpperCase(),
+              x: o?.x ?? 0,
+              z: o?.z ?? 0,
+              reward_text: winner.name,
+            },
+            () => {
+              if (o) this.focus(o.x, o.z);
+            },
+          );
         }
       }
+
+      if (c.action === "guess") {
+        if (receipt.status === "applied") {
+          notifyGameEvent("lm_guess_correct", {
+            student_name: this.player?.label ?? "Bạn",
+            landmark_name:
+              this.objects.find((x) => x.id === c.target)?.name ?? "Địa danh",
+          });
+        } else {
+          notifyActionError(
+            "Giải đố chưa chính xác",
+            "Cần chờ 10 phút trước khi thử lại.",
+          );
+        }
+      } else if (c.action === "contribute") {
+        notifyActionSuccess(
+          "Đóng góp Tinh Thể",
+          `Đã nạp ${c.amount ?? 1} Tinh Thể vào Đèn hiệu công trình!`,
+          undefined,
+          "landmark",
+          "flame",
+        );
+      } else if (c.action === "upkeep") {
+        notifyActionSuccess(
+          "Duy trì Tri thức chung",
+          "Đã gia hạn 24 giờ cho vùng Tri thức giao lưu!",
+          undefined,
+          "territory",
+          "shield-check",
+        );
+      } else if (c.action === "consolidate") {
+        notifyActionSuccess(
+          "Góp Điểm giữ tri thức",
+          "Đã góp 1 Điểm để gom cụm Tri thức vĩnh viễn!",
+          undefined,
+          "territory",
+          "shield-check",
+        );
+      }
+
       if (receipt.discovery)
         this.focus(receipt.discovery.x, receipt.discovery.z);
       await this.refresh();
     } catch {
       if (generation === this.generation)
-        NotificationBanner.show({
-          title: "Chưa nhận được xác nhận",
-          body: "Thao tác được lưu để thử lại khi kết nối ổn định.",
-        });
+        notifyActionError(
+          "Chưa nhận được xác nhận",
+          "Thao tác được lưu để thử lại khi kết nối ổn định.",
+        );
     } finally {
       if (generation === this.generation) {
         this.busy = false;

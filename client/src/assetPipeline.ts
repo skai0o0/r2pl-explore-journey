@@ -53,6 +53,15 @@ export function tunePbrMaterials(root: THREE.Object3D): void {
   });
 }
 
+export function enableShadows(root: THREE.Object3D): void {
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.castShadow = true;
+      object.receiveShadow = true;
+    }
+  });
+}
+
 export function applyGlbModelPlacement(
   model: THREE.Object3D,
   placement: ModelPlacement,
@@ -169,6 +178,7 @@ export function mountModelAsset(
   let model: THREE.Object3D | undefined;
   let fallbackDisposed = false;
   applyModelPlacement(fallback, placement);
+  enableShadows(fallback);
   scene.add(fallback);
 
   if (options?.skipIfUnavailable && !isModelAvailable(url)) {
@@ -190,6 +200,7 @@ export function mountModelAsset(
         return "fallback" as const;
       }
       tunePbrMaterials(loaded);
+      enableShadows(loaded);
       if (options?.colorHex !== undefined) {
         tintModelFactionMaterials(loaded, options.colorHex);
       }

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {
   LANDMARKS,
+  objectAt,
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
@@ -34,6 +35,11 @@ import {
 import { LandscapeEffects } from "./landscape.ts";
 import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import {
+  createTileLayerMaterial,
+  type TilePulses,
+  tileFxTime,
+} from "./tileFx.ts";
+import {
   footprintDiscovered,
   layoutMapLabels,
   objectDisplayName,
@@ -63,6 +69,7 @@ export function deriveDevCreditState(
 
 const CAMERA_DISTANCE = 1_800;
 const CAMERA_FAR = 4_000;
+const SUN_OFFSET: readonly [number, number, number] = [-240, 120, 360];
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
 export function configureMapCamera(
@@ -347,9 +354,11 @@ function foggedBaseTerrainPixels(): Uint8Array {
         Math.sin(x * 0.012 + z * 0.008) * 0.5 +
         Math.cos(x * 0.007 - z * 0.015) * 0.5;
       const mist = Math.floor(mistWave * 4);
-      let r = 8 + mist;
-      let g = 20 + mist;
-      let b = 27 + mist;
+      const centre = Math.max(0, 1 - Math.hypot(x - 500, z - 500) / 560);
+      const lattice = x % 16 === 0 && z % 16 === 0 ? 9 : 0;
+      let r = 8 + mist + Math.round(centre * 3) + lattice;
+      let g = 20 + mist + Math.round(centre * 9) + lattice;
+      let b = 27 + mist + Math.round(centre * 13) + lattice;
 
       for (const c of CLEARINGS) {
         if (Math.abs(x - c.x) >= c.r || Math.abs(z - c.z) >= c.r) continue;
@@ -375,6 +384,7 @@ export class WorldView {
   readonly #host: HTMLElement;
   readonly #renderer: THREE.WebGLRenderer;
   readonly #scene = new THREE.Scene();
+  #sun: THREE.DirectionalLight | undefined;
   readonly #camera = new THREE.OrthographicCamera(
     -1,
     1,
@@ -389,11 +399,18 @@ export class WorldView {
   readonly #projectedPoint = new THREE.Vector3();
   readonly #chunkLayers = new Map<
     number,
-    { pixels: Uint8Array; texture: THREE.DataTexture; mesh: THREE.Mesh }
+    {
+      pixels: Uint8Array;
+      texture: THREE.DataTexture;
+      mesh: THREE.Mesh;
+      pulses: TilePulses;
+    }
   >();
+  #fxFrame: number | undefined;
   readonly #markerElements: HTMLElement[] = [];
   readonly #markers: WorldMarker[];
-  readonly #catalog: readonly WorldObject[];
+  readonly #baseCatalog: readonly WorldObject[];
+  #catalog: readonly WorldObject[];
   readonly #solvedLandmarks = new Set<string>();
   readonly #isDev: boolean;
   #selectedObject: string | undefined;
@@ -412,6 +429,8 @@ export class WorldView {
   #replica: ProjectionReplica | undefined;
   #tickTimer: number | undefined;
   readonly #editorPreview = new THREE.Group();
+  readonly #pathPreviewGroup = new THREE.Group();
+  readonly #frontierGroup = new THREE.Group();
   readonly #tileIndicators = new TileIndicatorLayer();
   readonly #selection: HTMLElement;
   readonly #hoverElement: HTMLElement;
@@ -421,6 +440,7 @@ export class WorldView {
   readonly #onPick: (tile: PickedTile) => void;
   readonly #onViewChange: () => void;
   readonly #onHover: ((tile: PickedTile | undefined) => void) | undefined;
+  readonly #onPickObject: ((object: WorldObject) => void) | undefined;
 
   #schoolSlot = 0;
   #cameraMode: CameraMode = "isometric";
@@ -448,15 +468,20 @@ export class WorldView {
       readonly markers?: readonly WorldMarker[];
       readonly placements?: readonly ModelPlacement[];
       readonly objects?: readonly WorldObject[];
+      readonly onPickObject?: (object: WorldObject) => void;
     } = {},
   ) {
     this.#host = host;
     this.#onPick = onPick;
     this.#onViewChange = onViewChange;
     this.#onHover = onHover;
+    this.#onPickObject = layout.onPickObject;
     this.#markers = [...(layout.markers ?? markers)];
-    this.#catalog = layout.objects ?? [];
+    this.#baseCatalog = layout.objects ?? [];
+    this.#catalog = [...this.#baseCatalog];
     this.#isDev = document.body.dataset.debug === "true";
+    this.#scene.add(this.#pathPreviewGroup);
+    this.#scene.add(this.#frontierGroup);
 
     this.#renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -466,21 +491,40 @@ export class WorldView {
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.#renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.#renderer.toneMappingExposure = 1.15;
+    this.#renderer.shadowMap.enabled = true;
+    this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.append(this.#renderer.domElement);
     this.#scene.background = new THREE.Color(0x0b1a20);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.15);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
     this.#scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.95);
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x2a3a2e, 0.9);
     hemiLight.position.set(0, 0, 300);
     this.#scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfffbe8, 1.6);
-    dirLight.position.set(180, -180, 320);
+    const dirLight = new THREE.DirectionalLight(0xfff1d6, 2.4);
+    dirLight.position.set(...SUN_OFFSET);
     dirLight.target.position.set(0, 0, 0);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
+    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.far = 1500;
+    dirLight.shadow.bias = -0.0004;
+    dirLight.shadow.normalBias = 0.2;
+    this.#sun = dirLight;
     this.#scene.add(dirLight);
     this.#scene.add(dirLight.target);
+
+    // Transparent ground that only shows cast shadows (terrain itself is unlit).
+    const shadowGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
+      new THREE.ShadowMaterial({ color: 0x050a10, opacity: 0.38 }),
+    );
+    shadowGround.position.z = 0.08;
+    shadowGround.receiveShadow = true;
+    shadowGround.renderOrder = 1;
+    this.#scene.add(shadowGround);
 
     const terrain = new THREE.DataTexture(
       foggedBaseTerrainPixels(),
@@ -671,6 +715,22 @@ export class WorldView {
       element.dataset.markerId = marker.id ?? marker.title;
       copy.append(title, detail);
       element.append(glyph, copy);
+      element.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const obj = this.#catalog.find((o) => o.id === (marker.id ?? marker.title));
+        if (obj) {
+          const tile: PickedTile = {
+            x: obj.x,
+            z: obj.z,
+            index: tileIndex(obj.x, obj.z),
+            chunk: chunkId(Math.floor(obj.x / 64), Math.floor(obj.z / 64)),
+            local: (obj.z % 64) * 64 + (obj.x % 64),
+          };
+          this.select(tile);
+          this.#onPick(tile);
+          this.#onPickObject?.(obj);
+        }
+      });
       host.append(element);
       this.#markerElements.push(element);
     }
@@ -734,6 +794,7 @@ export class WorldView {
     this.#landscape.dispose();
     this.#mistTexture.dispose();
     if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
+    if (this.#fxFrame !== undefined) cancelAnimationFrame(this.#fxFrame);
     this.#scene.remove(this.#tileIndicators.object);
     this.#tileIndicators.dispose();
     for (const mount of this.#assetMounts) mount.dispose();
@@ -969,11 +1030,24 @@ export class WorldView {
       copy.className = "marker-copy";
       const title = document.createElement("b");
       title.textContent = marker.title;
-      copy.append(title);
       element.append(glyph, copy);
+      element.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tile: PickedTile = {
+          x: o.x,
+          z: o.z,
+          index: tileIndex(o.x, o.z),
+          chunk: chunkId(Math.floor(o.x / 64), Math.floor(o.z / 64)),
+          local: (o.z % 64) * 64 + (o.x % 64),
+        };
+        this.select(tile);
+        this.#onPick(tile);
+        this.#onPickObject?.(o);
+      });
       this.#host.append(element);
       this.#markerElements.push(element);
     }
+    this.#catalog = [...this.#baseCatalog, ...objects];
     this.#render();
   }
   get viewState(): { x: number; z: number; span: number } {
@@ -1080,6 +1154,105 @@ export class WorldView {
     this.#render();
   }
 
+  setPathPreview(path: { x: number; z: number }[] | undefined): void {
+    while (this.#pathPreviewGroup.children.length > 0) {
+      const child = this.#pathPreviewGroup.children[0]!;
+      this.#pathPreviewGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+        else child.material?.dispose();
+      }
+    }
+    if (!path || path.length === 0) {
+      this.#render();
+      return;
+    }
+    const dotGeo = new THREE.PlaneGeometry(0.75, 0.75);
+    const dotMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffe8,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i]!;
+      const mesh = new THREE.Mesh(dotGeo, dotMat);
+      mesh.position.set(p.x - 500 + 0.5, 500 - p.z - 0.5, 0.16);
+      this.#pathPreviewGroup.add(mesh);
+    }
+    this.#render();
+  }
+
+  setFrontierTiles(tiles: readonly { x: number; z: number; isStudy?: boolean }[]): void {
+    while (this.#frontierGroup.children.length > 0) {
+      const child = this.#frontierGroup.children[0]!;
+      this.#frontierGroup.remove(child);
+      if (child instanceof THREE.LineSegments) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+        else child.material?.dispose();
+      }
+    }
+    if (!tiles || tiles.length === 0) {
+      this.#render();
+      return;
+    }
+
+    const wildPoints: number[] = [];
+    const studyPoints: number[] = [];
+
+    for (const t of tiles) {
+      const minX = t.x - 500 + 0.05;
+      const maxX = t.x - 500 + 0.95;
+      const minZ = 500 - t.z - 0.95;
+      const maxZ = 500 - t.z - 0.05;
+      const arr = t.isStudy ? studyPoints : wildPoints;
+      arr.push(
+        minX, minZ, 0.14,  maxX, minZ, 0.14,
+        maxX, minZ, 0.14,  maxX, maxZ, 0.14,
+        maxX, maxZ, 0.14,  minX, maxZ, 0.14,
+        minX, maxZ, 0.14,  minX, minZ, 0.14,
+      );
+    }
+
+    if (wildPoints.length > 0) {
+      const wildGeo = new THREE.BufferGeometry();
+      wildGeo.setAttribute("position", new THREE.Float32BufferAttribute(wildPoints, 3));
+      const wildMat = new THREE.LineBasicMaterial({
+        color: 0x00ffe8,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+      });
+      this.#frontierGroup.add(new THREE.LineSegments(wildGeo, wildMat));
+    }
+
+    if (studyPoints.length > 0) {
+      const studyGeo = new THREE.BufferGeometry();
+      studyGeo.setAttribute("position", new THREE.Float32BufferAttribute(studyPoints, 3));
+      const studyMat = new THREE.LineBasicMaterial({
+        color: 0xffb703,
+        transparent: true,
+        opacity: 0.65,
+        depthWrite: false,
+      });
+      this.#frontierGroup.add(new THREE.LineSegments(studyGeo, studyMat));
+    }
+
+    this.#render();
+  }
+
+  projectToScreen(x: number, z: number): { x: number; y: number } | undefined {
+    const worldX = x - 500 + 0.5;
+    const worldY = 500 - z - 0.5;
+    const point = new THREE.Vector3(worldX, worldY, 0.15).project(this.#camera);
+    const rect = this.#host.getBoundingClientRect();
+    const screenX = rect.left + ((point.x + 1) / 2) * rect.width;
+    const screenY = rect.top + ((-point.y + 1) / 2) * rect.height;
+    return { x: screenX, y: screenY };
+  }
+
   playReveal(x: number, z: number, slot: number): void {
     window.clearTimeout(this.#revealTimer);
     this.#revealElement.hidden = false;
@@ -1169,10 +1342,39 @@ export class WorldView {
   paintTile(id: number, local: number, replica: ProjectionReplica): void {
     this.#replica = replica;
     const layer = this.#layer(id);
+    const offset = (63 - Math.floor(local / 64)) * 64 * 4 + (local % 64) * 4;
+    const before = layer.pixels.slice(offset, offset + 4);
     this.#paintLocal(layer.pixels, id, local, replica);
     layer.texture.needsUpdate = true;
+    const after = layer.pixels.subarray(offset, offset + 4);
+    const changed = before.some((value, i) => value !== after[i]);
+    if (changed && !document.hidden) {
+      layer.pulses.add(
+        local,
+        performance.now() / 1000,
+        after[3] === 0 ? "loss" : "gain",
+      );
+      this.#startFx();
+    }
     this.#landscape.rebuildSoon(id, replica);
     this.#render();
+  }
+
+  /** Smooth (per-frame) rendering while any tile animation is alive. */
+  #startFx(): void {
+    if (this.#fxFrame !== undefined) return;
+    const step = (): void => {
+      this.#fxFrame = undefined;
+      this.#render();
+      const now = performance.now() / 1000;
+      for (const layer of this.#chunkLayers.values()) {
+        if (layer.pulses.active(now)) {
+          this.#fxFrame = requestAnimationFrame(step);
+          return;
+        }
+      }
+    };
+    this.#fxFrame = requestAnimationFrame(step);
   }
 
   /**
@@ -1233,7 +1435,7 @@ export class WorldView {
       // Shared Knowledge: checker weave of both school colours.
       const a = parseInt(SCHOOLS[pair[0]!]!.color.slice(1), 16);
       const b = parseInt(SCHOOLS[pair[1]!]!.color.slice(1), 16);
-      const color = (x + z) % 2 === 0 ? a : b;
+      const color = Math.floor((x + z) / 3) % 2 === 0 ? a : b;
       pixels[offset] = Math.round(tr * 0.25 + ((color >> 16) & 255) * 0.75);
       pixels[offset + 1] = Math.round(tg * 0.25 + ((color >> 8) & 255) * 0.75);
       pixels[offset + 2] = Math.round(tb * 0.25 + (color & 255) * 0.75);
@@ -1272,17 +1474,11 @@ export class WorldView {
     texture.minFilter = THREE.NearestFilter;
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.needsUpdate = true;
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(64, 64),
-      new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        depthWrite: false,
-      }),
-    );
+    const { material, pulses } = createTileLayerMaterial(texture);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), material);
     mesh.position.set(chunkX * 64 - 500 + 32, 500 - chunkZ * 64 - 32, 0.05);
     this.#scene.add(mesh);
-    layer = { pixels, texture, mesh };
+    layer = { pixels, texture, mesh, pulses };
     this.#chunkLayers.set(id, layer);
     return layer;
   }
@@ -1437,8 +1633,10 @@ export class WorldView {
       chunk: chunkId(Math.floor(x / 64), Math.floor(z / 64)),
       local: (z % 64) * 64 + (x % 64),
     };
+    const obj = objectAt(x, z, this.#catalog);
     this.select(tile);
     this.#onPick(tile);
+    if (obj && obj.kind !== "hq") this.#onPickObject?.(obj);
   };
 
   #pointerLeave = (): void => {
@@ -1487,14 +1685,34 @@ export class WorldView {
   }
 
   #syncCamera(width: number, height: number): void {
+    const aspect = Math.max(1, width) / Math.max(1, height);
     configureMapCamera(
       this.#camera,
       this.#cameraMode,
       this.#centerX,
       this.#centerZ,
       this.#span,
-      Math.max(1, width) / Math.max(1, height),
+      aspect,
     );
+    const sun = this.#sun;
+    if (sun) {
+      const tx = this.#centerX - 500;
+      const ty = 500 - this.#centerZ;
+      sun.target.position.set(tx, ty, 0);
+      sun.position.set(tx + SUN_OFFSET[0], ty + SUN_OFFSET[1], SUN_OFFSET[2]);
+      const half = Math.min(
+        700,
+        Math.max(40, this.#span * Math.max(1, aspect)),
+      );
+      const cam = sun.shadow.camera;
+      if (cam.right !== half) {
+        cam.left = -half;
+        cam.right = half;
+        cam.top = half;
+        cam.bottom = -half;
+        cam.updateProjectionMatrix();
+      }
+    }
   }
 
   /** ~12 fps ambient motion: drifting mist and pulsing Beacon beams. */
@@ -1511,6 +1729,7 @@ export class WorldView {
   };
 
   #render = (): void => {
+    tileFxTime.value = performance.now() / 1000;
     const width = Math.max(2, this.#host.clientWidth);
     const height = Math.max(2, this.#host.clientHeight);
     this.#renderer.setSize(width, height, false);

@@ -33,5 +33,12 @@ async function stop(): Promise<void> {
   await play.close();
   await pool.end();
 }
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+});
+
 process.once("SIGINT", () => void stop());
 process.once("SIGTERM", () => void stop());

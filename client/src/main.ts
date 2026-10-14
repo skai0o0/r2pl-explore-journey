@@ -25,18 +25,27 @@ import {
   REASON,
 } from "../../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import type { GameView } from "../../shared/gameplay/commands.ts";
 import {
+  chunkCoordinatesForId,
   chunkCoordinatesForIndex,
   chunkId,
   localIndex,
   tileCoordinates,
+  tileIndex,
 } from "../../shared/world/coordinates.ts";
 import { GameplayUI } from "./gameplayUI.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
 import { CompassCard } from "./ui/compassCard.ts";
+import { FloatingTextManager } from "./ui/floatingText.ts";
 import { MiniMap } from "./ui/miniMap.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
+import {
+  notifyActionError,
+  notifyActionSuccess,
+  notifyGameEvent,
+} from "./ui/notifications.ts";
 import {
   objectDisplayName,
   uiModeFromSearch,
@@ -178,6 +187,8 @@ let profileBalance: string | undefined;
 let profileCost: string | undefined;
 let profileRequest = 0;
 const pending = new Map<string, PendingAction>();
+let nextStepTarget: { x: number; z: number } | undefined;
+let latestView: GameView | undefined;
 
 function lacksTestCredits(): boolean {
   return deriveDevCreditState(profileBalance, profileCost) === "insufficient";
@@ -242,6 +253,111 @@ function expansionBlocked(tile: PickedTile): boolean {
   });
 }
 
+function findShortestPathTo(
+  targetX: number,
+  targetZ: number,
+): { x: number; z: number }[] | undefined {
+  const isOwned = (x: number, z: number): boolean => {
+    const chunk = chunkId(Math.floor(x / 64), Math.floor(z / 64));
+    if (!replica.hasChunk(chunk)) return false;
+    const local = (z % 64) * 64 + (x % 64);
+    return !!(replica.maskAt(chunk, local) & (1 << player.slot));
+  };
+
+  if (isOwned(targetX, targetZ)) return undefined;
+
+  const queue: [number, number][] = [[targetX, targetZ]];
+  const parent = new Map<number, number>();
+  const visited = new Set<number>([tileIndex(targetX, targetZ)]);
+
+  const minX = Math.max(0, Math.min(targetX, player.home.x) - 40);
+  const maxX = Math.min(999, Math.max(targetX, player.home.x) + 40);
+  const minZ = Math.max(0, Math.min(targetZ, player.home.z) - 40);
+  const maxZ = Math.min(999, Math.max(targetZ, player.home.z) + 40);
+
+  let reachedOwned: [number, number] | undefined;
+
+  while (queue.length > 0 && visited.size < 6000) {
+    const [cx, cz] = queue.shift()!;
+    if (isOwned(cx, cz)) {
+      reachedOwned = [cx, cz];
+      break;
+    }
+
+    const neighbors: readonly [number, number][] = [
+      [cx + 1, cz],
+      [cx - 1, cz],
+      [cx, cz + 1],
+      [cx, cz - 1],
+    ];
+
+    for (const [nx, nz] of neighbors) {
+      if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
+      const nIdx = tileIndex(nx, nz);
+      if (visited.has(nIdx)) continue;
+      visited.add(nIdx);
+      parent.set(nIdx, tileIndex(cx, cz));
+      queue.push([nx, nz]);
+    }
+  }
+
+  if (!reachedOwned) return undefined;
+  const [rx, rz] = reachedOwned;
+
+  const path: { x: number; z: number }[] = [];
+  let currIdx: number | undefined = parent.get(tileIndex(rx, rz));
+  const targetIdx = tileIndex(targetX, targetZ);
+
+  while (currIdx !== undefined) {
+    const coords = tileCoordinates(currIdx);
+    path.push(coords);
+    if (currIdx === targetIdx) break;
+    currIdx = parent.get(currIdx);
+  }
+
+  return path;
+}
+
+function refreshFrontierTiles(): void {
+  if (!room || !replica) return;
+  const frontiers: { x: number; z: number; isStudy?: boolean }[] = [];
+  const visibleChunks = world.visibleChunkIds(selected?.chunk);
+  const checked = new Set<number>();
+
+  for (const cId of visibleChunks) {
+    if (!replica.hasChunk(cId)) continue;
+    const { chunkX, chunkZ } = chunkCoordinatesForId(cId);
+    for (let local = 0; local < 4096; local++) {
+      const mask = replica.maskAt(cId, local);
+      if (!(mask & (1 << player.slot))) continue;
+      const tx = chunkX * 64 + (local % 64);
+      const tz = chunkZ * 64 + Math.floor(local / 64);
+      const neighbors: readonly [number, number][] = [
+        [tx + 1, tz],
+        [tx - 1, tz],
+        [tx, tz + 1],
+        [tx, tz - 1],
+      ];
+      for (const [nx, nz] of neighbors) {
+        if (nx < 0 || nx >= 1000 || nz < 0 || nz >= 1000) continue;
+        const nIdx = tileIndex(nx, nz);
+        if (checked.has(nIdx)) continue;
+        checked.add(nIdx);
+        const ncId = chunkId(Math.floor(nx / 64), Math.floor(nz / 64));
+        if (!replica.hasChunk(ncId)) continue;
+        const nLocal = (nz % 64) * 64 + (nx % 64);
+        const nMask = replica.maskAt(ncId, nLocal);
+        if (!(nMask & (1 << player.slot))) {
+          const isStudy = nMask !== 0;
+          frontiers.push({ x: nx, z: nz, isStudy });
+        }
+      }
+    }
+  }
+
+  world.setFrontierTiles(frontiers);
+}
+
 function updateTile(): void {
   get("explore-button").closest<HTMLElement>(".tile-panel")!.hidden = !selected;
   if (!selected) return;
@@ -297,6 +413,8 @@ function updateTile(): void {
     return;
   }
   if (owned) {
+    world.setPathPreview(undefined);
+    nextStepTarget = undefined;
     ui.knowledge.textContent =
       "Ô này đã thuộc tri thức của trường bạn. Không mất Điểm Tri Thức.";
     ui.explore.disabled = true;
@@ -304,12 +422,25 @@ function updateTile(): void {
     return;
   }
   if (expansionBlocked(selected)) {
-    ui.knowledge.textContent =
-      "Chọn ô chung cạnh với vùng tri thức của trường. Trụ sở trường khác được bảo vệ.";
-    ui.explore.disabled = true;
-    ui.explore.textContent = "Cần mở đường tới đây";
+    const path = findShortestPathTo(selected.x, selected.z);
+    if (path && path.length > 0) {
+      world.setPathPreview(path);
+      nextStepTarget = path[0];
+      ui.knowledge.textContent = `Chưa chạm vùng Tri thức. Cần mở ${path.length} ô (~${path.length} Điểm) để tới đây.`;
+      ui.explore.disabled = !room || lacksTestCredits();
+      ui.explore.textContent = `⚡ Mở 1 ô tiến về mục tiêu (${path.length} ô)`;
+    } else {
+      world.setPathPreview(undefined);
+      nextStepTarget = undefined;
+      ui.knowledge.textContent =
+        "Chọn ô chung cạnh với vùng tri thức của trường. Trụ sở trường khác được bảo vệ.";
+      ui.explore.disabled = true;
+      ui.explore.textContent = "Cần mở đường tới đây";
+    }
     return;
   }
+  world.setPathPreview(undefined);
+  nextStepTarget = undefined;
   if (dock.getActiveMode() === "beacon" && !dock.isSmart()) {
     ui.knowledge.textContent = "Chọn một công trình để thắp Đèn Hiệu.";
     ui.explore.disabled = true;
@@ -426,6 +557,7 @@ const world = new WorldView(
     scheduleSubscribe();
     const camera = world.viewState;
     miniMap.updateCamera(camera.x, camera.z, camera.span);
+    refreshFrontierTiles();
   },
   (hovered) => {
     updateHover(hovered);
@@ -460,8 +592,19 @@ const world = new WorldView(
             rotationZ: 0,
           })),
         objects: publicWorld,
+        onPickObject: (obj) => {
+          if (gameplay.canShowObject(obj) && obj.kind !== "hq") {
+            gameplay.pick(obj);
+          }
+        },
       }
-    : {},
+    : {
+        onPickObject: (obj) => {
+          if (gameplay.canShowObject(obj) && obj.kind !== "hq") {
+            gameplay.pick(obj);
+          }
+        },
+      },
 );
 
 const operator =
@@ -542,6 +685,7 @@ const gameplay = new GameplayUI(
   publicWorld,
   (x, z) => world.focus(x, z, 100),
   (view) => {
+    latestView = view;
     world.setBeacons(view.landmarks);
     compass.setSolvedLandmarks(
       view.landmarks.filter((l) => l.solved).map((l) => l.id),
@@ -587,6 +731,31 @@ const gameplay = new GameplayUI(
   (id) => world.setChestOpen(id, true),
   isDev,
   (object) => object.kind !== "unistop" || world.isObjectDiscovered(object),
+  (targetX, targetZ) => {
+    world.animateFocus(targetX, targetZ, 120);
+    const path = findShortestPathTo(targetX, targetZ);
+    if (path && path.length > 0) {
+      world.setPathPreview(path);
+      const frontier = path[0]!;
+      const tile: PickedTile = {
+        x: frontier.x,
+        z: frontier.z,
+        index: tileIndex(frontier.x, frontier.z),
+        chunk: chunkId(Math.floor(frontier.x / 64), Math.floor(frontier.z / 64)),
+        local: (frontier.z % 64) * 64 + (frontier.x % 64),
+      };
+      selected = tile;
+      world.select(tile);
+      updateTile();
+      activity(`Đã dẫn đường tới mục tiêu: Cần mở ${path.length} ô.`, "normal");
+    }
+  },
+  () => {
+    void gameplay.command({
+      action: "running",
+      ...(latestView?.runningMode === "http" ? {} : { amount: 1000 }),
+    });
+  },
 );
 miniMap.onPanRequested = (x, z) => world.animateFocus(x, z, 100);
 miniMap.onPanLive = (x, z) => world.focus(x, z, 100);
@@ -666,7 +835,21 @@ function explore(): void {
     activity("Chọn một ô khi đã kết nối.", "error");
     return;
   }
-  if (expansionBlocked(selected)) {
+
+  const actTile: PickedTile = nextStepTarget
+    ? {
+        x: nextStepTarget.x,
+        z: nextStepTarget.z,
+        index: tileIndex(nextStepTarget.x, nextStepTarget.z),
+        chunk: chunkId(
+          Math.floor(nextStepTarget.x / 64),
+          Math.floor(nextStepTarget.z / 64),
+        ),
+        local: (nextStepTarget.z % 64) * 64 + (nextStepTarget.x % 64),
+      }
+    : selected;
+
+  if (expansionBlocked(actTile)) {
     updateTile();
     scheduleSubscribe();
     activity(
@@ -693,7 +876,7 @@ function explore(): void {
     key: keyHex(key),
     frame: encodeExplore({
       key,
-      tileIndex: selected.index,
+      tileIndex: actTile.index,
       ruleVersion: session === LEGACY_DEV_SESSION ? 0 : GAME_CONFIG.ruleVersion,
       ...(session === LEGACY_DEV_SESSION || dock.isSmart()
         ? {}
@@ -704,11 +887,11 @@ function explore(): void {
                 : ("explore" as const),
           }),
     }),
-    tile: selected,
+    tile: actTile,
     token: player.token,
   };
   pending.set(action.key, action);
-  world.setPending(selected);
+  world.setPending(actTile);
   updatePending();
   updateTile();
   activity("Đang mở tri thức…", "pending");
@@ -729,6 +912,26 @@ function handleFrame(raw: Uint8Array): void {
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
           activity("Đã mở tri thức cho trường bạn.", "success");
           world.playReveal(action.tile.x, action.tile.z, player.slot);
+          const screenPos = world.projectToScreen(
+            action.tile.x,
+            action.tile.z,
+          );
+          if (screenPos) {
+            FloatingTextManager.spawn(
+              screenPos.x,
+              screenPos.y - 12,
+              "-1 Point",
+              "cost",
+            );
+            setTimeout(() => {
+              FloatingTextManager.spawn(
+                screenPos.x,
+                screenPos.y - 32,
+                "+1 Ô Tri Thức",
+                "knowledge",
+              );
+            }, 100);
+          }
           if (session !== LEGACY_DEV_SESSION) {
             const fogChunks = new Set<number>();
             for (
@@ -755,13 +958,37 @@ function handleFrame(raw: Uint8Array): void {
             "Ô này đã có tri thức của trường bạn · không mất Điểm.",
             "normal",
           );
-        } else {
-          activity(
-            ack.reason === REASON.WRONG_ACTION
-              ? "Ô này không phù hợp với thao tác đã chọn. Chuyển sang Tự Động hoặc đổi Khám Phá/Giao Lưu."
-              : "Chưa thể mở ô này. Kiểm tra đường đi và số Điểm của bạn.",
-            "error",
+          const screenPos = world.projectToScreen(
+            action.tile.x,
+            action.tile.z,
           );
+          if (screenPos) {
+            FloatingTextManager.spawn(
+              screenPos.x,
+              screenPos.y - 12,
+              "Đã có tri thức",
+              "gain",
+            );
+          }
+        } else {
+          const screenPos = world.projectToScreen(
+            action.tile.x,
+            action.tile.z,
+          );
+          if (screenPos) {
+            FloatingTextManager.spawn(
+              screenPos.x,
+              screenPos.y - 12,
+              "Bị từ chối",
+              "error",
+            );
+          }
+          const errDetail =
+            ack.reason === REASON.WRONG_ACTION
+              ? "Ô này không phù hợp với thao tác đã chọn. Hãy chuyển sang Tự Động hoặc đổi Khám Phá/Giao Lưu."
+              : "Ô này chưa chung cạnh biên giới hoặc bạn chưa đủ Điểm Tri Thức.";
+          activity(errDetail, "error");
+          notifyActionError("Chưa thể mở ô này", errDetail);
           world.playReject(action.tile.x, action.tile.z);
         }
         updateTile();
@@ -774,6 +1001,7 @@ function handleFrame(raw: Uint8Array): void {
         world.paintChunk(snapshot.chunkId, replica);
         compass.refreshSoon();
         miniMap.paintProjection(snapshot.chunkId, replica);
+        refreshFrontierTiles();
         updateTile();
         break;
       }
@@ -786,6 +1014,7 @@ function handleFrame(raw: Uint8Array): void {
           world.paintTile(delta.chunkId, delta.localIndex, replica);
           compass.refreshSoon();
           miniMap.paintProjection(delta.chunkId, replica);
+          refreshFrontierTiles();
           updateTile();
           refreshBalanceSoon();
         }

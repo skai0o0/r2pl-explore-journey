@@ -1,3 +1,6 @@
+// client/src/ui/uniStopModal.ts
+import { GAME_CONFIG } from "../../../shared/gameplay/gameConfig.ts";
+import { Icons } from "./icons.ts";
 import {
   durationText,
   SCHOOL_ROSTER,
@@ -9,11 +12,21 @@ import {
 export interface UniStopView {
   id: string;
   tier: UniStopTier;
+  x?: number;
+  z?: number;
   ownerSchoolId?: string | null | undefined;
   schoolId: string;
   cooldownUntil: number;
   profileReady: boolean;
   hasWeeklyRunningPoints: boolean;
+  distanceToTerritory?: number;
+  closestFrontierTile?: { x: number; z: number };
+}
+
+export interface UniStopModalCallbacks {
+  onClaim: (id: string) => void;
+  onGuidePath?: (targetX: number, targetZ: number) => void;
+  onSyncRunning?: () => void;
 }
 
 /** Reads the private profile cooldown, never the station's obsolete global timer. */
@@ -23,40 +36,22 @@ export class UniStopModal {
   private timer?: number | undefined;
   private pending = false;
   private requestTimer?: number | undefined;
-  private title: HTMLElement;
-  private owner: HTMLElement;
-  private status: HTMLElement;
-  private cooldown: HTMLElement;
-  private details: HTMLElement;
-  private claim: HTMLButtonElement;
   private previousFocus?: HTMLElement;
+  private callbacks: UniStopModalCallbacks;
 
   constructor(
-    private onClaim: (id: string) => void,
+    claimOrCallbacks: ((id: string) => void) | UniStopModalCallbacks,
     parent: HTMLElement = document.body,
   ) {
-    this.overlay.className = "guidance-modal-overlay";
+    this.callbacks =
+      typeof claimOrCallbacks === "function"
+        ? { onClaim: claimOrCallbacks }
+        : claimOrCallbacks;
+
+    this.overlay.className = "guidance-modal-overlay unistop-modal-overlay";
     this.overlay.setAttribute("data-ui", "true");
     this.overlay.style.display = "none";
-    this.overlay.innerHTML = `<section class="guidance-modal" role="dialog" aria-modal="true" aria-labelledby="unistop-title">
-      <header><h2 id="unistop-title"></h2><button type="button" class="guidance-close" aria-label="Đóng trạm tiếp tế">×</button></header>
-      <p class="unistop-owner"></p><p class="unistop-status" role="status" aria-live="polite"></p>
-      <p class="unistop-cooldown"></p><p class="unistop-details"></p>
-      <p class="guidance-note">Mỗi sinh viên có lượt riêng tại từng trạm. Lượt không cộng dồn; đổi chủ không xóa thời gian chờ của bạn.</p>
-      <button type="button" class="guidance-primary unistop-claim">Nhận lượt tiếp tế</button>
-    </section>`;
-    this.title = this.overlay.querySelector("h2")!;
-    this.owner = this.overlay.querySelector(".unistop-owner")!;
-    this.status = this.overlay.querySelector(".unistop-status")!;
-    this.cooldown = this.overlay.querySelector(".unistop-cooldown")!;
-    this.details = this.overlay.querySelector(".unistop-details")!;
-    this.claim = this.overlay.querySelector(".unistop-claim")!;
-    this.overlay
-      .querySelector(".guidance-close")!
-      .addEventListener("click", () => this.close());
-    this.overlay.addEventListener("click", (e) => {
-      if (e.target === this.overlay) this.close();
-    });
+
     for (const name of [
       "pointerdown",
       "pointerup",
@@ -67,44 +62,30 @@ export class UniStopModal {
       "click",
     ])
       this.overlay.addEventListener(name, (e) => e.stopPropagation());
+
+    this.overlay.addEventListener("click", (e) => {
+      if (e.target === this.overlay) this.close();
+    });
+
     window.addEventListener("keydown", (e) => {
       if (!this.isOpen()) return;
       if (e.key === "Escape") {
         e.preventDefault();
         this.close();
       }
-      if (e.key === "Tab") {
-        const buttons = Array.from(
-          this.overlay.querySelectorAll<HTMLButtonElement>(
-            "button:not(:disabled)",
-          ),
-        );
-        const first = buttons[0],
-          last = buttons[buttons.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
     });
-    this.claim.addEventListener("click", () => {
-      if (!this.data || this.pending || !this.availability().canClaim) return;
-      this.pending = true;
-      this.render();
-      this.requestTimer = window.setTimeout(() => this.finishRequest(), 8000);
-      this.onClaim(this.data.id);
-    });
+
     parent.appendChild(this.overlay);
   }
+
   public isOpen() {
     return this.overlay.style.display !== "none";
   }
+
   public getStopId() {
     return this.data?.id;
   }
+
   public open(data: UniStopView) {
     this.close();
     this.previousFocus = document.activeElement as HTMLElement;
@@ -112,19 +93,21 @@ export class UniStopModal {
     this.overlay.style.display = "flex";
     this.render();
     this.timer = window.setInterval(() => this.render(), 1000);
-    this.overlay.querySelector<HTMLButtonElement>(".guidance-close")!.focus();
   }
+
   public update(data: UniStopView) {
     if (data.id !== this.data?.id) return;
     this.data = data;
     this.render();
   }
+
   public finishRequest() {
     this.pending = false;
     if (this.requestTimer !== undefined) window.clearTimeout(this.requestTimer);
     this.requestTimer = undefined;
     if (this.isOpen()) this.render();
   }
+
   public close() {
     const wasOpen = this.isOpen();
     this.overlay.style.display = "none";
@@ -133,6 +116,7 @@ export class UniStopModal {
     this.finishRequest();
     if (wasOpen) this.previousFocus?.focus();
   }
+
   private availability() {
     return uniStopAvailability(
       this.data!.ownerSchoolId,
@@ -142,35 +126,185 @@ export class UniStopModal {
       this.data!.profileReady,
     );
   }
+
+  private formatCountdown(totalSeconds: number): string {
+    const hh = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+    const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+    const ss = String(totalSeconds % 60).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  }
+
   private render() {
     if (!this.data) return;
-    const d = this.data,
-      config = UNISTOP_CONFIGS[d.tier],
-      state = this.availability();
-    this.title.textContent = config.name;
-    this.owner.textContent =
+    const d = this.data;
+    const config = UNISTOP_CONFIGS[d.tier];
+    const state = this.availability();
+
+    const isOwnedByMySchool = !!d.ownerSchoolId && d.ownerSchoolId === d.schoolId;
+    const ownerSchoolName =
       d.ownerSchoolId && SCHOOL_ROSTER[d.ownerSchoolId]
-        ? `Trường giữ trạm: ${SCHOOL_ROSTER[d.ownerSchoolId]?.name}`
-        : "Trạng thái: Trạm trung lập (Mở đường chạm trạm để trường chiếm giữ)";
-    this.status.textContent = this.pending
-      ? "Đang nhận kết quả tiếp tế…"
-      : {
-          syncing: "Đang đồng bộ tài khoản…",
-          unowned: "Mở rộng tri thức vào trạm để trường bạn nhận tiếp tế.",
-          foreign: "Chỉ sinh viên trường đang giữ trạm được nhận tiếp tế.",
-          cooldown: "Bạn đã dùng lượt tại trạm này.",
-          ready: "Lượt tiếp tế của bạn đã sẵn sàng!",
-        }[state.status];
-    this.cooldown.textContent =
-      state.remainingSeconds > 0
-        ? `Lượt của bạn hồi sau: ${durationText(state.remainingSeconds)}`
-        : `Hồi lượt sau mỗi ${config.cooldownMs / 3600000} giờ.`;
-    this.details.textContent = !d.profileReady
-      ? "Đang kiểm tra điều kiện điểm chạy trong tuần…"
-      : d.hasWeeklyRunningPoints
-        ? "Bạn có điểm chạy trong tuần. Quà thật vẫn tùy thuộc cấp trạm và kết quả quay."
-        : "Chưa có điểm chạy trong tuần: vẫn nhận vật phẩm trong game, chưa đủ điều kiện nhận quà thật.";
-    this.claim.disabled = !state.canClaim || this.pending;
-    this.claim.textContent = this.pending ? "Đang xử lý…" : "Nhận lượt tiếp tế";
+        ? SCHOOL_ROSTER[d.ownerSchoolId]?.name
+        : "Trạm Trung Lập";
+
+    const tierName = d.tier === "predator" ? "Predator" : d.tier === "nitro" ? "Nitro" : "Aspire";
+    const tierColor = d.tier === "predator" ? "#a855f7" : d.tier === "nitro" ? "#00ffe8" : "#fbbf24";
+
+    // Drop table preview
+    const outcomes = GAME_CONFIG.rewards.unistop[d.tier]?.outcomes ?? [];
+    const totalWeight = outcomes.reduce((sum, r) => sum + r.weight, 0);
+
+    const lootRows = outcomes.map((r) => {
+      const pct = totalWeight > 0 ? ((r.weight / totalWeight) * 100).toFixed(1) : "0";
+      const name =
+        r.kind === "gift"
+          ? "🎁 Quà Hiện Vật"
+          : r.kind === "crystals"
+            ? `💎 Tinh Thể ×${r.quantity}`
+            : r.kind === "points"
+              ? `⚡ Điểm Tri Thức ×${r.quantity}`
+              : r.kind === "key"
+                ? `🔑 Chìa Khóa ×${r.quantity}`
+                : `🗺️ Bản Đồ Kho Báu ×${r.quantity}`;
+      return `
+        <div class="loot-preview-row">
+          <span class="loot-name">${name}</span>
+          <span class="loot-pct">${pct}%</span>
+        </div>
+      `;
+    }).join("");
+
+    this.overlay.innerHTML = `
+      <section class="guidance-modal unistop-modal-card" role="dialog" aria-modal="true" aria-labelledby="unistop-title">
+        <header class="unistop-modal-header">
+          <div class="unistop-header-left">
+            <div class="unistop-brand-tag" style="--tier-color: ${tierColor};">
+              <span class="brand-predator-text">[PREDATOR]</span>
+              <span class="brand-badge">TRẠM TIẾP TẾ · ${tierName.toUpperCase()}</span>
+            </div>
+            <h2 id="unistop-title" class="unistop-title">${config.name}</h2>
+            ${d.x !== undefined && d.z !== undefined ? `<div class="unistop-coords">Tọa độ: (${d.x}, ${d.z})</div>` : ""}
+          </div>
+          <button type="button" class="guidance-close" aria-label="Đóng trạm tiếp tế">×</button>
+        </header>
+
+        <div class="unistop-modal-body">
+          <!-- Requirements Checklist -->
+          <div class="requirements-checklist-card">
+            <div class="checklist-header">
+              <span class="checklist-title">ĐIỀU KIỆN NHẬN TIẾP TẾ</span>
+            </div>
+
+            <!-- Item 1: School Ownership -->
+            <div class="checklist-item ${isOwnedByMySchool ? "ok" : "fail"}">
+              <span class="check-icon">${isOwnedByMySchool ? "✅" : "❌"}</span>
+              <div class="check-info">
+                <strong>Quyền tiếp tế của trường:</strong>
+                <span>${
+                  isOwnedByMySchool
+                    ? `Trường bạn đang giữ trạm (${ownerSchoolName})`
+                    : `Chưa chạm vùng Tri thức (Đang giữ: ${ownerSchoolName}${
+                        d.distanceToTerritory ? ` · Cách rìa gần nhất ${d.distanceToTerritory} ô` : ""
+                      })`
+                }</span>
+                ${
+                  !isOwnedByMySchool && d.x !== undefined && d.z !== undefined
+                    ? `
+                  <div class="check-action-row">
+                    <button type="button" class="btn-check-guide" id="btn-guide-unistop">
+                      🧭 Dẫn đường mở ô tới đây
+                    </button>
+                  </div>
+                `
+                    : ""
+                }
+              </div>
+            </div>
+
+            <!-- Item 2: Cooldown Countdown -->
+            <div class="checklist-item ${state.remainingSeconds === 0 ? "ok" : "wait"}">
+              <span class="check-icon">${state.remainingSeconds === 0 ? "✅" : "⏳"}</span>
+              <div class="check-info">
+                <strong>Lượt quay cá nhân:</strong>
+                <span>${
+                  state.remainingSeconds === 0
+                    ? "Sẵn sàng quay lượt tiếp tế!"
+                    : `Hồi lượt sau: <strong class="timer-live">${this.formatCountdown(state.remainingSeconds)}</strong>`
+                }</span>
+              </div>
+            </div>
+
+            <!-- Item 3: Weekly Running Gift Eligibility -->
+            <div class="checklist-item ${d.hasWeeklyRunningPoints ? "ok" : "warn"}">
+              <span class="check-icon">${d.hasWeeklyRunningPoints ? "🎁" : "⚠️"}</span>
+              <div class="check-info">
+                <strong>Điều kiện Quà hiện vật:</strong>
+                <span>${
+                  d.hasWeeklyRunningPoints
+                    ? "Đủ điều kiện nhận Quà thật (Đã đồng bộ km chạy tuần này)"
+                    : "Chưa có km chạy tuần: Vẫn nhận đồ ingame (Ô Quà thật sẽ tự chuyển thành Tinh thể ×4)"
+                }</span>
+                ${
+                  !d.hasWeeklyRunningPoints
+                    ? `
+                  <div class="check-action-row">
+                    <button type="button" class="btn-check-guide" id="btn-sync-running">
+                      🏃 Đồng bộ km chạy
+                    </button>
+                  </div>
+                `
+                    : ""
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Drop Rates Preview -->
+          <div class="loot-table-card">
+            <div class="loot-table-header">
+              ${Icons.sparkles(14)}
+              <span>TỶ LỆ RƠI VẬT PHẨM TRẠM ${tierName.toUpperCase()}</span>
+            </div>
+            <div class="loot-table-grid">
+              ${lootRows}
+            </div>
+          </div>
+
+          <p class="guidance-note">
+            💡 Mỗi sinh viên có lượt tiếp tế cá nhân riêng biệt. Đổi chủ trường không xóa lượt chờ của bạn.
+          </p>
+        </div>
+
+        <footer class="unistop-modal-footer">
+          <button type="button" class="guidance-primary unistop-claim" ${!state.canClaim || this.pending ? "disabled" : ""}>
+            ${this.pending ? "Đang xử lý…" : state.canClaim ? "Nhận Lượt Tiếp Tế (Quay Thưởng)" : !isOwnedByMySchool ? "Cần Mở Đường Chạm Trạm" : "Đang Trong Thời Gian Chờ"}
+          </button>
+        </footer>
+      </section>
+    `;
+
+    // Event binding
+    this.overlay.querySelector(".guidance-close")?.addEventListener("click", () => this.close());
+
+    const claimBtn = this.overlay.querySelector<HTMLButtonElement>(".unistop-claim");
+    claimBtn?.addEventListener("click", () => {
+      if (!this.data || this.pending || !this.availability().canClaim) return;
+      this.pending = true;
+      this.render();
+      this.requestTimer = window.setTimeout(() => this.finishRequest(), 8000);
+      this.callbacks.onClaim(this.data.id);
+    });
+
+    const guideBtn = this.overlay.querySelector("#btn-guide-unistop");
+    guideBtn?.addEventListener("click", () => {
+      if (d.x !== undefined && d.z !== undefined) {
+        this.close();
+        this.callbacks.onGuidePath?.(d.x, d.z);
+      }
+    });
+
+    const syncBtn = this.overlay.querySelector("#btn-sync-running");
+    syncBtn?.addEventListener("click", () => {
+      this.callbacks.onSyncRunning?.();
+    });
   }
 }

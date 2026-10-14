@@ -11,6 +11,9 @@ export interface CarouselSpinOptions {
   winningIndex: number;
   winningItem: LootItem;
   onClaim?: (item: LootItem) => void;
+  discoveryCoords?: { x: number; z: number } | undefined;
+  onViewTreasureMap?: (coords: { x: number; z: number }) => void;
+  giftCode?: string | undefined;
 }
 
 export class CarouselModal {
@@ -27,6 +30,7 @@ export class CarouselModal {
   private audioCtx: AudioContext | null = null;
   private confettiAnimationId: number | null = null;
   private currentOptions: CarouselSpinOptions | null = null;
+  private targetTranslateX = 0;
 
   private readonly cardWidth = 140;
   private readonly cardMargin = 6;
@@ -77,6 +81,7 @@ export class CarouselModal {
             <span class="rarity-tag legendary"><span class="dot"></span> Huyền thoại</span>
           </div>
           <div class="carousel-spin-status">Đang mở khóa phần thưởng...</div>
+          <button type="button" class="carousel-skip-btn" id="cmodal-skip-btn">⚡ Bỏ qua hiệu ứng (Mở nhanh)</button>
         </div>
 
         <!-- Result Celebration Overlay -->
@@ -87,6 +92,7 @@ export class CarouselModal {
             <div class="result-icon-box" id="cmodal-result-icon"></div>
             <h3 class="result-item-name" id="cmodal-result-name">Đang quay…</h3>
             <p class="result-item-desc" id="cmodal-result-desc">Phần thưởng dành cho bạn</p>
+            <div class="result-special-actions" id="cmodal-special-actions"></div>
             <button class="btn-claim-reward" id="cmodal-claim-btn">
               ${Icons.sparkles(18)}
               <span>NHẬN THƯỞNG</span>
@@ -200,6 +206,17 @@ export class CarouselModal {
     const closeBtn = this.overlay.querySelector("#cmodal-close");
     closeBtn?.addEventListener("click", () => {
       this.close();
+    });
+
+    // Skip button (Fast open)
+    const skipBtn = this.overlay.querySelector("#cmodal-skip-btn");
+    skipBtn?.addEventListener("click", () => {
+      if (this.isSpinning && this.currentOptions) {
+        this.isSpinning = false;
+        this.strip.style.transition = "none";
+        this.strip.style.transform = `translateX(${this.targetTranslateX}px)`;
+        this.onSpinComplete(this.currentOptions);
+      }
     });
 
     // Claim button
@@ -343,6 +360,8 @@ export class CarouselModal {
     // Small random jitter within ±18px so the landing feels authentic
     const jitter = (Math.random() - 0.5) * 36;
     const targetTranslateX = -(targetCardCenter - centerOffset + jitter);
+    this.targetTranslateX = targetTranslateX;
+    this.currentOptions = options;
 
     // 5. Run CS:GO Easing Animation
     const spinDuration = 4800; // 4.8 seconds
@@ -438,6 +457,9 @@ export class CarouselModal {
       const celebrationCard = this.overlay.querySelector(
         ".result-card-celebration",
       ) as HTMLElement;
+      const specialActionsEl = this.overlay.querySelector(
+        "#cmodal-special-actions",
+      ) as HTMLElement;
 
       const isRealGift =
         !!winningItem.isRealGift || winningItem.type === "real_gift";
@@ -486,6 +508,43 @@ export class CarouselModal {
           descEl.textContent =
             winningItem.description ||
             "Phần thưởng đã được cộng trực tiếp vào hành trang sinh viên!";
+        }
+      }
+
+      if (specialActionsEl) {
+        specialActionsEl.replaceChildren();
+
+        if (winningItem.type === "treasure_map" || options.discoveryCoords) {
+          const mapBtn = document.createElement("button");
+          mapBtn.type = "button";
+          mapBtn.className = "btn-view-map-loc";
+          mapBtn.innerHTML = `🗺️ Xem vị trí Rương vừa tìm thấy`;
+          mapBtn.addEventListener("click", () => {
+            const coords = options.discoveryCoords ?? { x: 500, z: 500 };
+            this.close();
+            options.onViewTreasureMap?.(coords);
+          });
+          specialActionsEl.appendChild(mapBtn);
+        }
+
+        if (isRealGift || options.giftCode) {
+          const code =
+            options.giftCode ??
+            `R2PL-GIFT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          const codeBox = document.createElement("div");
+          codeBox.className = "gift-code-box";
+          codeBox.innerHTML = `
+            <span class="gift-code-val">${code}</span>
+            <button type="button" class="btn-copy-code" id="btn-copy-code">📋 Sao chép mã Check-in</button>
+          `;
+          codeBox
+            .querySelector("#btn-copy-code")
+            ?.addEventListener("click", (e) => {
+              const btn = e.currentTarget as HTMLButtonElement;
+              navigator.clipboard?.writeText(code);
+              btn.textContent = "Đã sao chép! ✓";
+            });
+          specialActionsEl.appendChild(codeBox);
         }
       }
 

@@ -1990,3 +1990,475 @@
   );
   transform-origin: left;
 }
+
+/* ==========================================================================
+   REQUIREMENTS CHECKLIST & LOOT PREVIEW STYLES (QOL PREDATOR HUD)
+   ========================================================================== */
+
+.requirements-checklist-card {
+  margin: 12px 0;
+  background: rgba(10, 18, 30, 0.85);
+  border: 1px solid rgba(0, 255, 232, 0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checklist-header {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--predator-cyan, #00ffe8);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(16, 24, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.2s ease;
+}
+
+.checklist-item.ok {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.checklist-item.fail {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.checklist-item.wait {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.checklist-item.warn {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.checklist-item .check-icon {
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.checklist-item .check-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #e2e8f0;
+  flex: 1;
+}
+
+.checklist-item .check-info strong {
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.checklist-item .timer-live {
+  color: #00ffe8;
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+
+.check-action-row {
+  margin-top: 6px;
+}
+
+.btn-check-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 255, 232, 0.12);
+  border: 1px solid rgba(0, 255, 232, 0.4);
+  color: #00ffe8;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-check-guide:hover {
+  background: rgba(0, 255, 232, 0.25);
+  border-color: #00ffe8;
+  box-shadow: 0 0 10px rgba(0, 255, 232, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Loot table preview */
+.loot-table-card {
+  margin: 10px 0;
+  background: rgba(8, 14, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.loot-table-header {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.loot-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+}
+
+.loot-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.loot-preview-row .loot-name {
+  color: #e2e8f0;
+}
+
+.loot-preview-row .loot-pct {
+  color: #00ffe8;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+/* Chest Modal */
+.chest-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 12, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.chest-modal-dialog {
+  width: 100%;
+  max-width: 520px;
+  background: #08101a;
+  border: 1px solid rgba(0, 255, 232, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(0, 255, 232, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chest-modal-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 255, 232, 0.08) 0%, transparent 100%);
+}
+
+.chest-brand-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.chest-brand-tag .brand-badge {
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--tier-color, #00ffe8);
+  color: #000;
+}
+
+.chest-title {
+  margin: 4px 0 2px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
+.chest-coords {
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.chest-close-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.chest-close-btn:hover {
+  color: #ffffff;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.chest-modal-body {
+  padding: 14px 18px;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.chest-art-banner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(0, 255, 232, 0.04) 100%);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.chest-art-banner .chest-icon-large {
+  color: var(--tier-color, #fbbf24);
+  filter: drop-shadow(0 0 16px var(--tier-color, #fbbf24));
+  margin-bottom: 8px;
+}
+
+.chest-tier-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+  letter-spacing: 0.08em;
+}
+
+.chest-modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  background: rgba(6, 10, 16, 0.95);
+}
+
+.btn-open-chest {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(90deg, #00ffe8 0%, #00aaff 100%);
+  color: #000;
+  font-weight: 800;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-open-chest:hover:not(:disabled) {
+  box-shadow: 0 0 16px rgba(0, 255, 232, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-open-chest:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+.btn-close-chest {
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-close-chest:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* ==========================================================================
+   FLOATING TEXT FEEDBACK (WORLD VIEW FX)
+   ========================================================================== */
+
+.floating-text-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+  overflow: hidden;
+}
+
+.floating-text-bubble {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display, "Space Grotesk", sans-serif);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 12px currentColor;
+  animation: floatUpFade 1.2s cubic-bezier(0.12, 0.8, 0.33, 1) forwards;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.floating-text-bubble.kind-gain,
+.floating-text-bubble.kind-knowledge {
+  color: #00ffe8;
+}
+
+.floating-text-bubble.kind-cost,
+.floating-text-bubble.kind-error {
+  color: #ff5555;
+}
+
+.floating-text-bubble.kind-crystal {
+  color: #fbbf24;
+}
+
+.floating-text-bubble.kind-key {
+  color: #c084fc;
+}
+
+@keyframes floatUpFade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20%) scale(0.75);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  30% {
+    transform: translate(-50%, -70%) scale(1);
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -150%) scale(0.95);
+  }
+}
+
+/* ==========================================================================
+   CAROUSEL MODAL QOL (SKIP BUTTON & REWARD ACTIONS)
+   ========================================================================== */
+
+.carousel-skip-btn {
+  margin-left: auto;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fbbf24;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.carousel-skip-btn:hover {
+  background: rgba(251, 191, 36, 0.3);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+}
+
+.result-special-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.btn-view-map-loc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(90deg, #00ffe8 0%, #0062ff 100%);
+  color: #000;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-view-map-loc:hover {
+  box-shadow: 0 0 16px rgba(0, 255, 232, 0.6);
+  transform: translateY(-1px);
+}
+
+.gift-code-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.gift-code-box .gift-code-val {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fef08a;
+  letter-spacing: 0.1em;
+}
+
+.btn-copy-code {
+  background: #eab308;
+  color: #000;
+  border: none;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-copy-code:hover {
+  background: #facc15;
+}
+

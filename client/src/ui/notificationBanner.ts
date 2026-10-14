@@ -5,8 +5,8 @@ export interface NotificationBannerOptions {
   body: string;
   icon?: string | undefined;
   durationMs?: number | undefined;
-  category?: "territory" | "landmark" | "gacha" | "rank" | string;
-  onClick?: () => void;
+  category?: "territory" | "landmark" | "gacha" | "rank" | string | undefined;
+  onClick?: (() => void) | undefined;
 }
 
 class SoundSynthesizer {
