@@ -2,6 +2,8 @@
 
 Bản G-V1 local/dev đã nghiệm thu **PV01–PV18: 18/18 FULL**, với 8 trường HCMUT, HCMCOU, DTU, DHHP, HSU, HUCE, NTU, HCMIU. Gameplay gồm Shared Knowledge/upkeep/consolidation, Landmark/puzzle/Beacon, UniStop 3 cấp, Treasure Map/Chest/Key/carousel, Running/Gift staging, leaderboard, notifications và Admin Map Editor.
 
+Commit mã nguồn nghiệm thu Phase 3: **`b05e456`**; sửa GLB/procedural Z-Up: **`b743257`**. Bộ test đầy đủ: **142/142 PASS, 0 fail, 0 skip** khi bật PostgreSQL fixtures; build PASS. Commit cập nhật tài liệu xem `git log -1 --oneline`.
+
 ## Chạy nhanh trên workspace hiện tại — PowerShell
 
 PostgreSQL fixture đã dùng để nghiệm thu chạy ở `127.0.0.1:55439`. Từ thư mục repo, với dependencies đã cài:
@@ -14,7 +16,7 @@ npm run play:schools
 
 Mở **http://127.0.0.1:4176/**; Colyseus WebSocket dùng cổng **2568**. Nếu bản này đã chạy, mở URL để chơi ngay. Dừng process đang giữ cổng/campaign trước khi chạy một instance khác; launcher chỉ cho phép một writer cho mỗi campaign.
 
-`play:schools` build client, áp dụng migrations M3/M3.5, seed campaign một lần và khởi tạo signed gameplay schema/world objects (migration 003). Không cần chạy migration thủ công. Có 16 tài khoản người chơi giả lập và 24 bot; bot khám phá tối đa 10 phút, server vẫn mở để chơi sau khi bot kết thúc. Dừng bằng `Ctrl+C`.
+`play:schools` build client, áp dụng migrations M3/M3.5, seed campaign một lần và khởi tạo signed gameplay schema/world objects (migrations 003/004). Không cần chạy migration thủ công. Có 16 tài khoản người chơi giả lập và 24 bot; bot khám phá tối đa 10 phút, server vẫn mở để chơi sau khi bot kết thúc. Dừng bằng `Ctrl+C`.
 
 ## Cài đặt lần đầu / database khác
 
@@ -27,7 +29,7 @@ $env:R2PL_BOT_DATABASE_URL = 'postgresql://YOUR_LOCAL_USER:YOUR_LOCAL_PASSWORD@1
 npm run play:schools
 ```
 
-Database phải nằm trên loopback và có tên `r2pl_prep_test_*` hoặc `r2pl_bot_test_*`, ví dụ `r2pl_prep_test_gv1`. Giữ database để giữ ví, Knowledge, cooldowns, Chest claims, Gift entitlements, Crystal pots, Beacons, layout và history khi restart. Campaign mặc định: `97000000-0000-4000-8000-000000000000` (`school-play-rule1-layout2-20261014`).
+Database phải nằm trên loopback và có tên `r2pl_prep_test_*` hoặc `r2pl_bot_test_*`, ví dụ `r2pl_prep_test_gv1`. Giữ database để giữ ví, Knowledge, cooldowns, Chest claims, Gift entitlements, Crystal pots, Beacons, layout và history khi restart. Campaign mặc định: `98000000-0000-4000-8000-000000000000` (`school-play-rule1-layout3-20261014`).
 
 ## Thao tác chơi nhanh
 
@@ -46,7 +48,7 @@ Mở **Admin Map Editor**, nhập key mặc định local **`dev-map-admin`**, b
 Trong editor:
 - **Map Editor:** chọn **Di dời**, click vị trí trên bản đồ, xem preview footprint rồi bấm **ÁP DỤNG NGAY LÊN SERVER**. Menu Admin có **Đặt object mới** cho UniStop/Chest và tier, **Khôi phục layout trước** để rollback, cùng form thông báo campaign.
 - **Gift staging:** Để thử Gift, sync ít nhất 1 km Running của explorer trong tuần hiện tại; chọn **Tier mới**, nhập **Gift stock staging**, bấm **Cập nhật Gift stock staging**. Khi trúng Gift, hệ thống tự sinh mã duy nhất `giftCode` (định dạng `R2PL-GIFT-XXXXXX`) lưu vào entitlement và hiển thị trong Kho đồ cá nhân của sinh viên kèm nút Copy và huy hiệu trạng thái ("⏳ CHỜ CHECK-IN").
-- **Tra cứu & Xác nhận Check-in Quà tặng (Phase 3):** Trong panel Admin, có mục tra cứu mã quà tặng `giftCode`. Admin nhập mã quà, xem thông tin sinh viên, trường, loại quà và ngày trúng, sau đó bấm **"Xác nhận đã phát quà"** (`redeemedAt` được lưu bền vững vào PostgreSQL, chống nhận trùng lần 2).
+- **Tra cứu & Xác nhận Check-in Quà tặng (Phase 3):** Trong panel Admin, có mục tra cứu mã quà tặng `giftCode`. Admin nhập mã quà, xem thông tin sinh viên, trường, loại quà và ngày trúng, sau đó bấm **"Xác nhận đã phát quà"** (`redeemed_at` kiểu timestamptz và `redeemedAt` trong view được lưu cùng transaction PostgreSQL). Lookup dùng `GET /api/admin/gifts?code=...`, xác nhận dùng `POST /api/admin/gifts/redeem` với body chứa `giftCode`; cả hai cần header `X-Admin-Key`. Mã đã nhận hiện **ĐÃ PHÁT QUÀ**; lần xác nhận tiếp theo trả `alreadyRedeemed`, giữ nguyên timestamp. Test 8 request đồng thời chỉ 1 lần thành công. Unique index bảo đảm mã không trùng giữa các campaign; va chạm RNG được cấp lại mã trước commit.
 
 ## Cổng 3D GLB Auto-Loader & Draco Decoder (Phase 3)
 
@@ -56,8 +58,38 @@ Game hỗ trợ nạp tự động model 3D `.glb` theo quy ước đường d�
 - **3 UniStop:** `/models/unistops/unistop_<tier>.glb` (`aspire`, `nitro`, `predator`)
 - **3 Chest:** `/models/chests/chest_<tier>.glb` (`aspire`, `nitro`, `predator`)
 - **Draco Decoder:** Nằm tại `/draco/` cho phép giải nén mesh nén tốc độ cao.
-- **Pre-flight Manifest:** Client kiểm tra manifest danh mục model (`/api/models/manifest` hoặc `/models/manifest.json`), nếu model chưa có trên đĩa sẽ fallback êm sang procedural mesh mà **hoàn toàn không sinh lỗi 404 đỏ trên Console**.
+- **Manifest:** Client await `/models/manifest.json` trước khi dựng WorldView. Asset chưa có trong manifest dùng procedural fallback. Chỉ liệt kê file thực sự có trên đĩa; asset được liệt kê nhưng hỏng/mất vẫn giữ fallback khi loader thất bại.
 - **Tự động nhuộm màu & Animation:** Khi load model, các material có tên chứa `Faction` hoặc `Accent` tự động được nhuộm theo `colorHex` của trường chiếm giữ; node `Chest_Lid` tự động xoay mở khi rương được mở.
+
+### Nạp thêm GLB mới
+
+1. Copy file vào đúng thư mục trong `client/public/models/` theo quy ước trên. School ID viết thường: hcmut, hcmcou, dtu, dhhp, hsu, huce, ntu, hcmiu. Landmark ID lấy từ `shared/gameplay/gameConfig.ts`; thanglong dùng `hoangthanhthanglong.glb`, cairang dùng `chonoicairang.glb`.
+2. Thêm URL public vào mảng `models` trong `client/public/models/manifest.json`, ví dụ `/models/hqs/dtu_hq.glb`.
+3. Chạy `npm run build:client` rồi reload trình duyệt; launcher đang chạy phục vụ `dist/client`.
+
+GLB chuẩn glTF Y-Up được xoay X=π/2, auto-fit Box3 theo span hiện tại (HQ 20, Landmark 36, UniStop 10, Chest 2,5), căn tâm X-Y và đáy minZ=0,12. Footprint gameplay vẫn HQ 20×20, Landmark 40×40, UniStop theo layout, Chest 2×2. Procedural fallback dựng native Z-Up theo footprint, scale=1. HCMUT GLB, Aspire #1, Nitro #1, Núi Bà Đen, Đỉnh Fansipan và đủ 8 HQ đã được kiểm tra trên browser sau commit `b743257`.
+
+## CampaignProvider và biến môi trường
+
+`.env.example` có `DATABASE_URL`, `PORT`, `ADMIN_KEY`, `CAMPAIGN_API_URL`, `CAMPAIGN_SHARED_SECRET` cùng biến local/test. Secret chỉ đặt ở server. Để nạp env trên local/staging:
+
+```powershell
+Copy-Item .env.example .env
+# Sửa .env: database dev, ADMIN_KEY riêng và endpoint/secret nếu dùng API.
+npm.cmd run build:client
+node --env-file=.env --experimental-strip-types scripts/play-schools.ts
+```
+
+`play:schools` đọc DATABASE_URL (ưu tiên hơn R2PL_BOT_DATABASE_URL), PORT và WS_PORT; vẫn là launcher synthetic trên loopback, chỉ chấp nhận database test theo guard hiện có. Production deployment dùng connection/secret thật và mapping danh tính portal đã phê duyệt; launcher synthetic không chứng nhận production authentication.
+
+Để trống cả CAMPAIGN_API_URL và CAMPAIGN_SHARED_SECRET dùng SyntheticCampaignProvider và nút chạy giả lập. Đặt cả hai rồi restart server sẽ chọn HttpCampaignProvider; nút đổi thành **Đồng bộ Running từ chiến dịch**. Thiếu một biến làm server từ chối cấu hình. API dùng HTTPS (HTTP chỉ cho loopback test), timeout 5 giây, không follow redirect. Contract Webdev cung cấp dưới base URL:
+
+| Request | Response / ràng buộc |
+| --- | --- |
+| POST `sessions/verify`, body `{credential: string}` | `{provider: "http-campaign", externalStudentId: string, externalSchoolId: string, sessionExpiresAtMs: number}`; session chưa hết hạn; IDs khớp binding server trong `r2pl_prep.running_bindings` |
+| GET `running/<externalStudentId>` | `{provider: "http-campaign", externalStudentId: string, revision: string, cumulativeMeters: string, weeklyMeters: string, observedAtMs: number, weekStartMs: number}` |
+
+Cả hai request dùng `Authorization: Bearer <CAMPAIGN_SHARED_SECRET>`. Revision/meters là chuỗi decimal không dấu; revision bắt đầu từ 1. Timestamps là epoch milliseconds; tuần bắt đầu thứ Hai 00:00 Asia/Ho_Chi_Minh. Snapshot phải đúng identity, không quá 5 phút cũ; revision/meters lưu PostgreSQL. Đồng bộ lại cùng dữ liệu không cộng Points lần hai; số mét client gửi không tạo distance ở chế độ HTTP. Cùng snapshot tuần dùng cho Gift eligibility.
 
 ## Kiểm thử chịu tải 500 Clients hỗn hợp (Gate 17/10/2026)
 
@@ -68,7 +100,20 @@ $env:R2PL_LOADTEST_DATABASE_URL = $env:R2PL_BOT_DATABASE_URL
 npm run test:load500
 ```
 
-Kết quả gate 17/10/2026: **750/750 operations thành công 100.00%**, thông lượng 116.9 ops/sec, p50 latency 2.67s, p95 4.47s, không rò rỉ bộ nhớ (RSS peak 245.9 MB, heap 36.2 MB).
+Gate mục tiêu **17/10/2026**, nghiệm thu thực tế **14/10/2026 20:29 (UTC+7)** trên PostgreSQL disposable. Script giữ **500 WebSocket** tới hết tải; server cũng xác nhận 500 sessions. Phân bổ 63 người ở 4 trường và 62 người ở 4 trường còn lại.
+
+| Chỉ số | Thực đo |
+| --- | --- |
+| Mutation thành công | **1.008/1.008 — 100%, 0 fail** |
+| Hành động | 500 fresh Explore, 128 Shared joins, 8 capture UniStop, 128 spins, 124 góp Crystal Landmark, 120 upkeep |
+| Latency overall p50 / p95 | **2.298,89 / 12.629,61 ms** |
+| Thời gian mutation / thông lượng | 15,27s / 66,01 ops/s |
+| RSS initial / peak / final | 88,10 / **312,07** / 291,25 MiB |
+| Heap used | 45,30 MiB |
+| Hội tụ sau mutation | **7,62s**, 0 mask/fog/revision mismatch, 0 pending outbox, 0 ledger mismatch, 0 transport error |
+
+[Bằng chứng JSON đầy đủ và latency từng cohort](artifacts/phase3/500-client-gate.json). Gate chỉ nhận ACK thực sự áp dụng mutation; no-change/rejection đều làm FAIL. Kiểm tra toàn bộ projection đã subscribe của 500 client với PostgreSQL, gồm fog 5×5 qua chunk boundary. RAM là tổng server và 500 test client cùng process; lượt ngắn này chưa chứng minh không rò bộ nhớ hoặc đạt SLO Production. Các số cũ 750 ops / p95 4,47s được thay bằng kết quả gate 500 kết nối thật này.
+
 
 ## Campaign nghiệm thu nhanh có đường tới Landmark
 
@@ -89,13 +134,12 @@ Dùng một database test local đã khởi tạo, đặt connection string gi�
 
 ```powershell
 $env:R2PL_PREPARATION_DATABASE_URL = $env:R2PL_BOT_DATABASE_URL
-npm run typecheck
-npm run lint
-npm run build:client
-node --experimental-strip-types --test --test-concurrency=1 tests/expansion.test.ts tests/signed-gameplay.test.ts tests/school-play-integration.test.ts tests/playable-rewards.test.ts tests/reward-session.test.ts
+$env:R2PL_TEST_DATABASE_URL = $env:R2PL_PREPARATION_DATABASE_URL
+npm.cmd test
+npm.cmd run build
 ```
 
-Bộ nghiệm thu hiện tại: **24/24 PASS**, không skip; có coverage identity/privacy, ledger/idempotency, finite Chest race, Gift eligibility/fallback, Landmark takeover/cooldown, Shared Knowledge deadlines/refund và Admin publish/rollback/restart. Không cần chạy benchmark hạ tầng để chơi hoặc nghiệm thu G-V1.
+Bộ test đầy đủ hiện tại: **142/142 PASS, 0 fail, 0 skip** với cả hai biến PostgreSQL ở trên; có coverage identity/privacy, ledger/idempotency, finite Chest race, Gift eligibility/fallback, Landmark takeover/cooldown, Shared Knowledge deadlines/refund và Admin publish/rollback/restart. Test files chạy tuần tự để tránh DDL của các fixture dùng chung schema tranh lock; các race/idempotency test vẫn gửi request đồng thời. Khi không đặt biến database, các test PostgreSQL sẽ skip.
 
 ## Tài liệu và ảnh nghiệm thu
 

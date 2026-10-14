@@ -1,10 +1,10 @@
 # Tiến độ G-V1 — ruleVersion = 1 — 2026-10-14
 
-**G-V1 local/dev đã hoàn tất: PV01–PV18 đạt 18/18 FULL.** Bản chạy gồm toàn bộ luồng người chơi và Admin, từ config/rules đến PostgreSQL transaction, Three.js/UI và nghiệm thu trình duyệt desktop/mobile. Bộ test gameplay tập trung đạt **24/24 PASS**; TypeScript strict, lint và build PASS.
+**G-V1 local/dev đã hoàn tất: PV01–PV18 đạt 18/18 FULL.** Bản chạy gồm toàn bộ luồng người chơi và Admin, từ config/rules đến PostgreSQL transaction, Three.js/UI và nghiệm thu trình duyệt desktop/mobile. Bộ test đầy đủ với PostgreSQL đạt **142/142 PASS, 0 fail, 0 skip**; TypeScript strict và build PASS. Commit mã nguồn nghiệm thu Phase 3 mới nhất: **`b05e456`**. Bản sửa 3D: **`b743257`**.
 
 [GAME_SPEC.md](GAME_SPEC.md) là đặc tả đã ký, **ruleVersion = 1**; các xung đột C-01..C-13 và gate PENDING/BLOCKED của tài liệu cũ đã được chốt và superseded theo Owner Directive. Tham số gameplay tập trung tại [gameConfig.ts](../shared/gameplay/gameConfig.ts). Binary transport vẫn dùng protocol v1; gameplay đang chạy ruleVersion 1, với Points/Crystal/Keys/Maps trong cùng account.
 
-Chạy bản đầy đủ theo [README_PLAY.md](../README_PLAY.md), mở **http://127.0.0.1:4176/**. Running và Gift hiện dùng provider giả lập local/staging. Kết quả này xác nhận G-V1; tích hợp danh tính/portal chạy bộ và giao quà thật thuộc G-FULL trong [kế hoạch completion](V2_COMPLETION_PLAN_2026-10-13.md).
+Chạy bản đầy đủ theo [README_PLAY.md](../README_PLAY.md), mở **http://127.0.0.1:4176/**. Running có SyntheticCampaignProvider và HttpCampaignProvider chọn bằng biến môi trường; Gift có mã duy nhất và check-in PostgreSQL. Kết quả này xác nhận G-V1; tích hợp danh tính/portal chạy bộ và giao quà thật thuộc G-FULL trong [kế hoạch completion](V2_COMPLETION_PLAN_2026-10-13.md).
 
 Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [stepping stone HQ](../artifacts/g-v1/stepping-stone-hq.jpg), [compass onboarding](../artifacts/g-v1/compass-onboarding.jpg), [staging world](../artifacts/g-v1/staging-world.jpg), [Beacon takeover](../artifacts/g-v1/beacon-takeover.jpg), [mobile guidance](../artifacts/g-v1/mobile-guidance.jpg), [mobile Landmark](../artifacts/g-v1/mobile-landmark.jpg). M1–M3.6 foundations đã được chấp nhận; không chạy thêm benchmark 1.000-client, CPU profiling hoặc outbox microbenchmark trong đợt G-V1 này.
 
@@ -17,7 +17,7 @@ Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [steppin
 | Wallet/explore | Common account/ledger/idempotency: fresh 1 Point, rival join 2 Points, own/invalid 0; Running 1 km → 10 Points vào ví chơi | fixture-credit là tên lưu trữ nội bộ của Points dev; không phải gameplay ruleVersion 0 |
 | UI | V1 modals/dock/minimap/tooltip/ranking/banner/editor đã port và mount; Three.js models/markers, masked puzzle images và Beacon beams | Desktop/mobile đã nghiệm thu; normal play tách Dev tools |
 | Knowledge lifecycle | Max 2 trường, merge cluster 4-edge, free upkeep 24h, 1 Point/24h/cluster, consolidation 48h/rolling 2h, expiry/refund | Deadlines/escrow/ownership/score lưu trong PostgreSQL; solo decay OFF |
-| Rewards/Running | 15 UniStop trung lập (8 Aspire, 5 Nitro, 2 Predator) & 15 Chest trung lập; chạm Knowledge để chiếm trạm (`ownerSchoolId`); cá nhân cooldown 12h/24h/24h; Treasure Map mở rương riêng; Gift eligibility/stock/fallback | Synthetic CampaignProvider hoạt động end-to-end; portal và fulfillment thật thuộc G-FULL |
+| Rewards/Running | 15 UniStop trung lập (8 Aspire, 5 Nitro, 2 Predator) & 15 Chest trung lập; chạm Knowledge để chiếm trạm (`ownerSchoolId`); cá nhân cooldown 12h/24h/24h; Treasure Map mở rương riêng; Gift eligibility/stock/fallback | Synthetic và HTTP CampaignProvider hoạt động end-to-end; production portal binding/fulfillment theo contract README_PLAY |
 | Outbox/recovery | Durable commands/receipts, own-school relay, leased batch tail fix; reload/restart và actor-scoped recovery đã kiểm tra | Giữ nền tảng được chấp nhận; kiểm tra thêm khi có lỗi cụ thể, scale benchmark tiếp tục đóng băng |
 
 ## Work package status
@@ -34,11 +34,11 @@ Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [steppin
 | R2-00 HQ/frontier | COMPLETE — G-V1 local/dev | 400 owned/fog tiles/HQ, server 4-edge validation, rival HQ protected; Shared Knowledge/upkeep/consolidation/refund tích hợp |
 | R3-03 bot→player-view | COMPLETE — G-V1 local/dev | 24 bot và người chơi dùng cùng authority/campaign; own-school Knowledge hiển thị trong Three.js/minimap |
 | R3-01/02/04/05 | COMPLETE — G-V1 local/dev | Full object layout, V1 UI ports, guidance, normal/dev separation và desktop/mobile QA; PV02/PV07–PV15/PV18 |
-| R4-01 GLB Auto-Loader & Draco | COMPLETE — Phase 3 verified | Convention `/models/{hqs,landmarks,unistops,chests}/*.glb`, Draco decoder, manifest pre-flight (0 console 404), faction tinting, Chest_Lid rotation |
-| R4-02 Gift Check-in Redemption | COMPLETE — Phase 3 verified | `giftCode` (R2PL-GIFT-XXXXXX), UI badge & copy button, Admin search & 1-time redemption verification idempotent |
-| R4-03 500-Client Mixed Load Gate | COMPLETE — 17/10 Gate PASSED | 500 concurrent synthetic clients across 8 schools, 750 mixed ops (WS explore, UniStop spin, Landmark crystal, Shared Knowledge upkeep), 100% success rate (750/750), p50 2.67s, p95 4.47s, zero memory leak |
+| R4-01 GLB Auto-Loader & Draco | COMPLETE — Phase 3 verified | `b743257`: HCMUT GLB giữ Y-Up → Z-Up, Box3 auto-fit, minZ=0.12; procedural native Z-Up, scale=1, đúng footprint. `b05e456`: await manifest trước mount; GLB mới load ngay lần đầu; hướng dẫn trong README_PLAY |
+| R4-02 Gift Check-in Redemption | COMPLETE — Phase 3 verified | `b05e456`: Gift từ UniStop/Chest có R2PL-GIFT-XXXXXX; unique index và retry collision; Kho đồ có Copy/status; Admin check-in ghi redeemed_at; race 8 request chỉ 1 winner |
+| R4-03 500-Client Mixed Load Gate | PASS — gate 17/10/2026, chạy 14/10/2026 | Client và server xác nhận 500 WebSocket, 63/62 mỗi trường, giữ mở hết tải; 1.008/1.008 mutations (100%); p50 2,30s / p95 12,63s; 66,01 ops/s; RSS peak 312,07 MiB; hội tụ 7,62s: 0 mask/fog/revision mismatch, 0 outbox pending, 0 ledger mismatch, 0 disconnect. [JSON thực đo](../artifacts/phase3/500-client-gate.json) |
 | R9-A leased batch tail | FIXED — regression retained | Tail leases được giải phóng khi publish/recovery lỗi; delivered/newer-owned leases giữ nguyên |
-| R9-A original trigger / R9-C scale | PASS 500-CLIENT GATE / FROZEN 10K | 500 clients thực tế verified 100% success; benchmark 1.000+ và 10.000 CCU tiếp tục đóng băng cho G-FULL |
+| R9-A original trigger / R9-C scale | PASS 500-CLIENT GATE / FROZEN 10K | RAM đo cùng process server + clients; lượt ngắn chưa chứng minh không rò bộ nhớ. Sửa signed fog relay để gửi đủ fog 5×5 qua chunk boundary; benchmark 1.000+ và 10.000 CCU tiếp tục đóng băng |
 
 ## V1 parity checklist
 
@@ -57,12 +57,12 @@ Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [steppin
 | PV09 UniStop | FULL (G-V1 local/dev · ruleVersion 1) | 15 trạm trung lập (8 Aspire, 5 Nitro, 2 Predator); mở Knowledge chạm footprint trạm để chiếm cho cả trường (`ownerSchoolId`); đổi màu trạm 3D & minimap; quay thưởng cooldown 12h/24h/24h cá nhân |
 | PV10 Treasure Map | FULL (G-V1 local/dev · ruleVersion 1) | Browser Aspire nhận Treasure Map; private Chest tọa độ/navigation; actor isolation verified |
 | PV11 Chest/Key/carousel | FULL (G-V1 local/dev · ruleVersion 1) | Browser matching Key → finite Chest → CS:GO carousel; one-winner race/retry tests; claimed Chest biến khỏi inventory |
-| PV12 Gift | FULL (G-V1 local/dev · ruleVersion 1) | FULL synthetic staging: weekly Running + Gift stock → private Gift entitlement; zero eligibility/stock → Crystal fallback; real fulfillment thuộc G-FULL |
+| PV12 Gift | FULL (G-V1 local/dev · ruleVersion 1) | Weekly Running + stock → Gift code duy nhất từ UniStop/Chest; Kho đồ riêng; Admin tra cứu/xác nhận và durable redeemed_at; concurrent check-in 1 winner; thiếu eligibility/stock → Crystal fallback |
 | PV13 ranking/guidance | FULL (G-V1 local/dev · ruleVersion 1) | Leaderboard đủ 8 trường, Knowledge Score/timestamp tie rules; buff metadata; hướng dẫn chơi có trên desktop/mobile |
 | PV14 notifications/events | FULL (G-V1 local/dev · ruleVersion 1) | Durable own/public event history; toast dedup/bounded; browser admin notification, Beacon/lapse/refund events |
 | PV15 editor/admin | FULL (G-V1 local/dev · ruleVersion 1) | 3 mẫu UniStop và 3 mẫu Chest trung lập; thêm/xóa/di dời trực quan trên 3D map; validate/publish/rollback transactional |
 | PV16 reconnect/recovery | FULL (G-V1 local/dev · ruleVersion 1) | PG durable command-key replay; reload/server reconstruction giữ ví, Key, Chest claim, Gift, pots, Beacon, deadlines/history; actor recovery scoped |
-| PV17 provider/campaign | FULL (G-V1 local/dev · ruleVersion 1) | CampaignProvider interface + working synthetic Running provider; official school binding; conversion cùng ví; real portal contract thuộc G-FULL |
+| PV17 provider/campaign | FULL (G-V1 local/dev · ruleVersion 1) | Synthetic + HttpCampaignProvider; env CAMPAIGN_API_URL/CAMPAIGN_SHARED_SECRET; verified session khớp running_bindings; snapshot identity/revision được kiểm tra, convert Points một lần; contract trong README_PLAY và .env.example |
 | PV18 visual/normal-dev separation | FULL (G-V1 local/dev · ruleVersion 1) | Normal play/Dev tools tách riêng; V1 modules mounted; desktop/mobile guidance, minimap, modal/carousel QA; ảnh trong artifacts/g-v1 |
 
 ## Historical checkpoints
