@@ -40,3 +40,13 @@ export const MODEL_PLACEMENTS: readonly ModelPlacement[] = [
     rotationZ: 0,
   },
 ] as const;
+
+export {
+  getChestModelUrl,
+  getHqModelUrl,
+  getLandmarkModelUrl,
+  getUniStopModelUrl,
+  isModelAvailable,
+  registerAvailableModel,
+} from "./modelManifest.ts";
+

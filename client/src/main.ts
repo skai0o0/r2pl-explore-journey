@@ -592,6 +592,7 @@ const gameplay = new GameplayUI(
   },
   () => void refreshProfile(),
   session.campaignId ?? "",
+  (id) => world.setChestOpen(id, true),
 );
 miniMap.onPanRequested = (x, z) => world.animateFocus(x, z, 100);
 miniMap.onPanLive = (x, z) => world.focus(x, z, 100);

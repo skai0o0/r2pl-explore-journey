@@ -252,3 +252,108 @@ test("placement conversion and fallback lifecycle do not require WebGL", async (
   failed.dispose();
   assert.equal(scene.children.includes(fallback), false);
 });
+
+test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotation", async () => {
+  const {
+    getChestModelUrl,
+    getHqModelUrl,
+    getLandmarkModelUrl,
+    getUniStopModelUrl,
+    isModelAvailable,
+  } = await import("../client/src/assetRegistry.ts");
+  const {
+    setChestLidRotation,
+    tintModelFactionMaterials,
+  } = await import("../client/src/assetPipeline.ts");
+
+  // Model URL conventions
+  assert.equal(getHqModelUrl("hcmut"), "/models/hqs/hcmut_hq.glb");
+  assert.equal(getHqModelUrl("hcmiu"), "/models/hqs/hcmiu_hq.glb");
+  assert.equal(getLandmarkModelUrl("fansipan"), "/models/landmarks/fansipan.glb");
+  assert.equal(
+    getLandmarkModelUrl("thanglong"),
+    "/models/landmarks/hoangthanhthanglong.glb",
+  );
+  assert.equal(
+    getLandmarkModelUrl("cairang"),
+    "/models/landmarks/chonoicairang.glb",
+  );
+  assert.equal(getUniStopModelUrl("aspire"), "/models/unistops/unistop_aspire.glb");
+  assert.equal(getUniStopModelUrl("nitro"), "/models/unistops/unistop_nitro.glb");
+  assert.equal(
+    getUniStopModelUrl("predator"),
+    "/models/unistops/unistop_predator.glb",
+  );
+  assert.equal(getChestModelUrl("aspire"), "/models/chests/chest_aspire.glb");
+
+  // Manifest availability check
+  assert.equal(isModelAvailable("/models/hqs/hcmut_hq.glb"), true);
+  assert.equal(isModelAvailable("/models/hqs/hcmiu_hq.glb"), true);
+  assert.equal(isModelAvailable("/models/landmarks/nonexistent.glb"), false);
+
+  // Skip if unavailable immediately uses fallback without calling loader
+  let loaderCalled = false;
+  const scene = new THREE.Scene();
+  const fallback = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+  const mount = mountModelAsset(
+    scene,
+    {
+      loadInstance: () => {
+        loaderCalled = true;
+        return Promise.reject(new Error("should not be called"));
+      },
+    },
+    "/models/landmarks/missing.glb",
+    MODEL_PLACEMENTS[0]!,
+    fallback,
+    () => {},
+    { skipIfUnavailable: true },
+  );
+  assert.equal(loaderCalled, false);
+  assert.equal(await mount.ready, "fallback");
+  assert.equal(scene.children.includes(fallback), true);
+  mount.dispose();
+
+  // Faction material tinting
+  const root = new THREE.Group();
+  const meshFaction = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, name: "Mat_Faction_Primary" }),
+  );
+  const meshAccent = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, name: "Mat_Accent_Green" }),
+  );
+  const meshOther = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, name: "Mat_White" }),
+  );
+  root.add(meshFaction, meshAccent, meshOther);
+
+  tintModelFactionMaterials(root, "#0062FF");
+  assert.equal(
+    (meshFaction.material as THREE.MeshBasicMaterial).color.getHexString(),
+    "0062ff",
+  );
+  assert.equal(
+    (meshAccent.material as THREE.MeshBasicMaterial).color.getHexString(),
+    "0062ff",
+  );
+  assert.equal(
+    (meshOther.material as THREE.MeshBasicMaterial).color.getHexString(),
+    "ffffff",
+  );
+
+  // Chest lid rotation
+  const chestRoot = new THREE.Group();
+  const lid = new THREE.Group();
+  lid.name = "Chest_Lid";
+  chestRoot.add(lid);
+  assert.equal(lid.rotation.x, 0);
+
+  setChestLidRotation(chestRoot, true);
+  assert.ok(lid.rotation.x < -0.5);
+
+  setChestLidRotation(chestRoot, false);
+  assert.equal(lid.rotation.x, 0);
+});

@@ -30,6 +30,7 @@ export interface SchoolPlayFixture {
 export async function seedSchoolPlay(
   pool: Pool,
   campaignId = SCHOOL_PLAY_CAMPAIGN,
+  actorsPerSchool = 5,
 ): Promise<SchoolPlayFixture> {
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
@@ -45,13 +46,13 @@ export async function seedSchoolPlay(
   const actors: SchoolPlayActor[] = [];
   const players: DevPlayer[] = [];
   for (const school of schools)
-    for (let n = 0; n < 5; n++) {
+    for (let n = 0; n < actorsPerSchool; n++) {
       const role = (
         ["human", "human", "explorer", "connector", "steward"] as const
-      )[n]!;
+      )[n % 5]!;
       const actor = {
         token: `dev-school-${school.slot}-actor-${n}`,
-        actorId: `93000000-0000-4000-8000-${String(school.slot * 5 + n + 1).padStart(12, "0")}`,
+        actorId: `93000000-0000-4000-8000-${String(school.slot * actorsPerSchool + n + 1).padStart(12, "0")}`,
         schoolSlot: school.slot,
         name: `${school.label} · ${role === "human" ? "Explorer" : role} ${n + 1}`,
         schoolName: school.label,

@@ -675,3 +675,150 @@ test("admin validates publish, moves protected HQ ownership, restores persisted 
     await pool.end();
   }
 });
+
+test("gift check-in redemption generates giftCode, retrieves by code, and redeems once idempotently", {
+  skip: !url,
+}, async () => {
+  const pool = new Pool({ connectionString: url });
+  const campaign = randomUUID();
+  let server: Awaited<ReturnType<typeof createSchoolPlayServer>> | undefined;
+  try {
+    server = await createSchoolPlayServer(
+      pool,
+      { web: 0, websocket: 0 },
+      campaign,
+      { rewardDraw: () => 999 }, // Draw gift
+    );
+    const base = `http://127.0.0.1:${server.webPort}`;
+    const actor = server.fixture.actors.find(
+      (a) => a.role === "human" && a.schoolSlot === 0,
+    )!;
+    const headers = {
+      Authorization: `Bearer ${actor.token}`,
+      "Content-Type": "application/json",
+    };
+    const adminHeaders = {
+      "X-Admin-Key": "dev-map-admin",
+      "Content-Type": "application/json",
+    };
+
+    // Set gift stock
+    await fetch(`${base}/api/admin`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ action: "gift-stock", tier: "nitro", amount: 10 }),
+    });
+
+    // Make actor eligible by running
+    await fetch(`${base}/api/game`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        ruleVersion: 1,
+        key: randomUUID(),
+        action: "running",
+        amount: 1000,
+      }),
+    });
+
+    // Expand School 0 knowledge to touch unistop_nitro_1 (500, 360) footprint
+    await path(pool, campaign, 0, 500, 360);
+
+    // Spin unistop to roll a gift
+    const spinRes = await fetch(`${base}/api/game`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        ruleVersion: 1,
+        key: randomUUID(),
+        action: "spin",
+        target: "unistop_nitro_1",
+      }),
+    });
+    assert.equal(spinRes.status, 200);
+    const receipt = (await spinRes.json()) as {
+      status: string;
+      reason?: string;
+      message?: string;
+      reward?: { kind: string };
+      giftCode?: string;
+    };
+    assert.equal(receipt.status, "applied");
+    assert.equal(receipt.reward?.kind, "gift");
+    assert.ok(receipt.giftCode, "receipt must contain giftCode");
+    assert.match(receipt.giftCode!, /^R2PL-GIFT-[A-F0-9]{6}$/);
+
+    const giftCode = receipt.giftCode!;
+
+    // Verify in player view
+    const viewRes = await fetch(`${base}/api/game`, { headers });
+    const view = (await viewRes.json()) as {
+      gifts: Array<{ giftCode?: string; redeemedAt?: number | null; tier: string }>;
+    };
+    const playerGift = view.gifts.find((g) => g.giftCode === giftCode);
+    assert.ok(playerGift, "player gifts must include the rolled giftCode");
+    assert.equal(playerGift!.redeemedAt, null);
+
+    // Admin lookup by giftCode
+    const lookupRes = await fetch(
+      `${base}/api/admin/gifts?code=${encodeURIComponent(giftCode)}`,
+      { headers: adminHeaders },
+    );
+    assert.equal(lookupRes.status, 200);
+    const lookupData = (await lookupRes.json()) as {
+      gift: { giftCode: string; actorId: string; redeemedAt: number | null };
+    };
+    assert.equal(lookupData.gift.giftCode, giftCode);
+    assert.equal(lookupData.gift.actorId, actor.actorId);
+    assert.equal(lookupData.gift.redeemedAt, null);
+
+    // Admin lookup non-existent code
+    const notFoundRes = await fetch(
+      `${base}/api/admin/gifts?code=R2PL-GIFT-NOTEXIST`,
+      { headers: adminHeaders },
+    );
+    assert.equal(notFoundRes.status, 404);
+
+    // Admin redeem gift
+    const redeemRes = await fetch(`${base}/api/admin/gifts/redeem`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ giftCode }),
+    });
+    assert.equal(redeemRes.status, 200);
+    const redeemData = (await redeemRes.json()) as {
+      success: boolean;
+      gift: { redeemedAt: number };
+    };
+    assert.equal(redeemData.success, true);
+    assert.ok(redeemData.gift.redeemedAt > 0, "redeemedAt must be a positive timestamp");
+
+    // Second redemption attempt must report alreadyRedeemed (idempotency / anti-double claim)
+    const secondRedeemRes = await fetch(`${base}/api/admin/gifts/redeem`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ giftCode }),
+    });
+    assert.equal(secondRedeemRes.status, 200);
+    const secondData = (await secondRedeemRes.json()) as {
+      success: boolean;
+      alreadyRedeemed: boolean;
+    };
+    assert.equal(secondData.success, false);
+    assert.equal(secondData.alreadyRedeemed, true);
+
+    // Player view now shows redeemedAt
+    const updatedViewRes = await fetch(`${base}/api/game`, { headers });
+    const updatedView = (await updatedViewRes.json()) as {
+      gifts: Array<{ giftCode?: string; redeemedAt?: number | null }>;
+    };
+    const updatedGift = updatedView.gifts.find((g) => g.giftCode === giftCode);
+    assert.ok(updatedGift?.redeemedAt, "player gift view must show redeemedAt timestamp");
+  } finally {
+    await server?.close();
+    await cleanupSchoolRewards(pool, campaign);
+    await cleanupBotFixture(pool, campaign);
+    await pool.end();
+  }
+});
+

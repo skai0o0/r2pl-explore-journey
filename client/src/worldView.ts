@@ -16,13 +16,23 @@ import {
   tileIndex,
 } from "../../shared/world/coordinates.ts";
 import { ModelAssetLoader } from "./assetLoader.ts";
-import { type AssetMount, mountModelAsset } from "./assetPipeline.ts";
 import {
+  type AssetMount,
+  mountModelAsset,
+  setChestLidRotation,
+  tintModelFactionMaterials,
+} from "./assetPipeline.ts";
+import {
+  getChestModelUrl,
+  getHqModelUrl,
+  getLandmarkModelUrl,
+  getUniStopModelUrl,
   MODEL_ASSETS,
   MODEL_PLACEMENTS,
   type ModelPlacement,
 } from "./assetRegistry.ts";
 import { LandscapeEffects } from "./landscape.ts";
+import { fetchModelManifest } from "./modelManifest.ts";
 
 export interface PickedTile {
   readonly x: number;
@@ -382,7 +392,8 @@ export class WorldView {
   readonly #modelSupports: THREE.Mesh[] = [];
   readonly #privateObjects = new THREE.Group();
   readonly #beacons = new THREE.Group();
-  readonly #unistopMeshes = new Map<string, THREE.Mesh>();
+  readonly #unistopMeshes = new Map<string, THREE.Object3D>();
+  readonly #chestMeshes = new Map<string, THREE.Object3D>();
   readonly #landscape: LandscapeEffects;
   readonly #mist: THREE.Mesh;
   readonly #mistTexture: THREE.CanvasTexture;
@@ -502,6 +513,7 @@ export class WorldView {
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
     const assetLoader = new ModelAssetLoader();
+    void fetchModelManifest();
     for (const placement of layout.placements ?? MODEL_PLACEMENTS) {
       // The synthetic fixture glTFs are intentionally flat. Keep their loaded
       // geometry visible while giving the preview a small amount of real depth.
@@ -530,11 +542,29 @@ export class WorldView {
       assetRoot.position.z = supportHeight;
       this.#scene.add(assetRoot);
       this.#assetRoots.push(assetRoot);
+
+      const schoolId =
+        placement.asset === "hq"
+          ? placement.id.replace(/^hq-/, "").replace(/-hq$/, "").toLowerCase()
+          : undefined;
+      const school = schoolId
+        ? SCHOOLS.find((s) => s.id === schoolId)
+        : undefined;
+
+      const modelUrl =
+        placement.asset === "hq" && schoolId
+          ? getHqModelUrl(schoolId)
+          : placement.asset === "landmark"
+            ? getLandmarkModelUrl(placement.id)
+            : MODEL_ASSETS[placement.asset].url;
+
       const fallback =
         placement.asset === "hq"
           ? new THREE.Mesh(
               new THREE.BoxGeometry(1, 1, 0.08),
-              new THREE.MeshBasicMaterial({ color: 0x8bd9b4 }),
+              new THREE.MeshBasicMaterial({
+                color: school ? school.color : 0x8bd9b4,
+              }),
             )
           : new THREE.Mesh(
               new THREE.CircleGeometry(0.5, 4),
@@ -544,10 +574,14 @@ export class WorldView {
         mountModelAsset(
           assetRoot,
           assetLoader,
-          MODEL_ASSETS[placement.asset].url,
+          modelUrl,
           placement,
           fallback,
           this.#render,
+          {
+            skipIfUnavailable: true,
+            colorHex: school?.color,
+          },
         ),
       );
     }
@@ -566,18 +600,51 @@ export class WorldView {
         o.ownerSchoolSlot !== undefined
           ? (SCHOOLS[o.ownerSchoolSlot]?.color ?? baseColor)
           : baseColor;
-      const mesh = new THREE.Mesh(
+      const fallback = new THREE.Mesh(
         o.kind === "chest"
           ? new THREE.BoxGeometry(o.width, o.height, 2)
           : new THREE.CylinderGeometry(2, 3, 8, 6),
         new THREE.MeshBasicMaterial({ color }),
       );
       if (o.kind === "unistop") {
-        mesh.rotation.x = Math.PI / 2;
-        this.#unistopMeshes.set(o.id, mesh);
+        fallback.rotation.x = Math.PI / 2;
+        this.#unistopMeshes.set(o.id, fallback);
+      } else {
+        this.#chestMeshes.set(o.id, fallback);
       }
-      mesh.position.set(o.x - 500, 500 - o.z, o.kind === "chest" ? 1 : 4);
-      this.#scene.add(mesh);
+      fallback.position.set(o.x - 500, 500 - o.z, o.kind === "chest" ? 1 : 4);
+      this.#scene.add(fallback);
+
+      const modelUrl =
+        o.kind === "unistop" && o.tier
+          ? getUniStopModelUrl(o.tier)
+          : o.kind === "chest" && o.tier
+            ? getChestModelUrl(o.tier)
+            : "";
+      if (modelUrl) {
+        this.#assetMounts.push(
+          mountModelAsset(
+            this.#scene,
+            assetLoader,
+            modelUrl,
+            {
+              id: o.id,
+              asset: "hq",
+              worldX: o.x,
+              worldZ: o.z,
+              scale: o.kind === "chest" ? 2 : 4,
+              rotationZ: 0,
+            },
+            fallback,
+            this.#render,
+            {
+              skipIfUnavailable: true,
+              colorHex: color,
+              isChestOpened: false,
+            },
+          ),
+        );
+      }
     }
     for (const marker of this.#markers) {
       const element = document.createElement("div");
@@ -764,11 +831,21 @@ export class WorldView {
             o.ownerSchoolSlot !== null && o.ownerSchoolSlot !== undefined
               ? (SCHOOLS[o.ownerSchoolSlot]?.color ?? baseColor)
               : baseColor;
-          (mesh.material as THREE.MeshBasicMaterial).color.set(color);
+          if (mesh instanceof THREE.Mesh && mesh.material && "color" in mesh.material) {
+            (mesh.material as THREE.MeshBasicMaterial).color.set(color);
+          }
+          tintModelFactionMaterials(mesh, color);
         }
       }
     }
     this.#render();
+  }
+  setChestOpen(id: string, open = true): void {
+    const mesh = this.#chestMeshes.get(id);
+    if (mesh) {
+      setChestLidRotation(mesh, open);
+      this.#render();
+    }
   }
   #disposeGroup(group: THREE.Object3D): void {
     group.traverse((child) => {

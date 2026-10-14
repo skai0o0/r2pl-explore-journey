@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 
 export interface SceneTemplateLoader {
   load(url: string): Promise<THREE.Object3D>;
@@ -7,6 +8,16 @@ export interface SceneTemplateLoader {
 
 class ThreeGltfTemplateLoader implements SceneTemplateLoader {
   readonly #loader = new GLTFLoader();
+
+  constructor() {
+    try {
+      const draco = new DRACOLoader();
+      draco.setDecoderPath("/draco/gltf/");
+      this.#loader.setDRACOLoader(draco);
+    } catch {
+      // In minimal environments without worker support, fallback without Draco
+    }
+  }
 
   async load(url: string): Promise<THREE.Object3D> {
     return (await this.#loader.loadAsync(url)).scene;

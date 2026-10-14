@@ -1,9 +1,10 @@
-import { createHash, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import {
   type GameCommand,
   type GameReceipt,
   type GameView,
+  type GiftEntitlementView,
   type LandmarkView,
   parseGameCommand,
 } from "../../shared/gameplay/commands.ts";
@@ -112,9 +113,7 @@ export class SignedGameplay {
     }
   }
   actor(token: string | undefined): SchoolPlayActor | undefined {
-    return this.fixture.actors.find(
-      (a) => a.token === token && a.role === "human",
-    );
+    return this.fixture.actors.find((a) => a.token === token);
   }
   private async state<T>(
     db: PoolClient,
@@ -267,7 +266,7 @@ export class SignedGameplay {
     }
   }
   async initialize(): Promise<void> {
-    for (const actor of this.fixture.actors.filter((a) => a.role === "human"))
+    for (const actor of this.fixture.actors)
       for (const tier of ["aspire", "nitro", "predator"])
         await this.pool.query(
           "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,opening_balance,balance) VALUES($1,$2,$3,$4,$4) ON CONFLICT DO NOTHING",
@@ -327,11 +326,28 @@ export class SignedGameplay {
           }
         }
       const gifts = (
-        await db.query<{ id: string; data: { tier: string } }>(
-          "SELECT id,data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND data->>'actorId'=$2",
+        await db.query<{
+          id: string;
+          data: {
+            tier: string;
+            giftCode?: string;
+            redeemedAt?: number | null;
+            createdAt?: number;
+            schoolName?: string;
+          };
+        }>(
+          "SELECT id,data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND data->>'actorId'=$2 ORDER BY id DESC",
           [this.fixture.campaignId, actor.actorId],
         )
-      ).rows.map((r) => ({ id: r.id, tier: r.data.tier }));
+      ).rows.map((r) => ({
+        id: r.id,
+        tier: r.data.tier,
+        giftCode:
+          r.data.giftCode ?? `R2PL-GIFT-${r.id.slice(0, 6).toUpperCase()}`,
+        redeemedAt: r.data.redeemedAt ?? null,
+        createdAt: r.data.createdAt,
+        schoolName: r.data.schoolName,
+      }));
       const cooldowns = await this.state<Record<string, number>>(
         db,
         "cooldowns",
@@ -677,6 +693,7 @@ export class SignedGameplay {
       a.actorId,
       {},
     );
+    let giftCode: string | undefined;
     if (reward.kind === "gift") {
       const stock = await this.state<{ remaining: number }>(
         db,
@@ -695,11 +712,19 @@ export class SignedGameplay {
           weight: reward.weight,
         };
       else {
+        giftCode = `R2PL-GIFT-${randomBytes(3).toString("hex").toUpperCase()}`;
         stock.remaining--;
         await this.save(db, "gift-stock", o.tier, stock);
         await this.save(db, "gift-entitlement", c.key, {
           actorId: a.actorId,
+          schoolSlot: a.schoolSlot,
+          schoolName: this.fixture.schools[a.schoolSlot]?.label ?? "Unknown",
           tier: o.tier,
+          giftCode,
+          sourceKind: kind,
+          sourceId: o.id,
+          createdAt: now,
+          redeemedAt: null,
         });
       }
     }
@@ -734,10 +759,139 @@ export class SignedGameplay {
       status: "applied",
       reason: null,
       reward,
+      ...(giftCode ? { giftCode } : {}),
       ...(discovery ? { discovery } : {}),
       ...(nextAvailableAtMs ? { nextAvailableAtMs } : {}),
       message: `${reward.kind} ×${reward.quantity}`,
     };
+  }
+
+  async findGiftByCode(giftCode: string): Promise<{
+    id: string;
+    actorId: string;
+    schoolSlot: number;
+    schoolName: string;
+    tier: string;
+    giftCode: string;
+    createdAt: number;
+    redeemedAt: number | null;
+  } | null> {
+    const normalized = giftCode.trim().toUpperCase();
+    const res = await this.pool.query<{ id: string; data: Record<string, unknown> }>(
+      "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND (UPPER(data->>'giftCode')=$2 OR UPPER(id)=$2) LIMIT 1",
+      [this.fixture.campaignId, normalized],
+    );
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0]!;
+    const data = r.data;
+    return {
+      id: r.id,
+      giftCode: (data.giftCode as string) ?? normalized,
+      actorId: data.actorId as string,
+      schoolSlot: (data.schoolSlot as number) ?? 0,
+      schoolName: (data.schoolName as string) ?? "Unknown",
+      tier: (data.tier as string) ?? "aspire",
+      createdAt: (data.createdAt as number) ?? 0,
+      redeemedAt: (data.redeemedAt as number | null) ?? null,
+    };
+  }
+
+  async listGifts(limit = 50): Promise<
+    Array<{
+      id: string;
+      actorId: string;
+      schoolSlot: number;
+      schoolName: string;
+      tier: string;
+      giftCode: string;
+      createdAt: number;
+      redeemedAt: number | null;
+    }>
+  > {
+    const res = await this.pool.query<{ id: string; data: Record<string, unknown> }>(
+      "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' ORDER BY id DESC LIMIT $2",
+      [this.fixture.campaignId, limit],
+    );
+    return res.rows.map((r) => {
+      const data = r.data;
+      return {
+        id: r.id,
+        giftCode:
+          (data.giftCode as string) ??
+          `R2PL-GIFT-${r.id.slice(0, 6).toUpperCase()}`,
+        actorId: data.actorId as string,
+        schoolSlot: (data.schoolSlot as number) ?? 0,
+        schoolName: (data.schoolName as string) ?? "Unknown",
+        tier: (data.tier as string) ?? "aspire",
+        createdAt: (data.createdAt as number) ?? 0,
+        redeemedAt: (data.redeemedAt as number | null) ?? null,
+      };
+    });
+  }
+
+  async redeemGift(giftCode: string): Promise<{
+    success: boolean;
+    alreadyRedeemed?: boolean;
+    gift?: Record<string, unknown>;
+    error?: string;
+  }> {
+    const normalized = giftCode.trim().toUpperCase();
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      const res = await db.query<{ id: string; data: Record<string, unknown> }>(
+        "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND (UPPER(data->>'giftCode')=$2 OR UPPER(id)=$2) FOR UPDATE",
+        [this.fixture.campaignId, normalized],
+      );
+      if (res.rows.length === 0) {
+        await db.query("ROLLBACK");
+        return { success: false, error: "GIFT_NOT_FOUND" };
+      }
+      const row = res.rows[0]!;
+      const data = { ...row.data };
+      if (data.redeemedAt) {
+        await db.query("ROLLBACK");
+        return {
+          success: false,
+          alreadyRedeemed: true,
+          gift: {
+            ...data,
+            id: row.id,
+            giftCode: (data.giftCode as string) ?? normalized,
+          },
+        };
+      }
+      const now = Date.now();
+      data.redeemedAt = now;
+      await db.query(
+        "UPDATE r2pl_v2.game_state SET data=$1 WHERE campaign_id=$2 AND scope='gift-entitlement' AND id=$3",
+        [JSON.stringify(data), this.fixture.campaignId, row.id],
+      );
+      await db.query(
+        "INSERT INTO r2pl_v2.game_events(campaign_id, actor_id, school_slot, title, body) VALUES($1, $2, $3, $4, $5)",
+        [
+          this.fixture.campaignId,
+          data.actorId,
+          data.schoolSlot,
+          "Đã nhận quà tại sự kiện",
+          `Mã ${data.giftCode ?? normalized} (${data.tier}) đã được Ban tổ chức xác nhận check-in phát quà thành công.`,
+        ],
+      );
+      await db.query("COMMIT");
+      return {
+        success: true,
+        gift: {
+          ...data,
+          id: row.id,
+          giftCode: (data.giftCode as string) ?? normalized,
+        },
+      };
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
   }
 }
 class RuleRejection extends Error {}

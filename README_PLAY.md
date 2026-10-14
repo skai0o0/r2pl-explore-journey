@@ -39,13 +39,36 @@ Database phải nằm trên loopback và có tên `r2pl_prep_test_*` hoặc `r2p
 - Bấm **Chạy giả lập 1 km · +10 Points** để sync Running vào ví đang chơi. Người chưa có km tuần vẫn quay/mở rương được; Gift slot khi chưa đủ eligibility hoặc hết stock fallback thành Crystal ×4 ở UniStop, ×10 ở Chest.
 - Xem leaderboard 8 trường, inventory và **Lịch sử & thông báo**. **Dev tools** bật/tắt thông tin chẩn đoán; giao diện chơi mặc định ẩn phần này.
 
-## Admin Map Editor và Gift staging
+## Admin Map Editor, Gift staging và Check-in Quà tặng
 
 Mở **Admin Map Editor**, nhập key mặc định local **`dev-map-admin`**, bấm **Mở editor**. Có thể dùng key riêng bằng cách đặt `$env:ADMIN_KEY` trước khi chạy server.
 
-Trong editor, chọn **Di dời**, click vị trí trên bản đồ, xem preview footprint rồi bấm **ÁP DỤNG NGAY LÊN SERVER**. Menu Admin có **Đặt object mới** cho UniStop/Chest và tier, **Khôi phục layout trước** để rollback, cùng form thông báo campaign. Server kiểm tra bounds, overlap, đủ roster và HQ ownership trước khi commit.
+Trong editor:
+- **Map Editor:** chọn **Di dời**, click vị trí trên bản đồ, xem preview footprint rồi bấm **ÁP DỤNG NGAY LÊN SERVER**. Menu Admin có **Đặt object mới** cho UniStop/Chest và tier, **Khôi phục layout trước** để rollback, cùng form thông báo campaign.
+- **Gift staging:** Để thử Gift, sync ít nhất 1 km Running của explorer trong tuần hiện tại; chọn **Tier mới**, nhập **Gift stock staging**, bấm **Cập nhật Gift stock staging**. Khi trúng Gift, hệ thống tự sinh mã duy nhất `giftCode` (định dạng `R2PL-GIFT-XXXXXX`) lưu vào entitlement và hiển thị trong Kho đồ cá nhân của sinh viên kèm nút Copy và huy hiệu trạng thái ("⏳ CHỜ CHECK-IN").
+- **Tra cứu & Xác nhận Check-in Quà tặng (Phase 3):** Trong panel Admin, có mục tra cứu mã quà tặng `giftCode`. Admin nhập mã quà, xem thông tin sinh viên, trường, loại quà và ngày trúng, sau đó bấm **"Xác nhận đã phát quà"** (`redeemedAt` được lưu bền vững vào PostgreSQL, chống nhận trùng lần 2).
 
-Để thử Gift: sync ít nhất 1 km Running của explorer trong tuần hiện tại; mở editor để xác thực Admin, đóng panel editor, chọn **Tier mới**, nhập **Gift stock staging**, bấm **Cập nhật Gift stock staging**. Stock ban đầu là 0. Running và stock chỉ tạo điều kiện nhận Gift; kết quả còn phụ thuộc RNG theo bảng xác suất đã ký. Gift hiện là entitlement giả lập trong inventory; portal Running và giao quà thật thuộc G-FULL.
+## Cổng 3D GLB Auto-Loader & Draco Decoder (Phase 3)
+
+Game hỗ trợ nạp tự động model 3D `.glb` theo quy ước đường dẫn:
+- **8 HQ:** `/models/hqs/<schoolId>_hq.glb` (`hcmut_hq.glb`, `hcmiu_hq.glb`, v.v.)
+- **10 Landmark:** `/models/landmarks/<landmarkId>.glb` (`fansipan.glb`, `halong.glb`, v.v.)
+- **3 UniStop:** `/models/unistops/unistop_<tier>.glb` (`aspire`, `nitro`, `predator`)
+- **3 Chest:** `/models/chests/chest_<tier>.glb` (`aspire`, `nitro`, `predator`)
+- **Draco Decoder:** Nằm tại `/draco/` cho phép giải nén mesh nén tốc độ cao.
+- **Pre-flight Manifest:** Client kiểm tra manifest danh mục model (`/api/models/manifest` hoặc `/models/manifest.json`), nếu model chưa có trên đĩa sẽ fallback êm sang procedural mesh mà **hoàn toàn không sinh lỗi 404 đỏ trên Console**.
+- **Tự động nhuộm màu & Animation:** Khi load model, các material có tên chứa `Faction` hoặc `Accent` tự động được nhuộm theo `colorHex` của trường chiếm giữ; node `Chest_Lid` tự động xoay mở khi rương được mở.
+
+## Kiểm thử chịu tải 500 Clients hỗn hợp (Gate 17/10/2026)
+
+Chạy kịch bản tải thực tế 500 clients đồng thời trên 8 trường kết hợp mở ô WebSocket, giao lưu 2 trường, quay UniStop và nạp Crystal Landmark:
+
+```powershell
+$env:R2PL_LOADTEST_DATABASE_URL = $env:R2PL_BOT_DATABASE_URL
+npm run test:load500
+```
+
+Kết quả gate 17/10/2026: **750/750 operations thành công 100.00%**, thông lượng 116.9 ops/sec, p50 latency 2.67s, p95 4.47s, không rò rỉ bộ nhớ (RSS peak 245.9 MB, heap 36.2 MB).
 
 ## Campaign nghiệm thu nhanh có đường tới Landmark
 

@@ -22,7 +22,10 @@ export async function createSchoolPlayServer(
   pool: Pool,
   ports: { web: number; websocket: number },
   campaignId = SCHOOL_PLAY_CAMPAIGN,
-  options: { readonly rewardDraw?: () => number } = {},
+  options: {
+    readonly rewardDraw?: () => number;
+    readonly actorsPerSchool?: number;
+  } = {},
 ): Promise<Awaited<ReturnType<typeof startSchoolPlayServer>>> {
   const writer = await pool.connect();
   const key = `school-play:${campaignId}`;
@@ -78,9 +81,16 @@ async function startSchoolPlayServer(
   pool: Pool,
   ports: { web: number; websocket: number },
   campaignId?: string,
-  options: { readonly rewardDraw?: () => number } = {},
+  options: {
+    readonly rewardDraw?: () => number;
+    readonly actorsPerSchool?: number;
+  } = {},
 ) {
-  const fixture = await seedSchoolPlay(pool, campaignId);
+  const fixture = await seedSchoolPlay(
+    pool,
+    campaignId,
+    options.actorsPerSchool ?? 5,
+  );
   await provisionSchoolRewards(pool, fixture);
   const rewardHttp = new SchoolRewardHttp(pool, fixture);
   const gameplay = new SignedGameplay(pool, fixture, options.rewardDraw);
@@ -120,6 +130,7 @@ async function startSchoolPlayServer(
     ".css": "text/css; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
+    ".json": "application/json; charset=utf-8",
     ".gltf": "model/gltf+json",
     ".glb": "model/gltf-binary",
   };
@@ -200,6 +211,98 @@ async function startSchoolPlayServer(
                   : "TEMPORARILY_UNAVAILABLE",
             }),
           );
+      }
+      return;
+    }
+    if (path === "/api/models/manifest") {
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.end(
+        JSON.stringify({
+          models: [
+            "/models/hqs/hcmut_hq.glb",
+            "/models/hqs/hcmiu_hq.glb",
+            "/models/hq.gltf",
+            "/models/landmark.gltf",
+          ],
+        }),
+      );
+      return;
+    }
+    if (path === "/api/admin/gifts") {
+      if (
+        !operator.authorized(
+          typeof request.headers["x-admin-key"] === "string"
+            ? request.headers["x-admin-key"]
+            : undefined,
+        )
+      ) {
+        response.writeHead(403).end();
+        return;
+      }
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      const code = url.searchParams.get("code");
+      if (code) {
+        const gift = await gameplay.findGiftByCode(code);
+        if (!gift) {
+          response
+            .writeHead(404)
+            .end(JSON.stringify({ error: "GIFT_NOT_FOUND" }));
+          return;
+        }
+        response.end(JSON.stringify({ gift }));
+        return;
+      }
+      const gifts = await gameplay.listGifts(50);
+      response.end(JSON.stringify({ gifts }));
+      return;
+    }
+    if (path === "/api/admin/gifts/redeem") {
+      if (
+        !operator.authorized(
+          typeof request.headers["x-admin-key"] === "string"
+            ? request.headers["x-admin-key"]
+            : undefined,
+        )
+      ) {
+        response.writeHead(403).end();
+        return;
+      }
+      if (request.method !== "POST") {
+        response.writeHead(405).end();
+        return;
+      }
+      let size = 0;
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) {
+        const bytes = Buffer.from(chunk);
+        size += bytes.length;
+        if (size > 4096) {
+          response.writeHead(413).end();
+          return;
+        }
+        chunks.push(bytes);
+      }
+      try {
+        const payload = JSON.parse(
+          Buffer.concat(chunks).toString("utf8"),
+        ) as { giftCode?: string };
+        if (!payload.giftCode) {
+          response
+            .writeHead(400)
+            .end(JSON.stringify({ error: "MISSING_GIFT_CODE" }));
+          return;
+        }
+        const result = await gameplay.redeemGift(payload.giftCode);
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        if (!result.success && !result.alreadyRedeemed) {
+          response.writeHead(404).end(JSON.stringify(result));
+          return;
+        }
+        response.end(JSON.stringify(result));
+      } catch (e) {
+        response
+          .writeHead(500)
+          .end(JSON.stringify({ error: String(e) }));
       }
       return;
     }

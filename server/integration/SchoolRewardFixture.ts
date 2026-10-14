@@ -8,9 +8,7 @@ export function schoolRewardBinding(
   fixture: SchoolPlayFixture,
   token: string | undefined,
 ): CampaignBinding | null {
-  const actor = fixture.actors.find(
-    (a) => a.token === token && a.role === "human",
-  );
+  const actor = fixture.actors.find((a) => a.token === token);
   return actor
     ? {
         campaignId: fixture.campaignId,
@@ -131,7 +129,7 @@ export async function provisionSchoolRewards(
       )
         throw new Error("Conflicting immutable reward target fixture");
     }
-    for (const actor of fixture.actors.filter((a) => a.role === "human")) {
+    for (const actor of fixture.actors) {
       const b = schoolRewardBinding(fixture, actor.token)!;
       await db.query(
         "INSERT INTO r2pl_prep.running_bindings(campaign_id,actor_id,provider,external_student_id,school_slot,external_school_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING",

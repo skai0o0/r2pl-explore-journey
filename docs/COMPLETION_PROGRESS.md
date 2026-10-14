@@ -34,8 +34,11 @@ Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [steppin
 | R2-00 HQ/frontier | COMPLETE — G-V1 local/dev | 400 owned/fog tiles/HQ, server 4-edge validation, rival HQ protected; Shared Knowledge/upkeep/consolidation/refund tích hợp |
 | R3-03 bot→player-view | COMPLETE — G-V1 local/dev | 24 bot và người chơi dùng cùng authority/campaign; own-school Knowledge hiển thị trong Three.js/minimap |
 | R3-01/02/04/05 | COMPLETE — G-V1 local/dev | Full object layout, V1 UI ports, guidance, normal/dev separation và desktop/mobile QA; PV02/PV07–PV15/PV18 |
+| R4-01 GLB Auto-Loader & Draco | COMPLETE — Phase 3 verified | Convention `/models/{hqs,landmarks,unistops,chests}/*.glb`, Draco decoder, manifest pre-flight (0 console 404), faction tinting, Chest_Lid rotation |
+| R4-02 Gift Check-in Redemption | COMPLETE — Phase 3 verified | `giftCode` (R2PL-GIFT-XXXXXX), UI badge & copy button, Admin search & 1-time redemption verification idempotent |
+| R4-03 500-Client Mixed Load Gate | COMPLETE — 17/10 Gate PASSED | 500 concurrent synthetic clients across 8 schools, 750 mixed ops (WS explore, UniStop spin, Landmark crystal, Shared Knowledge upkeep), 100% success rate (750/750), p50 2.67s, p95 4.47s, zero memory leak |
 | R9-A leased batch tail | FIXED — regression retained | Tail leases được giải phóng khi publish/recovery lỗi; delivered/newer-owned leases giữ nguyên |
-| R9-A original trigger / R9-C scale | MONITORING / BENCHMARK FROZEN | Relay error cũ không tái hiện trong đợt kiểm tra; G-V1 không tuyên bố capacity 1.000/10.000 CCU |
+| R9-A original trigger / R9-C scale | PASS 500-CLIENT GATE / FROZEN 10K | 500 clients thực tế verified 100% success; benchmark 1.000+ và 10.000 CCU tiếp tục đóng băng cho G-FULL |
 
 ## V1 parity checklist
 

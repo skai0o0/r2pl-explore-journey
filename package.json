@@ -28,7 +28,8 @@
     "test:bots": "node --experimental-strip-types --test --test-concurrency=1 tests/school-bot-planner.test.ts tests/school-bot-network.test.ts",
     "play:bots": "node --experimental-strip-types scripts/play-school-bots.ts",
     "play:schools": "npm run build:client && node --experimental-strip-types scripts/play-schools.ts",
-    "demo:play-rewards": "node --experimental-strip-types scripts/demo-playable-rewards.ts"
+    "demo:play-rewards": "node --experimental-strip-types scripts/demo-playable-rewards.ts",
+    "test:load500": "node --experimental-strip-types scripts/loadtest-500-clients.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.18",

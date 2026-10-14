@@ -47,6 +47,7 @@ export class GameplayUI {
     private onView: (view: GameView) => void,
     private onWallet: () => void,
     private scope = "",
+    private onChestOpened?: (id: string) => void,
   ) {
     this.panel.className = "gameplay-menu";
     this.panel.innerHTML =
@@ -346,6 +347,9 @@ export class GameplayUI {
           winningIndex: 24,
           winningItem: winner,
         });
+        if (c.action === "open" && c.target) {
+          this.onChestOpened?.(c.target);
+        }
       }
       if (receipt.discovery)
         this.focus(receipt.discovery.x, receipt.discovery.z);
@@ -387,10 +391,53 @@ export class GameplayUI {
       " · Keys A/N/P " +
       (this.view ? Object.values(this.view.keys).join("/") : "—");
     content.append(inventory);
-    for (const gift of this.view?.gifts ?? []) {
-      const row = document.createElement("p");
-      row.textContent = `Gift staging ${gift.tier} · ${gift.id}`;
-      content.append(row);
+    const gifts = this.view?.gifts ?? [];
+    if (gifts.length > 0) {
+      const section = document.createElement("div");
+      section.className = "gift-inventory-section";
+      section.style.cssText =
+        "margin:10px 0;padding:10px;background:#0d232e;border:1px solid #1a3c4f;border-radius:6px;";
+      const heading = document.createElement("div");
+      heading.style.cssText =
+        "font-weight:700;color:#00e5ff;margin-bottom:8px;font-size:13px;display:flex;align-items:center;gap:6px;";
+      heading.innerHTML = "🎁 <span>Kho Quà Hiện Vật & Check-in</span>";
+      section.append(heading);
+
+      for (const gift of gifts) {
+        const card = document.createElement("div");
+        card.style.cssText =
+          "background:#142d3b;border-radius:4px;padding:8px;margin-bottom:6px;font-size:12px;border-left:3px solid #ffcc66;";
+        const isRedeemed = !!gift.redeemedAt;
+        const code = gift.giftCode || gift.id;
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-weight:700;color:#ffd700;text-transform:uppercase">${gift.tier} GIFT</span>
+            <span style="font-size:11px;font-weight:600;color:${isRedeemed ? "#5fffd0" : "#ff9d00"}">
+              ${isRedeemed ? "✓ ĐÃ NHẬN" : "⏳ CHỜ CHECK-IN"}
+            </span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin:4px 0">
+            <span style="color:#aaa;font-size:11px">Mã đối soát:</span>
+            <code style="background:#09151c;padding:2px 6px;border-radius:3px;color:#00e5ff;font-weight:700;letter-spacing:1px">${code}</code>
+            <button type="button" class="copy-gift-btn" style="padding:2px 8px;font-size:11px;cursor:pointer">Sao chép</button>
+          </div>
+          <small style="color:#88a">
+            ${isRedeemed ? `Đã nhận quà tại sự kiện (${new Date(Number(gift.redeemedAt)).toLocaleString("vi-VN")})` : "Đưa mã này cho Ban tổ chức tại sự kiện để nhận quà"}
+          </small>
+        `;
+        const copyBtn = card.querySelector(".copy-gift-btn") as HTMLButtonElement;
+        copyBtn?.addEventListener("click", () => {
+          if (navigator.clipboard) {
+            void navigator.clipboard.writeText(code);
+            NotificationBanner.show({
+              title: "Kho đồ",
+              body: `Đã sao chép mã quà tặng: ${code}`,
+            });
+          }
+        });
+        section.append(card);
+      }
+      content.append(section);
     }
     const running = document.createElement("button");
     running.textContent = `Chạy giả lập 1 km · +${GAME_CONFIG.running.kmToPointsRate} Points`;

@@ -23,12 +23,20 @@ export interface LandmarkView {
   readonly cooldownUntil: number;
   readonly hasPath: boolean;
 }
+export interface GiftEntitlementView {
+  readonly id: string;
+  readonly tier: string;
+  readonly giftCode?: string | undefined;
+  readonly redeemedAt?: number | null | undefined;
+  readonly createdAt?: number | undefined;
+  readonly schoolName?: string | undefined;
+}
 export interface GameView {
   readonly ruleVersion: 1;
   readonly crystals: string;
   readonly treasureMaps: string;
   readonly revealedTiles: number;
-  readonly gifts: readonly { id: string; tier: string }[];
+  readonly gifts: readonly GiftEntitlementView[];
   readonly keys: Readonly<Record<"aspire" | "nitro" | "predator", string>>;
   readonly landmarks: readonly LandmarkView[];
   readonly chests: readonly WorldObject[];
@@ -53,9 +61,10 @@ export interface GameView {
 export interface GameReceipt {
   readonly status: "applied" | "rejected";
   readonly reason: string | null;
-  readonly reward?: RewardOutcome;
-  readonly discovery?: WorldObject;
-  readonly nextAvailableAtMs?: number;
+  readonly reward?: RewardOutcome | undefined;
+  readonly giftCode?: string | undefined;
+  readonly discovery?: WorldObject | undefined;
+  readonly nextAvailableAtMs?: number | undefined;
   readonly message: string;
 }
 export function parseGameCommand(input: unknown): GameCommand {
