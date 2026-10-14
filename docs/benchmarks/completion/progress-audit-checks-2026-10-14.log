@@ -1,0 +1,70 @@
+typecheck
+exit=0
+
+
+lint
+exit=0
+scripts\simulation\observer.html:12:638 lint/style/useTemplate  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  i Template literals are preferred over string concatenation.
+
+    10 │ function zoom(){const inner=el('map').querySelector('svg svg');if(!inner)return;const size=Number(el('zoom').value);const parts=originalView.split(' ').map(Number);inner.setAttribute('viewBox',size?[(parts[2]-size)/2,(parts[3]-size)/2,size,size].join(' '):originalView);}
+    11 │ el('zoom').addEventListener('change',zoom);
+  > 12 │ ...l');detail.textContent=school.rate+' lệnh/s/bot · '+state.botsPerSchool+' bot';label.append(name,det...
+       │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    13 │ </script></body></html>
+
+  i Unsafe fix: Use a template literal.
+
+    4 4 │   function zoom(){const inner=el('map').querySelector('svg svg');if(!inner)return;const size=Number(el('zoom').value);const parts=originalView.split(' ').map(Number);inner.setAttribute('viewBox',size?[(parts[2]-size)/2,(parts[3]-size)/2,size,size].join(' '):originalView);}
+    5 5 │   el('zoom').addEventListener('change',zoom);
+    6   │ - ...Element('small');detail.textContent=school.rate+'·lệnh/s/bot···'+state.botsPerSchool+'·bot';label.ap...
+      6 │ + ...ent.createElement('small');detail.textContent=`${school.rate}·lệnh/s/bot···${state.botsPerSchool}·bo...
+    7 7 │
+
+
+scripts\simulation\observer.html:12:898 lint/style/useTemplate  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  i Template literals are preferred over string concatenation.
+
+    10 │ function zoom(){const inner=el('map').querySelector('svg svg');if(!inner)return;const size=Number(el('zoom').value);const parts=originalView.split(' ').map(Number);inner.setAttribute('viewBox',size?[(parts[2]-size)/2,(parts[3]-size)/2,size,size].join(' '):originalView);}
+    11 │ el('zoom').addEventListener('change',zoom);
+  > 12 │ ...l('time').textContent=Math.round(live.elapsedSeconds)+'s / '+state.duration+'s';el('actions').textCo...
+       │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    13 │ </script></body></html>
+
+  i Unsafe fix: Use a template literal.
+
+    4 4 │   function zoom(){const inner=el('map').querySelector('svg svg');if(!inner)return;const size=Number(el('zoom').value);const parts=originalView.split(' ').map(Number);inner.setAttribute('viewBox',size?[(parts[2]-size)/2,(parts[3]-size)/2,size,size].join(' '):originalView);}
+    5 5 │   el('zoom').addEventListener('change',zoom);
+    6   │ - ...e').textContent=Math.round(live.elapsedSeconds)+'s·/·'+state.duration+'s';el('actions').textContent=...
+      6 │ + ....append(row);}if(live){el('time').textContent=`${Math.round(live.elapsedSeconds)}s·/·${state.duratio...
+    7 7 │
+
+
+Checked 110 files in 80ms. No fixes applied.
+Found 2 infos.
+
+
+build
+exit=0
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 73 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/index.html                   5.09 kB │ gzip:   2.02 kB
+dist/client/assets/index-BULbn0Zr.css   14.59 kB │ gzip:   4.16 kB
+dist/client/assets/index-ySTHafbP.js   824.65 kB │ gzip: 221.47 kB
+
+✓ built in 271ms
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+
+dev-health
+exit=0
+200 {"fixtureOnly":true,"schools":8,"botStatus":"finished"}

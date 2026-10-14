@@ -1,7 +1,7 @@
 # Kế hoạch hoàn thiện V2 — tối thiểu ngang V1
 
 Ngày: 2026-10-13. Trạng thái: kế hoạch triển khai đề xuất theo yêu cầu owner; chưa phải ký duyệt luật hoặc phát hành production.
-Baseline V2: aaccf70, branch codex/m4a-playable. Baseline V1 read-only: 79e5cfa2a16101fd3872eacb52ef6d2fafcc03d4.
+Baseline khi lập kế hoạch: aaccf70, branch codex/m4a-playable. Current code checkpoint: bf67b66; xem [progress audit2026-10-14](PROGRESS_AUDIT_2026-10-14.md) và [current status](COMPLETION_PROGRESS.md). Baseline V1 read-only: 79e5cfa2a16101fd3872eacb52ef6d2fafcc03d4.
 
 ## 1. Đích đến và cách nghiệm thu
 
@@ -22,7 +22,9 @@ R2-00 is mandatory before higher-level gameplay acceptance: durable free initial
 
 Nguồn kế hoạch: [Master Implementation Plan](../writing-block.md), [ROADMAP](ROADMAP.md), [Gamenote cuối](../R2PL_Gamenote_V2_Dong_bo_2026-10-12.txt), [GAME_SPEC](GAME_SPEC.md), [DECISIONS](DECISIONS.md), [conflicts](SPEC_CONFLICTS.md), [V1 reuse audit](V1_REUSE_MATRIX.md). Đối chiếu bổ sung V1 README, docs/architecture.md, CampusRoom handlers và các module UI/test; đây là source audit, chưa phải chạy lại V1 để chứng nhận browser parity.
 
-| Lớp | Bằng chứng hiện tại | Phần chưa được tính hoàn chỉnh |
+Bảng sau là snapshot khi lập kế hoạch ngày13/10 (102 tests), được giữ để truy xuất. Không dùng nó thay cho current status ngày14/10.
+
+| Lớp | Bằng chứng tại snapshot13/10 | Phần chưa được tính hoàn chỉnh tại snapshot |
 | --- | --- | --- |
 | World/realtime/durability | M1–M3.5 nền tảng đã có nghiệm thu theo scope; 1 triệu ô, school-filtered v1, PostgreSQL/idempotency/outbox | Auth/economy/command sản phẩm và capacity production chưa đạt |
 | Client playable | M4-A accepted; M4-B/C có foundation và isometric/assets/input; desktop+narrow smoke | Các modal/vòng gameplay đầy đủ; physical touch, GPU/memory, UX acceptance |
@@ -41,24 +43,24 @@ Mỗi hàng là điều kiện độc lập của G-V1, không lấy điểm m�
 
 | ID | Có trong V1 / nhu cầu người chơi | V2 hiện tại | Kết quả bắt buộc của V2 | Gói |
 | --- | --- | --- | --- | --- |
-| PV01 | Student profile, school selection, wallet/HUD | Synthetic Dawn/Dusk, fixture-credit | 8 trường fixture trong UI, Points/Crystals/Keys tách biệt, loading/error/receipt/balance khớp server; real identity sau đó | R1/R3/R8 |
-| PV02 | World 1000×1000, HQ, fog, camera/minimap, picking | Foundation + fixture assets | 8 HQ staging, object placement hợp lệ, overview/detail, navigation/minimap, input desktop/mobile | R3 |
-| PV03 | Explore và study/review | Explore v0; review chưa là luật hoàn chỉnh | HQ-owned seed + four-edge frontier enforced server-side; Explore và ôn/review đúng spec được chốt; retry/no-change không mất tiền ngoài luật; UI giải thích giá và effect | R2 |
+| PV01 | Student profile, school selection, wallet/HUD | 8 synthetic schools, credit HUD + inventory4 resources | 8 trường fixture trong UI, Points/Crystals/Keys tách biệt, loading/error/receipt/balance khớp server; real identity sau đó | R1/R3/R8 |
+| PV02 | World 1000×1000, HQ, fog, camera/minimap, picking | HQ20×20 seed,4-edge authority,8 placed placeholder models | 8 HQ staging, object placement hợp lệ, overview/detail, navigation/minimap, input desktop/mobile | R3 |
+| PV03 | Explore và study/review | Server-enforced HQ/frontier/no-change/retry; review chưa live | HQ-owned seed + four-edge frontier enforced server-side; Explore và ôn/review đúng spec được chốt; retry/no-change không mất tiền ngoài luật; UI giải thích giá và effect | R2 |
 | PV04 | School coexistence/giao lưu và pha màu | Bot overlap; legacy pure contest | Quan hệ shared/contest được duyệt, lệnh tham gia/duy trì/đóng góp, UI trạng thái/deadline/lý do từ chối; giới hạn số trường theo rule | R2/R3 |
 | PV05 | Retention/housekeeping | Không có lifecycle live | Upkeep/forgetting/claim thay thế decay V1 theo rule mới; durable deadlines, exact refunds và recovery | R2 |
-| PV06 | Profile resources và conversion UI | Preparation wallets riêng | Một authoritative account model, inventory và lịch sử receipt; conversion chỉ khi có luật riêng, không lén chọn 1:1 | R1/R4 |
+| PV06 | Profile resources và conversion UI | Common dev explore/reward wallet + panel; running prep riêng | Một authoritative account model, inventory và lịch sử receipt; conversion chỉ khi có luật riêng, không lén chọn 1:1 | R1/R4 |
 | PV07 | Landmark puzzle/hint/guess/cooldown | Pure candidate + placeholder art | Landmark modal, answer server-side, cooldown, hint/reveal và đóng góp hiển thị realtime | R5 |
 | PV08 | Landmark contribution/beacon/takeover | Chưa có transaction live | Crystal ledger/pots, concurrent threshold/takeover đúng config, trường beacon, buff lifecycle đã duyệt | R5 |
-| PV09 | UniStop 3 tiers, cooldown/reward modal | Aspire backend prep | Cả 3 tier trong UI, access/eligibility rõ, timer không tích lũy lượt, persisted roll và inventory update | R4 |
+| PV09 | UniStop 3 tiers, cooldown/reward modal | Aspire dev transaction + panel; Nitro/Predator policy pending | Cả 3 tier trong UI, access/eligibility rõ, timer không tích lũy lượt, persisted roll và inventory update | R4 |
 | PV10 | Treasure Map dẫn tới Chest | Reference inventory chưa có journey UI | Treasure Map receipt, clue/discovery theo quyền, đường tới Chest; không lộ rương bí mật của người khác | R3/R4 |
-| PV11 | Keys, Chest finite/exclusive, carousel | Fixed Chest backend prep | Tier mapping chốt, Key atomic spend, một winner theo consumption policy, carousel trình bày đúng kết quả server, reconnect không reroll | R4 |
+| PV11 | Keys, Chest finite/exclusive, carousel | Fixed Chest/common Key wallet + panel; starter discovery | Tier mapping chốt, Key atomic spend, một winner theo consumption policy, carousel trình bày đúng kết quả server, reconnect không reroll | R4 |
 | PV12 | Gift result/profile display | Không có live Gift workflow | Local entitlement/stock synthetic có nhãn; Gift-bearing draw dùng chính policy được duyệt; real stock/check-in ở R8 | R4/R8 |
 | PV13 | School ranking, stats overlay, first-goal guidance | Bot counters; chưa product leaderboard | School/player leaderboard theo metric được duyệt, ties/corrections, first-action→first-object journey và stat detail | R3/R6 |
 | PV14 | Game events, notification banner/toast | Chưa product event loop | Typed committed events; toast/inbox, reconnect dedup, trigger đúng quyền; event scheduler/config tối thiểu | R6 |
 | PV15 | Map Editor/dev tools/notification studio | Chưa editor product | Draft/save/load/validate/place/publish/rollback; roles và audit; preview notification/event; không cần sửa code cho thao tác thường | R6 |
-| PV16 | Profile/cooldown reconnect | Explore durable; rewards/running tách prep | Snapshot/resync cho tất cả state, ACK loss và server restart không mất/chồng tiền, cooldown, claim, score | R1–R7 |
+| PV16 | Profile/cooldown reconnect | Explore/reward durable; reward recovery theo campaign+actor; running riêng | Snapshot/resync cho tất cả state, ACK loss và server restart không mất/chồng tiền, cooldown, claim, score | R1–R7 |
 | PV17 | Dev provider và campaign reference | Contract/prep có | Local provider dùng cùng service với real adapter, hiển thị mock status; normal user không được cấp dev/admin qua URL | R1/R8 |
-| PV18 | HQ model/scene feel, normal/dev modes | Fixture glTF/isometric | Branding, models hoặc fallback hợp lệ, cùng mức readable/polished V1, admin/dev tools không lẫn UI normal | R3/R7 |
+| PV18 | HQ model/scene feel, normal/dev modes | 8 HQ fixture glTF đúng placement/isometric; inventory dialog | Branding, models hoặc fallback hợp lệ, cùng mức readable/polished V1, admin/dev tools không lẫn UI normal | R3/R7 |
 
 PV03/PV05/PV06/PV08/PV09 có chênh lệch luật với V1 hoặc giữa các note. Chốt behavior replacement trước khi đánh DONE; không yêu cầu giữ luật cũ để đạt parity. V1 external running, approved buff pool và notifications push vốn có placeholder; parity local có thể dùng adapter synthetic, nhưng G-FULL không được bỏ các phần production đã chọn trong scope.
 

@@ -1,5 +1,21 @@
 # Milestone state and backlog
 
+## Current implementation checkpoint — 2026-10-14
+
+Read [progress audit](PROGRESS_AUDIT_2026-10-14.md) and [current completion checklist](COMPLETION_PROGRESS.md) for baseline bf67b66. Dated gate tables and CURRENT/LATEST candidate notes below retain their historical scope; they do not override subsequent owner authorization or prove implementation.
+
+| Boundary | Current state | Remaining gate |
+| --- | --- | --- |
+| Foundation M0–M3.5 | Accepted/conditional within documented scope | Full production rule freeze and hotspot performance remain open |
+| M4-A | Accepted playable baseline; subsequent dev increments implemented | Full Master Plan M4 is PARTIAL: Shared/competition, Landmark contribution and leaderboard absent |
+| Eight-school dev build | HQ400 tiles/school + server four-edge exploration + common reward/explore wallet + inventory UI | World reward contact, remaining gameplay and browser reward-spend acceptance |
+| M5 / M6 | Preparation and partial synthetic rewards exist; full milestones not completed | External provider, production economy/Gifts, admin/editor/LiveOps |
+| M7 / G-V1 / G-FULL | Not achieved | Product journey acceptance, QA and measured launch readiness |
+
+Audit checks:124/124 PostgreSQL/network tests pass, strict/lint/build pass. Dev server health is online; bounded bot run has finished. No new capacity claim or milestone acceptance is inferred.
+
+## Historical decisions and milestone records
+
 > **2026-10-13 OWNER DIRECTION — DEVELOPMENT / INTEGRATION PREPARATION:** The owner authorized completing feasible code and preparing blocked integrations, and named `R2PL_Gamenote_V2_Dong_bo_2026-10-12.txt` as the latest product idea reference. For this bounded increment, its product direction takes precedence over conflicting historical Round-4 proposals; this does not publish a production ruleVersion. Running contracts, synthetic transactional reconciliation, reward reference tables and cooldown preparation are implemented; see [integration preparation report](INTEGRATION_PREPARATION_REPORT_2026-10-13.md). No production endpoint, reward grant, running conversion default or campaign mutation is enabled. Earlier docs-only prohibitions describe earlier authorization, not this preparation increment.
 
 > **AUTHORITATIVE READER NOTE — KNOWLEDGE V1 FREEZE CANDIDATE:** Read [Knowledge Rules v1 canonical candidate](M4D0_KNOWLEDGE_RULES_V1_FREEZE_CANDIDATE_2026-10-12.md) FIRST, then [M4-D1 readiness audit and tasks](M4D1_IMPLEMENTATION_READINESS_AUDIT_2026-10-12.md). This candidate resolves earlier conflicting clock/grace/transfer/test-fixture statements, but is **NOT a signed production ruleVersion or M4-D1 implementation authorization**. Treat conflicting historical cases as SUPERSEDED, not alternate implementations.

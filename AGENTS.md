@@ -26,7 +26,7 @@ Strict compilation, lint/format, relevant tests, documented schema/protocol/rule
 
 ## Implementation ownership — owner update 2026-10-14
 
-- The owner explicitly authorized Codex to implement all remaining development directly without Antigravity. This supersedes the frontend assignment below. Production rule and review gates still apply.
+- The owner explicitly authorized Codex to implement all remaining development directly without Antigravity. This supersedes the historical external-agent file assignments below; Codex may implement frontend and pure rules directly as well as integration. Production rule and review gates still apply.
 
 ## Historical multi-agent implementation policy
 
