@@ -152,8 +152,8 @@ test("signed routes keep chests private, persist Running into playable wallet, r
   }
 });
 async function path(pool: Pool, campaign: string, slot: number): Promise<void> {
-  const x = 310,
-    z = 280,
+  const x = 480,
+    z = 450,
     id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
   await pool.query(
     "INSERT INTO r2pl_v2.world_chunk_heads(campaign_id,chunk_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
@@ -365,16 +365,16 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
     await rivalTiles(
       pool,
       campaign,
-      [200, 201, 202].map((z) => ({ x: 210, z, mask: 2 })),
+      [280, 281, 282].map((z) => ({ x: 510, z, mask: 2 })),
     );
     const before = (await server.accounts.profile(a.token))!.balance;
-    for (const z of [200, 201, 202]) {
+    for (const z of [280, 281, 282]) {
       const r = await mutation.apply({
         campaignId: campaign,
         actorId: a.actorId,
         schoolSlot: 0,
         key: Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
-        tileIndex: z * 1000 + 210,
+        tileIndex: z * 1000 + 510,
         cost: 1n,
       });
       assert.equal(r.result.status, "test_applied");
@@ -393,7 +393,7 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
       actorId: a.actorId,
       schoolSlot: 0,
       key: Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
-      tileIndex: 200210,
+      tileIndex: 280510,
       cost: 1n,
     });
     assert.equal(noChange.result.status, "test_no_change");
@@ -402,7 +402,7 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
       actorId: third.actorId,
       schoolSlot: 2,
       key: Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
-      tileIndex: 200210,
+      tileIndex: 280510,
       cost: 1n,
     });
     assert.equal(full.result.reason, "shared_full");
@@ -482,17 +482,17 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
     const mask = (
       await pool.query<{ mask: Buffer }>(
         "SELECT mask FROM r2pl_v2.world_chunks WHERE campaign_id=$1 AND chunk_id=$2",
-        [campaign, chunkId(3, 3)],
+        [campaign, chunkId(7, 4)],
       )
     ).rows[0]!.mask;
-    assert.equal(mask.readUInt16LE(localIndex(210, 200) * 2), 0);
+    assert.equal(mask.readUInt16LE(localIndex(510, 280) * 2), 0);
     const fog = (
       await pool.query<{ fog: Buffer }>(
         "SELECT fog FROM r2pl_v2.school_fog_chunks WHERE campaign_id=$1 AND chunk_id=$2 AND school_slot=0",
-        [campaign, chunkId(3, 3)],
+        [campaign, chunkId(7, 4)],
       )
     ).rows[0]!.fog;
-    const adjacent = localIndex(212, 202);
+    const adjacent = localIndex(511, 282);
     assert(fog[adjacent >> 3]! & (1 << (adjacent & 7)));
     assert(
       (await g.view(a)).events.some(
@@ -500,13 +500,13 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
       ),
     );
     async function joinOne(z: number) {
-      await rivalTiles(pool, campaign, [{ x: 210, z, mask: 2 }]);
+      await rivalTiles(pool, campaign, [{ x: 510, z, mask: 2 }]);
       await mutation.apply({
         campaignId: campaign,
         actorId: a.actorId,
         schoolSlot: 0,
         key: Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
-        tileIndex: z * 1000 + 210,
+        tileIndex: z * 1000 + 510,
         cost: 1n,
       });
       return (await g.view(a)).shared[0]!.id;
@@ -523,18 +523,18 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
       return (
         await pool.query<{ mask: Buffer }>(
           "SELECT mask FROM r2pl_v2.world_chunks WHERE campaign_id=$1 AND chunk_id=$2",
-          [campaign, chunkId(3, 3)],
+          [campaign, chunkId(7, 4)],
         )
-      ).rows[0]!.mask.readUInt16LE(localIndex(210, z) * 2);
+      ).rows[0]!.mask.readUInt16LE(localIndex(510, z) * 2);
     }
-    const guestLapse = await joinOne(204);
+    const guestLapse = await joinOne(284);
     await lapse(guestLapse, [0]);
-    assert.equal(await maskAt(204), 2);
+    assert.equal(await maskAt(284), 2);
     assert.equal((await g.view(a)).shared.length, 0);
-    const bothLapse = await joinOne(205);
+    const bothLapse = await joinOne(285);
     await lapse(bothLapse, [0, 1]);
-    assert.equal(await maskAt(205), 2);
-    const success = await joinOne(206);
+    assert.equal(await maskAt(285), 2);
+    const success = await joinOne(286);
     await lapse(success, [1]);
     assert.equal((await g.view(a)).shared[0]!.required, 1);
     assert.equal(
@@ -549,7 +549,7 @@ test("shared join charges 2, rejects third school, keeps private cluster views, 
       ).status,
       "applied",
     );
-    assert.equal(await maskAt(206), 1);
+    assert.equal(await maskAt(286), 1);
     assert.equal((await g.view(a)).shared.length, 0);
   } finally {
     await server?.close();
@@ -586,7 +586,7 @@ test("admin validates publish, moves protected HQ ownership, restores persisted 
         body: JSON.stringify(body),
       });
     const bad = old.objects.map((o) =>
-      o.id === "hq-hcmut" ? { ...o, x: 500, z: 160 } : o,
+      o.id === "hq-hcmut" ? { ...o, x: 655, z: 345 } : o,
     );
     assert.equal((await send({ action: "publish", objects: bad })).status, 400);
     const moved = old.objects.map((o) =>
@@ -624,7 +624,7 @@ test("admin validates publish, moves protected HQ ownership, restores persisted 
       true,
     );
     assert.equal((await send({ action: "rollback" })).status, 200);
-    assert.equal(server.fixture.players[0]!.home.x, 200);
+    assert.equal(server.fixture.players[0]!.home.x, 500);
     const scores = (await (await fetch(`${base}/api/game/ranking`)).json()) as {
       rankings: { points: number }[];
     };

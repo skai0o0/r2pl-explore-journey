@@ -120,8 +120,8 @@ export const SCHOOLS = [
     color: "#0062FF",
     accent: "#00E5FF",
     hq: {
-      x: 200,
-      z: 200,
+      x: 500,
+      z: 280,
     },
   },
   {
@@ -132,8 +132,8 @@ export const SCHOOLS = [
     color: "#FF8C00",
     accent: "#FFD700",
     hq: {
-      x: 500,
-      z: 160,
+      x: 655,
+      z: 345,
     },
   },
   {
@@ -144,8 +144,8 @@ export const SCHOOLS = [
     color: "#E60026",
     accent: "#FF4D6D",
     hq: {
-      x: 800,
-      z: 200,
+      x: 720,
+      z: 500,
     },
   },
   {
@@ -156,8 +156,8 @@ export const SCHOOLS = [
     color: "#00A86B",
     accent: "#00FF9D",
     hq: {
-      x: 840,
-      z: 500,
+      x: 655,
+      z: 655,
     },
   },
   {
@@ -168,8 +168,8 @@ export const SCHOOLS = [
     color: "#7928CA",
     accent: "#FF0080",
     hq: {
-      x: 800,
-      z: 800,
+      x: 500,
+      z: 720,
     },
   },
   {
@@ -180,8 +180,8 @@ export const SCHOOLS = [
     color: "#E7C547",
     accent: "#FFF0A0",
     hq: {
-      x: 500,
-      z: 840,
+      x: 345,
+      z: 655,
     },
   },
   {
@@ -192,8 +192,8 @@ export const SCHOOLS = [
     color: "#00B8D9",
     accent: "#80FFFF",
     hq: {
-      x: 200,
-      z: 800,
+      x: 280,
+      z: 500,
     },
   },
   {
@@ -204,8 +204,8 @@ export const SCHOOLS = [
     color: "#E85D9E",
     accent: "#FFB8DD",
     hq: {
-      x: 160,
-      z: 500,
+      x: 345,
+      z: 345,
     },
   },
 ] as const satisfies readonly SchoolConfig[];
@@ -217,8 +217,8 @@ export const LANDMARKS = [
     category: "scenic",
     buffDescription: "Nóc nhà Đông Dương — tri thức vùng cao.",
     gameplayRole: "highland_fortress",
-    x: 330,
-    z: 280,
+    x: 500,
+    z: 450,
   },
   {
     id: "halong",
@@ -226,8 +226,8 @@ export const LANDMARKS = [
     category: "scenic",
     buffDescription: "Vịnh ngàn đảo — khám phá kỳ quan ven biển.",
     gameplayRole: "natural_barrier",
-    x: 500,
-    z: 300,
+    x: 575,
+    z: 330,
   },
   {
     id: "nguhanhson",
@@ -235,8 +235,8 @@ export const LANDMARKS = [
     category: "scenic",
     buffDescription: "Ngũ Sơn Tinh Tú — kết nối tri thức lân cận.",
     gameplayRole: "healing_sanctuary",
-    x: 680,
-    z: 300,
+    x: 670,
+    z: 575,
   },
   {
     id: "phongnha",
@@ -244,8 +244,8 @@ export const LANDMARKS = [
     category: "scenic",
     buffDescription: "Mạng lưới địa đạo — hành trình tri thức ngầm.",
     gameplayRole: "hidden_corridor",
-    x: 720,
-    z: 450,
+    x: 330,
+    z: 425,
   },
   {
     id: "nuibaden",
@@ -253,8 +253,8 @@ export const LANDMARKS = [
     category: "scenic",
     buffDescription: "Đỉnh cao Đông Nam Bộ — tầm nhìn học thuật.",
     gameplayRole: "strategic_overlook",
-    x: 700,
-    z: 650,
+    x: 425,
+    z: 330,
   },
   {
     id: "thanglong",
@@ -262,8 +262,8 @@ export const LANDMARKS = [
     category: "iconic",
     buffDescription: "Kinh đô ngàn năm — truyền thống hiếu học.",
     gameplayRole: "capitol",
-    x: 550,
-    z: 720,
+    x: 500,
+    z: 550,
   },
   {
     id: "canghaiphong",
@@ -271,8 +271,8 @@ export const LANDMARKS = [
     category: "iconic",
     buffDescription: "Đầu mối hàng hải — giao lưu tri thức biển.",
     gameplayRole: "logistics_port",
-    x: 370,
-    z: 700,
+    x: 670,
+    z: 425,
   },
   {
     id: "kinhthanhhue",
@@ -280,8 +280,8 @@ export const LANDMARKS = [
     category: "iconic",
     buffDescription: "Cố đô văn hiến — gìn giữ tri thức di sản.",
     gameplayRole: "citadel",
-    x: 280,
-    z: 550,
+    x: 575,
+    z: 670,
   },
   {
     id: "bitexco",
@@ -289,8 +289,8 @@ export const LANDMARKS = [
     category: "iconic",
     buffDescription: "Biểu tượng hiện đại — năng lượng tri thức đô thị.",
     gameplayRole: "economic_hub",
-    x: 300,
-    z: 400,
+    x: 425,
+    z: 670,
   },
   {
     id: "cairang",
@@ -298,8 +298,8 @@ export const LANDMARKS = [
     category: "iconic",
     buffDescription: "Giao thoa văn hóa — tri thức sông nước.",
     gameplayRole: "trade_market",
-    x: 500,
-    z: 550,
+    x: 330,
+    z: 575,
   },
 ] as const;
 export const GAME_CONFIG = {
@@ -368,6 +368,62 @@ export interface WorldObject {
   readonly schoolSlot?: number;
   readonly tier?: RewardProfile;
 }
+/** Nearest (clockwise) ring Landmark each school pushes toward first. */
+export const FIRST_LANDMARK_BY_SLOT: readonly string[] = [
+  "halong",
+  "canghaiphong",
+  "nguhanhson",
+  "kinhthanhhue",
+  "bitexco",
+  "cairang",
+  "phongnha",
+  "nuibaden",
+];
+/** Predator stations ring the two central Landmarks (430..570 block). */
+const PREDATOR_STATIONS: readonly { readonly x: number; readonly z: number }[] =
+  [
+    { x: 500, z: 480 },
+    { x: 550, z: 440 },
+    { x: 560, z: 500 },
+    { x: 550, z: 560 },
+    { x: 500, z: 515 },
+    { x: 450, z: 560 },
+    { x: 440, z: 500 },
+    { x: 450, z: 440 },
+  ];
+/** Stepping-stone ring layout: Aspire 15–20 tiles off the HQ edge, Nitro ~45 tiles toward the first Landmark. */
+export function steppingStonePlacement(
+  slot: number,
+  tier: RewardProfile,
+): {
+  readonly unistop: { readonly x: number; readonly z: number };
+  readonly chest: { readonly x: number; readonly z: number };
+} {
+  const school = SCHOOLS[slot]!;
+  if (tier === "predator") {
+    const p = PREDATOR_STATIONS[slot]!;
+    return { unistop: p, chest: { x: p.x, z: p.z + 6 } };
+  }
+  const landmark = LANDMARKS.find(
+    (l) => l.id === FIRST_LANDMARK_BY_SLOT[slot],
+  )!;
+  const dx = landmark.x - school.hq.x;
+  const dz = landmark.z - school.hq.z;
+  // Aspire: rectangle gap of 17 tiles between the HQ edge and the UniStop footprint (dominant axis).
+  // Nitro: 45 tiles (Euclidean) from the HQ centre, on the way to the first Landmark.
+  const alongHalf =
+    Math.abs(dx) >= Math.abs(dz)
+      ? GAME_CONFIG.footprints.unistop.width / 2
+      : GAME_CONFIG.footprints.unistop.height / 2;
+  const aspireReach = GAME_CONFIG.footprints.hq.width / 2 + 17 + alongHalf;
+  const scale =
+    tier === "aspire"
+      ? aspireReach / Math.max(Math.abs(dx), Math.abs(dz))
+      : 45 / Math.hypot(dx, dz);
+  const x = Math.round(school.hq.x + dx * scale);
+  const z = Math.round(school.hq.z + dz * scale);
+  return { unistop: { x, z }, chest: { x, z: z + 6 } };
+}
 export const STAGING_OBJECTS: readonly WorldObject[] = [
   ...SCHOOLS.map((s) => ({
     id: `hq-${s.id}`,
@@ -387,26 +443,32 @@ export const STAGING_OBJECTS: readonly WorldObject[] = [
     ...GAME_CONFIG.footprints.landmark,
   })),
   ...SCHOOLS.flatMap((s) =>
-    (["aspire", "nitro", "predator"] as const).map((tier, i) => ({
-      id: `dev-${tier}-${s.slot}`,
-      kind: "unistop" as const,
-      name: `${s.shortName} ${tier}`,
-      x: s.hq.x + 30 + i * 16,
-      z: s.hq.z,
-      ...GAME_CONFIG.footprints.unistop,
-      tier,
-    })),
+    (["aspire", "nitro", "predator"] as const).map((tier) => {
+      const p = steppingStonePlacement(s.slot, tier);
+      return {
+        id: `dev-${tier}-${s.slot}`,
+        kind: "unistop" as const,
+        name: `${s.shortName} ${tier}`,
+        x: p.unistop.x,
+        z: p.unistop.z,
+        ...GAME_CONFIG.footprints.unistop,
+        tier,
+      };
+    }),
   ),
   ...SCHOOLS.flatMap((s) =>
-    (["aspire", "nitro", "predator"] as const).map((tier, i) => ({
-      id: `chest-${tier}-${s.slot}`,
-      kind: "chest" as const,
-      name: `Chest ${tier}`,
-      x: s.hq.x + 30 + i * 16,
-      z: s.hq.z + 16,
-      ...GAME_CONFIG.footprints.chest,
-      tier,
-    })),
+    (["aspire", "nitro", "predator"] as const).map((tier) => {
+      const p = steppingStonePlacement(s.slot, tier);
+      return {
+        id: `chest-${tier}-${s.slot}`,
+        kind: "chest" as const,
+        name: `Chest ${tier}`,
+        x: p.chest.x,
+        z: p.chest.z,
+        ...GAME_CONFIG.footprints.chest,
+        tier,
+      };
+    }),
   ),
 ];
 export function objectAt(

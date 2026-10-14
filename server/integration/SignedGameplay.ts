@@ -265,6 +265,7 @@ export class SignedGameplay {
           id: c.id,
           pair: c.pair,
           tiles: c.tiles.length,
+          tileIndexes: c.tiles.map((t) => t.tile),
           due: c.due[String(actor.schoolSlot)] ?? 0,
           freeUntil: c.createdAt + GAME_CONFIG.knowledge.freeUpkeepMs,
           guest: c.guest ?? null,

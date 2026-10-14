@@ -98,15 +98,15 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
       "test_no_change",
     );
     assert.equal(
-      (await apply(tileIndex(210, 210))).result.reason,
+      (await apply(tileIndex(510, 290))).result.reason,
       "not_adjacent",
     );
     assert.equal(
-      (await apply(tileIndex(490, 170))).result.reason,
+      (await apply(tileIndex(645, 355))).result.reason,
       "not_adjacent",
     ); // rival knowledge alone cannot anchor growth
     assert.equal(
-      (await apply(tileIndex(490, 160))).result.reason,
+      (await apply(tileIndex(655, 345))).result.reason,
       "protected_hq",
     );
     assert.equal((await apply(tileIndex(0, 0))).result.reason, "not_adjacent");
@@ -117,32 +117,32 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
     const rejectedKey = Uint8Array.from(
       Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
     );
-    const rejection = await apply(tileIndex(212, 200), rejectedKey);
+    const rejection = await apply(tileIndex(512, 280), rejectedKey);
     assert.equal(rejection.result.reason, "not_adjacent");
     assert.equal(
-      (await apply(tileIndex(210, 200))).result.status,
+      (await apply(tileIndex(510, 280))).result.status,
       "test_applied",
     );
     assert.equal(
-      (await apply(tileIndex(211, 200))).result.status,
+      (await apply(tileIndex(511, 280))).result.status,
       "test_applied",
     );
     assert.deepEqual(
-      (await apply(tileIndex(212, 200), rejectedKey)).result,
+      (await apply(tileIndex(512, 280), rejectedKey)).result,
       rejection.result,
     );
     assert.equal(
-      (await apply(tileIndex(212, 200))).result.status,
+      (await apply(tileIndex(512, 280))).result.status,
       "test_applied",
     );
-    for (let x = 189; x >= 175; x--)
+    for (let x = 489; x >= 475; x--)
       assert.equal(
-        (await apply(tileIndex(x, 200))).result.status,
+        (await apply(tileIndex(x, 280))).result.status,
         "test_applied",
       );
     const race = await Promise.all([
-      apply(tileIndex(174, 200)),
-      apply(tileIndex(174, 200), undefined, second.actorId),
+      apply(tileIndex(474, 280)),
+      apply(tileIndex(474, 280), undefined, second.actorId),
     ]);
     assert.deepEqual(race.map((result) => result.result.status).sort(), [
       "test_applied",
@@ -193,7 +193,7 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
           actor.actorId,
           0,
           rejectedKey,
-          tileIndex(212, 200),
+          tileIndex(512, 280),
         )
       ).result,
       rejection.result,
@@ -202,7 +202,7 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
       actor.actorId,
       0,
       Uint8Array.from(Buffer.from(randomUUID().replaceAll("-", ""), "hex")),
-      tileIndex(173, 200),
+      tileIndex(473, 280),
     );
     assert.equal(resumed.result.status, "test_applied");
   } finally {

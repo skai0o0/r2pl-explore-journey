@@ -33,22 +33,21 @@ async function explore(actor: typeof a, x: number, z: number) {
     throw new Error(`Acceptance path rejected: ${x},${z} ${r.result.reason}`);
 }
 // Build real adjacent Knowledge using the same wallet/transaction/relay as browser players.
-for (let x = 200; x <= 309; x++) await explore(a, x, 200);
-for (let z = 201; z <= 280; z++) await explore(a, 309, z);
-for (let z = 281; z <= 400; z++) await explore(a, 309, z);
-for (let x = 310; x <= 350; x++) await explore(a, x, 200);
-for (let z = 201; z <= 204; z++) await explore(a, 350, z);
-for (let z = 160; z <= 200; z++) await explore(b, 500, z);
-for (let x = 499; x >= 351; x--) await explore(b, x, 200);
-for (let z = 201; z <= 280; z++) await explore(b, 351, z);
-await explore(b, 350, 280);
+// HCMUT (500, 280) moves east to 575 then south to 330 (Ha Long).
+for (let x = 510; x <= 575; x++) await explore(a, x, 280);
+for (let z = 281; z <= 330; z++) await explore(a, 575, z);
+// HCMCOU (655, 345) moves west to 576 then up to 330.
+for (let x = 644; x >= 576; x--) await explore(b, x, 345);
+for (let z = 344; z >= 330; z--) await explore(b, 576, z);
+// Join at Ha Long (575, 330)
+await explore(b, 575, 330);
 console.log(
   JSON.stringify({
     url: `http://127.0.0.1:${play.webPort}`,
     websocketPort: play.websocketPort,
     campaignId: play.fixture.campaignId,
-    landmark: "fansipan",
-    sharedTile: { x: 350, z: 200 },
+    landmark: "halong",
+    sharedTile: { x: 575, z: 330 },
     guestToken: b.token,
   }),
 );

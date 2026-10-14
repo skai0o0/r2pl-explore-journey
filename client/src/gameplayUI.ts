@@ -10,7 +10,10 @@ import {
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
-import { LANDMARK_HINTS } from "../../shared/gameplay/landmarkPuzzle.ts";
+import {
+  LANDMARK_HINTS,
+  LANDMARK_PUZZLES,
+} from "../../shared/gameplay/landmarkPuzzle.ts";
 import type { DevPlayer } from "../../shared/integration/devSession.ts";
 import { CarouselModal } from "./ui/carouselModal.ts";
 import { LandmarkModal } from "./ui/landmarkModal.ts";
@@ -124,6 +127,8 @@ export class GameplayUI {
       landmarkKey: id,
       name: l.name,
       hint: LANDMARK_HINTS[id],
+      story: LANDMARK_PUZZLES[id]?.story,
+      hints: LANDMARK_PUZZLES[id]?.hints,
       category: l.category,
       footprint: GAME_CONFIG.footprints.landmark,
       buffDescription: l.buffDescription,

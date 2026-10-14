@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { SCHOOLS, type WorldObject } from "../../shared/gameplay/gameConfig.ts";
+import {
+  LANDMARKS,
+  SCHOOLS,
+  type WorldObject,
+} from "../../shared/gameplay/gameConfig.ts";
 import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
 import {
   CHUNK_SIZE,
@@ -18,6 +22,7 @@ import {
   MODEL_PLACEMENTS,
   type ModelPlacement,
 } from "./assetRegistry.ts";
+import { LandscapeEffects } from "./landscape.ts";
 
 export interface PickedTile {
   readonly x: number;
@@ -227,21 +232,21 @@ const markers: readonly WorldMarker[] = [
     x: 215,
     z: 235,
     title: "DAWN HQ",
-    detail: "Public headquarters · fixture",
+    detail: "Public headquarters Â· fixture",
     kind: "dawn",
   },
   {
     x: 785,
     z: 765,
     title: "DUSK HQ",
-    detail: "Public headquarters · fixture",
+    detail: "Public headquarters Â· fixture",
     kind: "dusk",
   },
   {
     x: 510,
     z: 485,
     title: "LANDMARK",
-    detail: "Visual placeholder · no rewards",
+    detail: "Visual placeholder Â· no rewards",
     kind: "landmark",
   },
 ] as const;
@@ -260,6 +265,64 @@ function baseTerrainColor(x: number, z: number): [number, number, number] {
   return [32 + grain, 76 + grain, 58 + grain];
 }
 
+/** Soft tileable cloud alpha map for the animated fog-of-war mist. */
+function mistTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, size, size);
+  for (let i = 0; i < 70; i++) {
+    const x = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+    const y = Math.abs(Math.sin(i * 78.233) * 12345.6789) % 1;
+    const r = 18 + ((i * 37) % 40);
+    for (const ox of [-size, 0, size])
+      for (const oy of [-size, 0, size]) {
+        const g = ctx.createRadialGradient(
+          x * size + ox,
+          y * size + oy,
+          0,
+          x * size + ox,
+          y * size + oy,
+          r,
+        );
+        g.addColorStop(0, "rgba(190,215,225,0.35)");
+        g.addColorStop(1, "rgba(190,215,225,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(x * size + ox - r, y * size + oy - r, r * 2, r * 2);
+      }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(5, 5);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+function hexRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+/** Soft glow at every school HQ (school colour) and Landmark (lilac). */
+const CLEARINGS: readonly {
+  readonly x: number;
+  readonly z: number;
+  readonly r: number;
+  readonly color: [number, number, number];
+}[] = [
+  ...SCHOOLS.map((s) => ({
+    x: s.hq.x,
+    z: s.hq.z,
+    r: 22,
+    color: hexRgb(s.accent),
+  })),
+  ...LANDMARKS.map((l) => ({
+    x: l.x,
+    z: l.z,
+    r: 26,
+    color: [195, 165, 235] as [number, number, number],
+  })),
+];
+
 function foggedBaseTerrainPixels(): Uint8Array {
   const pixels = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT * 4);
   for (let z = 0; z < WORLD_HEIGHT; z++) {
@@ -272,31 +335,14 @@ function foggedBaseTerrainPixels(): Uint8Array {
       let g = 20 + mist;
       let b = 27 + mist;
 
-      // Dawn HQ beacon clearing at (215, 235)
-      const dDawn = Math.hypot(x - 215, z - 235);
-      if (dDawn < 16) {
-        const t = Math.max(0, 1 - dDawn / 16);
-        r = Math.round(r * (1 - t) + 72 * t);
-        g = Math.round(g * (1 - t) + 210 * t);
-        b = Math.round(b * (1 - t) + 155 * t);
-      }
-
-      // Dusk HQ beacon clearing at (785, 765)
-      const dDusk = Math.hypot(x - 785, z - 765);
-      if (dDusk < 16) {
-        const t = Math.max(0, 1 - dDusk / 16);
-        r = Math.round(r * (1 - t) + 245 * t);
-        g = Math.round(g * (1 - t) + 150 * t);
-        b = Math.round(b * (1 - t) + 100 * t);
-      }
-
-      // Landmark beacon clearing at (510, 485)
-      const dLandmark = Math.hypot(x - 510, z - 485);
-      if (dLandmark < 22) {
-        const t = Math.max(0, 1 - dLandmark / 22);
-        r = Math.round(r * (1 - t) + 195 * t);
-        g = Math.round(g * (1 - t) + 165 * t);
-        b = Math.round(b * (1 - t) + 235 * t);
+      for (const c of CLEARINGS) {
+        if (Math.abs(x - c.x) >= c.r || Math.abs(z - c.z) >= c.r) continue;
+        const d = Math.hypot(x - c.x, z - c.z);
+        if (d >= c.r) continue;
+        const t = Math.max(0, 1 - d / c.r) * 0.85;
+        r = Math.round(r * (1 - t) + c.color[0] * t);
+        g = Math.round(g * (1 - t) + c.color[1] * t);
+        b = Math.round(b * (1 - t) + c.color[2] * t);
       }
 
       const offset = ((WORLD_HEIGHT - 1 - z) * WORLD_WIDTH + x) * 4;
@@ -336,6 +382,12 @@ export class WorldView {
   readonly #modelSupports: THREE.Mesh[] = [];
   readonly #privateObjects = new THREE.Group();
   readonly #beacons = new THREE.Group();
+  readonly #landscape: LandscapeEffects;
+  readonly #mist: THREE.Mesh;
+  readonly #mistTexture: THREE.CanvasTexture;
+  #shared: ReadonlyMap<number, readonly number[]> = new Map();
+  #replica: ProjectionReplica | undefined;
+  #tickTimer: number | undefined;
   readonly #editorPreview = new THREE.Group();
   readonly #tileIndicators = new TileIndicatorLayer();
   readonly #selection: HTMLElement;
@@ -350,8 +402,8 @@ export class WorldView {
   #schoolSlot = 0;
   #cameraMode: CameraMode = "isometric";
   #span = 275;
-  #centerX = 215;
-  #centerZ = 235;
+  #centerX: number = SCHOOLS[0].hq.x;
+  #centerZ: number = SCHOOLS[0].hq.z;
   #drag:
     | { x: number; y: number; centerX: number; centerZ: number; moved: boolean }
     | undefined;
@@ -429,6 +481,22 @@ export class WorldView {
       ),
     );
 
+    this.#landscape = new LandscapeEffects(layout.objects ?? [], this.#render);
+    this.#scene.add(this.#landscape.group);
+    this.#mistTexture = mistTexture();
+    this.#mist = new THREE.Mesh(
+      new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
+      new THREE.MeshBasicMaterial({
+        map: this.#mistTexture,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+      }),
+    );
+    // Above the fog base, below explored chunk layers (z 0.05): drifts only over unexplored land.
+    this.#mist.position.z = 0.03;
+    this.#scene.add(this.#mist);
+    this.#tickTimer = window.setInterval(this.#tick, 80);
     this.#scene.add(this.#privateObjects);
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
@@ -507,7 +575,7 @@ export class WorldView {
       if (marker.color) element.style.color = marker.color;
       const glyph = document.createElement("span");
       glyph.className = "marker-glyph";
-      glyph.textContent = marker.kind === "landmark" ? "◆" : "⌂";
+      glyph.textContent = marker.kind === "landmark" ? "â—†" : "âŒ‚";
       const copy = document.createElement("span");
       copy.className = "marker-copy";
       const title = document.createElement("b");
@@ -540,7 +608,7 @@ export class WorldView {
     this.#revealElement = document.createElement("div");
     this.#revealElement.className = "tile-reveal";
     this.#revealElement.innerHTML =
-      '<span class="reveal-ring"></span><span class="reveal-spark">✦</span><span class="reveal-tag">KNOWLEDGE REVEALED</span>';
+      '<span class="reveal-ring"></span><span class="reveal-spark">âœ¦</span><span class="reveal-tag">KNOWLEDGE REVEALED</span>';
     this.#revealElement.hidden = true;
     host.append(this.#revealElement);
 
@@ -575,6 +643,9 @@ export class WorldView {
   dispose(): void {
     window.clearTimeout(this.#revealTimer);
     window.clearTimeout(this.#rejectTimer);
+    window.clearInterval(this.#tickTimer);
+    this.#landscape.dispose();
+    this.#mistTexture.dispose();
     if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
     this.#scene.remove(this.#tileIndicators.object);
     this.#tileIndicators.dispose();
@@ -607,10 +678,7 @@ export class WorldView {
   ): void {
     for (const child of [...this.#beacons.children]) {
       this.#beacons.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        (child.material as THREE.Material).dispose();
-      }
+      this.#disposeGroup(child);
     }
     for (const beacon of beacons) {
       const index = this.#markers.findIndex((m) => m.id === beacon.id),
@@ -620,25 +688,64 @@ export class WorldView {
       if (detail)
         detail.textContent =
           (beacon.holder === null
-            ? "Chưa sáng"
+            ? "ChÆ°a sÃ¡ng"
             : SCHOOLS[beacon.holder]!.shortName + " Beacon") +
-          " · " +
+          " Â· " +
           beacon.target +
           " Crystal";
       if (beacon.holder === null) continue;
-      const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.7, 2, 70, 8),
+      const color = new THREE.Color(SCHOOLS[beacon.holder]!.color);
+      const beam = new THREE.Group();
+      const core = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.9, 1.6, 150, 10, 1, true),
         new THREE.MeshBasicMaterial({
-          color: SCHOOLS[beacon.holder]!.color,
+          color: color.clone().lerp(new THREE.Color(0xffffff), 0.55),
           transparent: true,
-          opacity: 0.65,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
         }),
       );
-      beam.rotation.x = Math.PI / 2;
-      beam.position.set(marker.x - 500, 500 - marker.z, 35);
+      const aura = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.2, 5.2, 150, 14, 1, true),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.38,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      const halo = new THREE.Mesh(
+        new THREE.RingGeometry(7, 13, 40),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.55,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      for (const part of [core, aura]) {
+        part.rotation.x = Math.PI / 2;
+        part.position.z = 75;
+      }
+      halo.position.z = 0.2;
+      beam.add(core, aura, halo);
+      beam.position.set(marker.x - 500, 500 - marker.z, 0);
+      beam.userData.beacon = true;
       this.#beacons.add(beam);
     }
     this.#render();
+  }
+  #disposeGroup(group: THREE.Object3D): void {
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    });
   }
   setEditorPreview(objects: readonly WorldObject[]): void {
     for (const child of [...this.#editorPreview.children]) {
@@ -726,7 +833,11 @@ export class WorldView {
       (layer.mesh.material as THREE.Material).dispose();
     }
     this.#chunkLayers.clear();
-    this.focus(slot === 0 ? 215 : 785, slot === 0 ? 235 : 765, 275);
+    this.#shared = new Map();
+    this.#replica = undefined;
+    this.#landscape.setSchool(slot);
+    const hq = SCHOOLS[slot]?.hq;
+    this.focus(hq?.x ?? 500, hq?.z ?? 500, 120);
   }
 
   focus(x: number, z: number, span = this.#span): void {
@@ -872,19 +983,54 @@ export class WorldView {
   }
 
   paintChunk(id: number, replica: ProjectionReplica): void {
+    this.#replica = replica;
     const layer = this.#layer(id);
     for (let local = 0; local < 4096; local++) {
       this.#paintLocal(layer.pixels, id, local, replica);
     }
     layer.texture.needsUpdate = true;
+    this.#landscape.rebuild(id, replica);
     this.#render();
   }
 
   paintTile(id: number, local: number, replica: ProjectionReplica): void {
+    this.#replica = replica;
     const layer = this.#layer(id);
     this.#paintLocal(layer.pixels, id, local, replica);
     layer.texture.needsUpdate = true;
+    this.#landscape.rebuildSoon(id, replica);
     this.#render();
+  }
+
+  /**
+   * Private party view of Shared Knowledge tiles (tile index -> school pair).
+   * Painted as a two-colour weave so the overlap with the rival is obvious.
+   */
+  setSharedTiles(tiles: ReadonlyMap<number, readonly number[]>): void {
+    const touched = new Set<number>();
+    for (const index of [...this.#shared.keys(), ...tiles.keys()])
+      touched.add(
+        chunkId(
+          Math.floor((index % WORLD_WIDTH) / 64),
+          Math.floor(index / WORLD_WIDTH / 64),
+        ),
+      );
+    this.#shared = new Map(tiles);
+    const replica = this.#replica;
+    if (!replica) return;
+    for (const id of touched) {
+      const layer = this.#chunkLayers.get(id);
+      if (!layer) continue;
+      for (let local = 0; local < 4096; local++)
+        this.#paintLocal(layer.pixels, id, local, replica);
+      layer.texture.needsUpdate = true;
+    }
+    this.#render();
+  }
+
+  /** Compass helper: nearest owned/HQ tile to a world object. */
+  nearestOwned(target: WorldObject) {
+    return this.#landscape.nearestOwned(target);
   }
 
   #paintLocal(
@@ -902,15 +1048,28 @@ export class WorldView {
       return;
     }
 
-    if (!replica.isDiscovered(id, local)) {
+    const pair = this.#shared.get(z * WORLD_WIDTH + x);
+    if (!replica.isDiscovered(id, local) && !pair) {
       // Unexplored tile: transparent so base fog texture shows through
       pixels[offset + 3] = 0;
       return;
     }
 
+    const [tr, tg, tb] = baseTerrainColor(x, z);
+    if (pair && pair.length === 2) {
+      // Shared Knowledge: checker weave of both school colours.
+      const a = parseInt(SCHOOLS[pair[0]!]!.color.slice(1), 16);
+      const b = parseInt(SCHOOLS[pair[1]!]!.color.slice(1), 16);
+      const color = (x + z) % 2 === 0 ? a : b;
+      pixels[offset] = Math.round(tr * 0.25 + ((color >> 16) & 255) * 0.75);
+      pixels[offset + 1] = Math.round(tg * 0.25 + ((color >> 8) & 255) * 0.75);
+      pixels[offset + 2] = Math.round(tb * 0.25 + (color & 255) * 0.75);
+      pixels[offset + 3] = 255;
+      return;
+    }
+
     // Discovered tile: fog is cleared!
     const isOwned = (replica.maskAt(id, local) & (1 << this.#schoolSlot)) !== 0;
-    const [tr, tg, tb] = baseTerrainColor(x, z);
 
     if (isOwned) {
       // Differentiate authorized discovered school-owned tiles with vibrant school territory styling!
@@ -921,11 +1080,11 @@ export class WorldView {
       pixels[offset + 2] = Math.round(tb * 0.35 + (color & 255) * 0.65);
       pixels[offset + 3] = 255;
     } else {
-      // Discovered but not owned by this school (scouted/unclaimed):
-      // Revealed natural terrain with crisp neutral survey lighting
-      pixels[offset] = Math.min(255, Math.round(tr * 0.85 + 145 * 0.15));
-      pixels[offset + 1] = Math.min(255, Math.round(tg * 0.85 + 185 * 0.15));
-      pixels[offset + 2] = Math.min(255, Math.round(tb * 0.85 + 175 * 0.15));
+      // Remembered fog: discovered once but no longer owned. Muted, desaturated terrain.
+      const gray = (tr + tg + tb) / 3;
+      pixels[offset] = Math.round((tr * 0.4 + gray * 0.6) * 0.62 + 18);
+      pixels[offset + 1] = Math.round((tg * 0.4 + gray * 0.6) * 0.62 + 24);
+      pixels[offset + 2] = Math.round((tb * 0.4 + gray * 0.6) * 0.62 + 30);
       pixels[offset + 3] = 255;
     }
   }
@@ -1164,6 +1323,19 @@ export class WorldView {
       Math.max(1, width) / Math.max(1, height),
     );
   }
+
+  /** ~12 fps ambient motion: drifting mist and pulsing Beacon beams. */
+  #tick = (): void => {
+    if (document.hidden) return;
+    const t = performance.now() / 1000;
+    const map = this.#mistTexture;
+    map.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
+    for (const beam of this.#beacons.children) {
+      const pulse = 1 + Math.sin(t * 2.4) * 0.08;
+      beam.scale.set(pulse, pulse, 1);
+    }
+    this.#render();
+  };
 
   #render = (): void => {
     const width = Math.max(2, this.#host.clientWidth);

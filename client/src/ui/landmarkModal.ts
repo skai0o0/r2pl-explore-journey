@@ -13,6 +13,8 @@ export interface LandmarkModalData {
   landmarkKey: string;
   name: string;
   hint?: string | undefined;
+  story?: string | undefined;
+  hints?: readonly string[] | undefined;
   category: "scenic" | "iconic";
   footprint: { width: number; height: number };
   buffDescription: string;
@@ -44,6 +46,21 @@ export interface LandmarkModalCallbacks {
   onGuessLandmark?: (landmarkId: string, guess: string) => void;
   onFocusLandmark?: (x: number, y: number) => void;
   onConvertPoints?: (amount: number) => void;
+}
+
+/** 10×10 cover grid: exactly 10 deterministic cells reveal the picture (90% hidden). */
+export function puzzleMaskGrid(key: string): string {
+  let seed = 2166136261;
+  for (const ch of key) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
+  const open = new Set<number>();
+  while (open.size < 10) {
+    seed = Math.imul(seed ^ (seed >>> 15), 2246822507) >>> 0;
+    open.add(seed % 100);
+  }
+  return Array.from(
+    { length: 100 },
+    (_, i) => `<i class="pz-cell${open.has(i) ? " open" : ""}"></i>`,
+  ).join("");
 }
 
 export class LandmarkModal {
@@ -352,7 +369,8 @@ export class LandmarkModal {
 
         <!-- Scrollable Modal Content -->
         <div class="lm-modal-body">
-          <div class="landmark-puzzle-image ${mySchoolGuessed ? "solved" : "masked"}"><img src="/landmarks/${data.landmarkKey}.svg" alt="Hình gợi ý địa danh"><span>Giải đố để mở ảnh</span></div>
+          <div class="landmark-puzzle-image ${mySchoolGuessed ? "solved" : "masked"}" data-mask-cells="${mySchoolGuessed ? 0 : 90}"><img src="/landmarks/${data.landmarkKey}.svg" alt="Hình gợi ý địa danh">${mySchoolGuessed ? "" : `<div class="pz-grid" aria-hidden="true">${puzzleMaskGrid(data.landmarkKey)}</div><span>Giải đố để mở ảnh</span>`}</div>
+          ${data.story ? `<p class="lm-story">📖 ${data.story}</p>` : ""}
           <!-- 1. Beacon Status Banner -->
           <div class="lm-beacon-banner lm-flame-banner ${isLit ? "is-lit" : "is-unlit"}" style="--school-color: ${litSchoolColor};">
             <div class="lm-flame-status-left">
@@ -445,7 +463,11 @@ export class LandmarkModal {
               `
                 : `
                 <div class="lm-guess-form">
-                  <p class="lm-guess-hint">Gợi ý: ${data.hint || "Quan sát phần công trình hiện ra trong sương mù."}</p>
+                  ${
+                    data.hints?.length
+                      ? `<ol class="lm-guess-hint lm-hint-list">${data.hints.map((h) => `<li>${h}</li>`).join("")}</ol>`
+                      : `<p class="lm-guess-hint">Gợi ý: ${data.hint || "Quan sát phần công trình hiện ra trong sương mù."}</p>`
+                  }
                   ${
                     data.guessedBySchoolId &&
                     data.guessedBySchoolId !== mySchoolId &&

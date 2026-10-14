@@ -1854,3 +1854,129 @@ body:has(.gameplay-menu[open]) .operator-menu:not([open]) {
 .lm-modal-dialog {
   max-height: 90dvh;
 }
+
+/* Landmark puzzle: 10x10 cover grid hides 90% of the illustration until solved. */
+.landmark-puzzle-image.masked img {
+  filter: none;
+  opacity: 1;
+}
+.landmark-puzzle-image .pz-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+}
+.landmark-puzzle-image .pz-cell {
+  background: #0d222b;
+  box-shadow: inset 0 0 0 1px #1d4552;
+}
+.landmark-puzzle-image .pz-cell.open {
+  background: transparent;
+  box-shadow: none;
+}
+.landmark-puzzle-image.masked span {
+  background: none;
+  pointer-events: none;
+  text-shadow: 0 0 6px #000;
+  z-index: 1;
+}
+.lm-story {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid #72d8ca;
+  background: rgba(114, 216, 202, 0.08);
+  color: #d5ece5;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.lm-hint-list {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+/* Compass / next-objective card + welcome toast */
+.compass-card {
+  position: fixed;
+  top: 98px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(460px, calc(100vw - 560px));
+  min-width: 340px;
+  padding: 12px 14px;
+  z-index: 6;
+  border-left: 3px solid var(--school, #72d8ca);
+}
+.compass-row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.compass-row + .compass-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.compass-arrow {
+  font-size: 22px;
+  color: var(--school, #72d8ca);
+  text-align: center;
+}
+.compass-copy b {
+  display: block;
+  font-size: 12px;
+  color: #eefaf0;
+}
+.compass-copy small {
+  display: block;
+  font-size: 11px;
+  color: #9ec3b4;
+}
+.compass-card button {
+  border: 1px solid #568275;
+  border-radius: 7px;
+  background: #203c40;
+  color: #d9fff0;
+  font-size: 11px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.compass-card button:hover {
+  background: #31504c;
+}
+.compass-card .compass-edge {
+  background: transparent;
+}
+.welcome-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  z-index: 40;
+  color: #eefaf0;
+  font-size: 14px;
+  animation: welcome-in 0.4s ease-out;
+}
+@keyframes welcome-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+@media (max-width: 900px) {
+  .compass-card {
+    top: auto;
+    bottom: 150px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+    min-width: 0;
+  }
+  .compass-row {
+    grid-template-columns: 26px 1fr auto;
+  }
+  .compass-edge {
+    display: none;
+  }
+}

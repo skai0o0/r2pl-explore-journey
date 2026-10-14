@@ -5,6 +5,7 @@ import {
   isExpansionEdge,
 } from "../../shared/gameplay/expansion.ts";
 import {
+  FIRST_LANDMARK_BY_SLOT,
   GAME_CONFIG,
   LANDMARKS,
   objectAt,
@@ -33,6 +34,7 @@ import {
 } from "../../shared/world/coordinates.ts";
 import { GameplayUI } from "./gameplayUI.ts";
 import { OperatorUI } from "./operatorUI.ts";
+import { CompassCard } from "./ui/compassCard.ts";
 import { MiniMap } from "./ui/miniMap.ts";
 import { StatsOverlay } from "./ui/statsOverlay.ts";
 import { StudentActionDock } from "./ui/studentActionDock.ts";
@@ -385,6 +387,10 @@ async function refreshProfile(token = player.token): Promise<void> {
     rewards.refresh();
     updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
+    if (!welcomed.has(token) && profile.balance !== undefined) {
+      welcomed.add(token);
+      compass.welcome(profile.schoolName, profile.balance);
+    }
   } catch {
     if (attempt === generation && token === player.token)
       activity("Balance temporarily unavailable", "error");
@@ -478,6 +484,19 @@ const operator = new OperatorUI(
   (objects) => world.setEditorPreview(objects),
 );
 const stats = new StatsOverlay();
+const compass = new CompassCard(publicWorld, {
+  nearestOwned: (target) => world.nearestOwned(target),
+  focus: (x, z, span) => world.animateFocus(x, z, span),
+});
+Object.assign(window, { world, compass });
+const welcomed = new Set<string>();
+/** First Landmark on this school's stepping-stone path (falls back to the map centre). */
+function homeLandmark(): { x: number; z: number; id: string } {
+  const id = FIRST_LANDMARK_BY_SLOT[player.slot] ?? "fansipan";
+  const o = publicWorld.find((w) => w.id === id) ??
+    LANDMARKS.find((l) => l.id === id) ?? { x: 500, z: 500 };
+  return { x: o.x, z: o.z, id };
+}
 stats.onFlyToHQRequested = () =>
   world.animateFocus(player.home.x, player.home.z, 100);
 function refreshRanking(): void {
@@ -513,6 +532,12 @@ const gameplay = new GameplayUI(
   (x, z) => world.focus(x, z, 100),
   (view) => {
     world.setBeacons(view.landmarks);
+    const sharedTiles = new Map<number, readonly number[]>();
+    for (const cluster of view.shared)
+      for (const tile of cluster.tileIndexes ?? [])
+        sharedTiles.set(tile, cluster.pair);
+    world.setSharedTiles(sharedTiles);
+    compass.refreshSoon();
     stats.updateExploration(
       view.revealedTiles,
       (view.revealedTiles /
@@ -556,11 +581,12 @@ dock.onModeChange(() => {
   if (selected) updateTile();
 });
 dock.onBeaconAction = () => {
-  const l = objectAt(selected?.x ?? 500, selected?.z ?? 550, publicWorld);
+  const l = objectAt(selected?.x ?? 500, selected?.z ?? 500, publicWorld);
   if (l?.kind === "landmark") gameplay.pick(l);
   else {
-    world.animateFocus(500, 550, 200);
-    const o = publicWorld.find((o) => o.id === "cairang");
+    const first = homeLandmark();
+    world.animateFocus(first.x, first.z, 200);
+    const o = publicWorld.find((o) => o.id === first.id);
     if (o) gameplay.pick(o);
   }
 };
@@ -702,6 +728,7 @@ function handleFrame(raw: Uint8Array): void {
         const snapshot = decodeSnapshot(frame.payload);
         replica.applySnapshot(snapshot);
         world.paintChunk(snapshot.chunkId, replica);
+        compass.refreshSoon();
         miniMap.paintProjection(snapshot.chunkId, replica);
         updateTile();
         break;
@@ -713,6 +740,7 @@ function handleFrame(raw: Uint8Array): void {
           room?.sendBytes("m2", encodeResync(delta.chunkId));
         } else if (result === "applied") {
           world.paintTile(delta.chunkId, delta.localIndex, replica);
+          compass.refreshSoon();
           miniMap.paintProjection(delta.chunkId, replica);
           updateTile();
           refreshBalanceSoon();
@@ -765,6 +793,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
   world.setSchool(player.slot);
+  compass.setSchool(player.slot);
   miniMap.setSchool(player.slot);
   miniMap.setPlayerHQ(
     SCHOOLS[player.slot]?.id ?? "",
@@ -824,9 +853,10 @@ ui.retry.addEventListener("click", () => void connect(player));
 get("home-button").addEventListener("click", () =>
   world.animateFocus(player.home.x, player.home.z, 200),
 );
-get("landmark-button").addEventListener("click", () =>
-  world.animateFocus(510, 485, 200),
-);
+get("landmark-button").addEventListener("click", () => {
+  const first = homeLandmark();
+  world.animateFocus(first.x, first.z, 200);
+});
 overviewButton.addEventListener("click", () =>
   world.animateFocus(500, 500, 1000),
 );
@@ -848,9 +878,11 @@ window.addEventListener("keydown", (event) => {
       world.animateFocus(player.home.x, player.home.z, 200);
       break;
     case "l":
-    case "L":
-      world.animateFocus(510, 485, 200);
+    case "L": {
+      const first = homeLandmark();
+      world.animateFocus(first.x, first.z, 200);
       break;
+    }
     case "o":
     case "O":
       world.animateFocus(500, 500, 1000);

@@ -38,6 +38,7 @@ export interface GameView {
     id: string;
     pair: number[];
     tiles: number;
+    tileIndexes: number[];
     due: number;
     freeUntil: number;
     guest: number | null;

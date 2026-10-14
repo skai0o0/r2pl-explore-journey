@@ -1,0 +1,489 @@
+{
+  "version": 1,
+  "scope": "synthetic-admin-simulation",
+  "status": "completed",
+  "termination": "duration",
+  "runId": "2026-10-13T15-26-19-321Z-c523efc1",
+  "campaignId": "7a1106b1-d07e-4fb4-8283-b586ce31d0bb",
+  "retainedDatabaseData": false,
+  "capabilities": {
+    "exploration": true,
+    "schoolFilteredViews": true,
+    "knowledgeOverlap": true,
+    "contest": false,
+    "defense": false,
+    "upkeep": false,
+    "decay": false,
+    "landmarkGameplay": false,
+    "rewards": false
+  },
+  "limitations": [
+    "Knowledge overlap uses fixture-credit ruleVersion 0; not a production shared contest.",
+    "No contest/defense/upkeep/decay command exists in protocol v1.",
+    "School labels are presentation aliases; IDs/slots/layout are synthetic, not production onboarding.",
+    "Same-process server and generator on one host; no launch capacity claim."
+  ],
+  "options": {
+    "duration": 600,
+    "botsPerSchool": 3,
+    "rates": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2,
+      3,
+      5
+    ],
+    "preset": "mixed",
+    "layout": "gather",
+    "seed": 20261013,
+    "credits": 10000,
+    "maxActions": 100000,
+    "retryEvery": 25,
+    "reconnectEvery": 0,
+    "output": "C:\\Users\\Nem\\Desktop\\explore-journey\\docs\\benchmarks\\bots\\ui-f9b185da-2a8f-4071-b8d1-e2cfac287ae4",
+    "regionSize": 128,
+    "keepData": false
+  },
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "release": "10.0.26200",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+    "logicalCpus": 16,
+    "totalMemoryBytes": 34164097024,
+    "topology": "same-process durable server + WebSocket bots"
+  },
+  "elapsedSeconds": 600.013,
+  "logicalActions": 25002,
+  "wireCommands": 25990,
+  "intents": {
+    "expand": 10431,
+    "rendezvous": 12365,
+    "revisit": 2206
+  },
+  "coverage": {
+    "uniqueTiles": 8037,
+    "overlapTiles": 4853,
+    "pairCounts": {
+      "6:7": 4853,
+      "5:6": 3295,
+      "5:7": 3295,
+      "4:5": 2472,
+      "4:6": 2472,
+      "4:7": 2472,
+      "3:4": 1637,
+      "3:5": 1637,
+      "3:6": 1637,
+      "3:7": 1637,
+      "2:3": 1218,
+      "2:4": 1219,
+      "2:5": 1219,
+      "2:6": 1219,
+      "2:7": 1219,
+      "1:2": 815,
+      "1:3": 815,
+      "1:4": 815,
+      "1:5": 815,
+      "1:6": 815,
+      "1:7": 815,
+      "0:1": 406,
+      "0:2": 406,
+      "0:3": 406,
+      "0:4": 406,
+      "0:5": 406,
+      "0:6": 406,
+      "0:7": 406
+    },
+    "schoolTiles": [
+      406,
+      815,
+      1219,
+      1637,
+      2472,
+      3295,
+      4853,
+      8037
+    ]
+  },
+  "integrity": {
+    "schoolViewsConverged": true,
+    "ackMapMatchesDatabase": true,
+    "walletConservation": true,
+    "idempotencyRecords": true,
+    "outboxDrained": true,
+    "ownVisibleSamplesComplete": true
+  },
+  "metrics": {
+    "ackLatencyMs": {
+      "count": 25990,
+      "p50": 16.257,
+      "p95": 46.105,
+      "p99": 59.483,
+      "max": 125.446
+    },
+    "ownReplicaVisibilityMs": {
+      "count": 22734,
+      "p50": 21.47,
+      "p95": 58.361,
+      "p99": 78.204,
+      "max": 3761.53
+    },
+    "missingVisibleSamples": 0,
+    "retries": 988,
+    "reconnects": 0,
+    "resyncs": 0,
+    "m2FramesReceived": 94285,
+    "m2BytesReceived": 4498414
+  },
+  "schools": [
+    {
+      "label": "HCMUT",
+      "fixtureId": "fixture-school-0",
+      "slot": 0,
+      "requestedPerBotRate": 0.25,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 406,
+      "noChange": 44,
+      "rejected": 0,
+      "knowledgeTiles": 406
+    },
+    {
+      "label": "HCMCOU",
+      "fixtureId": "fixture-school-1",
+      "slot": 1,
+      "requestedPerBotRate": 0.5,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 815,
+      "noChange": 81,
+      "rejected": 0,
+      "knowledgeTiles": 815
+    },
+    {
+      "label": "DTU",
+      "fixtureId": "fixture-school-2",
+      "slot": 2,
+      "requestedPerBotRate": 0.75,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 1219,
+      "noChange": 127,
+      "rejected": 0,
+      "knowledgeTiles": 1219
+    },
+    {
+      "label": "DHHP",
+      "fixtureId": "fixture-school-3",
+      "slot": 3,
+      "requestedPerBotRate": 1,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 1637,
+      "noChange": 154,
+      "rejected": 0,
+      "knowledgeTiles": 1637
+    },
+    {
+      "label": "HSU",
+      "fixtureId": "fixture-school-4",
+      "slot": 4,
+      "requestedPerBotRate": 1.5,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 2472,
+      "noChange": 223,
+      "rejected": 0,
+      "knowledgeTiles": 2472
+    },
+    {
+      "label": "HUCE",
+      "fixtureId": "fixture-school-5",
+      "slot": 5,
+      "requestedPerBotRate": 2,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 3295,
+      "noChange": 290,
+      "rejected": 0,
+      "knowledgeTiles": 3295
+    },
+    {
+      "label": "NTU",
+      "fixtureId": "fixture-school-6",
+      "slot": 6,
+      "requestedPerBotRate": 3,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 4853,
+      "noChange": 513,
+      "rejected": 0,
+      "knowledgeTiles": 4853
+    },
+    {
+      "label": "HCMIU",
+      "fixtureId": "fixture-school-7",
+      "slot": 7,
+      "requestedPerBotRate": 5,
+      "bots": 3,
+      "roles": [
+        "explorer",
+        "connector",
+        "steward"
+      ],
+      "applied": 8037,
+      "noChange": 836,
+      "rejected": 0,
+      "knowledgeTiles": 8037
+    }
+  ],
+  "serverMetrics": {
+    "counters": {
+      "relay_poll_triggers": 52156,
+      "outbox_claim_queries": 54250,
+      "outbox_events_claimed": 22741,
+      "connections": 24,
+      "outbound_frames": 94285,
+      "outbound_bytes": 4498414,
+      "inbound_frames": 26014,
+      "snapshots_enqueued": 123,
+      "subscription_changes": 24,
+      "durable_commands": 25002,
+      "fanout_recipients": 68148,
+      "outbox_events_delivered": 22734,
+      "durable_retries": 988,
+      "outbox_relay_errors": 27,
+      "durable_gap_snapshots": 27
+    },
+    "histograms": {
+      "outbox_claim_query_ms": {
+        "count": 54250,
+        "p50": 1.0850999988615513,
+        "p95": 4.717800000682473,
+        "p99": 6.785800000652671,
+        "max": 55.80750000104308
+      },
+      "outbox_claim_batch_size": {
+        "count": 54250,
+        "p50": 0,
+        "p95": 2,
+        "p99": 3,
+        "max": 8
+      },
+      "socket_buffered_bytes": {
+        "count": 94285,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "outbound_queue_depth": {
+        "count": 94285,
+        "p50": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "sector_queue_depth": {
+        "count": 48820,
+        "p50": 1,
+        "p95": 2,
+        "p99": 3,
+        "max": 6
+      },
+      "sector_queue_wait_ms": {
+        "count": 48820,
+        "p50": 0.01049999997485429,
+        "p95": 15.505000000004657,
+        "p99": 33.776599999982864,
+        "max": 108.74229999998352
+      },
+      "sector_snapshot_queue_wait_ms": {
+        "count": 96,
+        "p50": 0.002100000000041291,
+        "p95": 0.01630000000000109,
+        "p99": 0.06200000000001182,
+        "max": 0.06200000000001182
+      },
+      "sector_execute_ms": {
+        "count": 48820,
+        "p50": 4.768999999971129,
+        "p95": 33.71759999997448,
+        "p99": 47.369199999957345,
+        "max": 97.66729999997187
+      },
+      "sector_snapshot_execute_ms": {
+        "count": 96,
+        "p50": 0.9791999999999916,
+        "p95": 4.440800000000081,
+        "p99": 23.247800000000097,
+        "max": 23.247800000000097
+      },
+      "sector_command_queue_wait_ms": {
+        "count": 25990,
+        "p50": 0.0217999999949825,
+        "p95": 20.36249999998836,
+        "p99": 38.84349999995902,
+        "max": 93.05950000003213
+      },
+      "sector_command_execute_ms": {
+        "count": 25990,
+        "p50": 11.719699999986915,
+        "p95": 39.83810000005178,
+        "p99": 50.95360000000801,
+        "max": 97.66729999997187
+      },
+      "durable_pool_wait_ms": {
+        "count": 25990,
+        "p50": 0.03239999999641441,
+        "p95": 0.19750000000931323,
+        "p99": 0.6429000000352971,
+        "max": 50.801900000020396
+      },
+      "durable_transaction_ms": {
+        "count": 25990,
+        "p50": 11.55850000004284,
+        "p95": 39.48719999997411,
+        "p99": 50.70339999999851,
+        "max": 97.52039999997942
+      },
+      "durable_chunk_lock_ms": {
+        "count": 25990,
+        "p50": 0.41419999999925494,
+        "p95": 2.14179999998305,
+        "p99": 3.489799999999377,
+        "max": 14.388199999986682
+      },
+      "commit_to_ack_enqueue_ms": {
+        "count": 25990,
+        "p50": 0.052899999980581924,
+        "p95": 0.14429999998537824,
+        "p99": 0.24530000000959262,
+        "max": 3.317299999995157
+      },
+      "command_ack_ms": {
+        "count": 25990,
+        "p50": 15.341500000009546,
+        "p95": 44.34220000001369,
+        "p99": 56.928699999989476,
+        "max": 122.30770000000484
+      },
+      "ack_delivery_ms": {
+        "count": 25990,
+        "p50": 0.09039999998640269,
+        "p95": 0.289600000003702,
+        "p99": 0.5376999999862164,
+        "max": 6.6921000000002095
+      },
+      "projection_decode_ms": {
+        "count": 22740,
+        "p50": 0.0069000013172626495,
+        "p95": 0.017800001427531242,
+        "p99": 0.03270000033080578,
+        "max": 1.4415999986231327
+      },
+      "commit_to_claim_return_ms": {
+        "count": 22713,
+        "p50": 1.5404000002890825,
+        "p95": 9.464700000360608,
+        "p99": 19.6045000012964,
+        "max": 30034.56500000134
+      },
+      "sector_relay_queue_wait_ms": {
+        "count": 22734,
+        "p50": 0.0031999999991967343,
+        "p95": 10.521899999992456,
+        "p99": 21.96179999999913,
+        "max": 108.74229999998352
+      },
+      "delta_encode_ms": {
+        "count": 22734,
+        "p50": 0.008399999991524965,
+        "p95": 0.021799999987706542,
+        "p99": 0.044400000013411045,
+        "max": 1.4484999999403954
+      },
+      "fanout_candidates": {
+        "count": 22734,
+        "p50": 3,
+        "p95": 3,
+        "p99": 3,
+        "max": 3
+      },
+      "fanout_enqueue_ms": {
+        "count": 22734,
+        "p50": 0.015099999960511923,
+        "p95": 0.03599999999278225,
+        "p99": 0.07140000001527369,
+        "max": 4.4747999999672174
+      },
+      "commit_to_delta_enqueue_ms": {
+        "count": 22713,
+        "p50": 2.187099998816848,
+        "p95": 17.517000000923872,
+        "p99": 31.51469999924302,
+        "max": 30034.734100000933
+      },
+      "sector_relay_execute_ms": {
+        "count": 22734,
+        "p50": 0.13479999999981374,
+        "p95": 0.35799999997834675,
+        "p99": 0.6809999999823049,
+        "max": 6.641400000000431
+      },
+      "delta_delivery_ms": {
+        "count": 68148,
+        "p50": 0.1157999999995809,
+        "p95": 0.3130000000237487,
+        "p99": 0.601399999926798,
+        "max": 6.648400000001857
+      },
+      "outbox_mark_delivered_ms": {
+        "count": 22734,
+        "p50": 0.5465999990701675,
+        "p95": 1.5053000003099442,
+        "p99": 3.0049999989569187,
+        "max": 13.391900001093745
+      },
+      "outbox_claim_to_delivered_ms": {
+        "count": 22734,
+        "p50": 1.0160999987274408,
+        "p95": 12.996400000527501,
+        "p99": 24.596699999645352,
+        "max": 109.80360000021756
+      }
+    }
+  },
+  "failures": []
+}

@@ -6,7 +6,7 @@
 
 Chạy bản đầy đủ theo [README_PLAY.md](../README_PLAY.md), mở **http://127.0.0.1:4176/**. Running và Gift hiện dùng provider giả lập local/staging. Kết quả này xác nhận G-V1; tích hợp danh tính/portal chạy bộ và giao quà thật thuộc G-FULL trong [kế hoạch completion](V2_COMPLETION_PLAN_2026-10-13.md).
 
-Nghiệm thu: [staging world](../artifacts/g-v1/staging-world.jpg), [Beacon takeover](../artifacts/g-v1/beacon-takeover.jpg), [mobile guidance](../artifacts/g-v1/mobile-guidance.jpg), [mobile Landmark](../artifacts/g-v1/mobile-landmark.jpg). M1–M3.6 foundations đã được chấp nhận; không chạy thêm benchmark 1.000-client, CPU profiling hoặc outbox microbenchmark trong đợt G-V1 này.
+Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [stepping stone HQ](../artifacts/g-v1/stepping-stone-hq.jpg), [compass onboarding](../artifacts/g-v1/compass-onboarding.jpg), [staging world](../artifacts/g-v1/staging-world.jpg), [Beacon takeover](../artifacts/g-v1/beacon-takeover.jpg), [mobile guidance](../artifacts/g-v1/mobile-guidance.jpg), [mobile Landmark](../artifacts/g-v1/mobile-landmark.jpg). M1–M3.6 foundations đã được chấp nhận; không chạy thêm benchmark 1.000-client, CPU profiling hoặc outbox microbenchmark trong đợt G-V1 này.
 
 ## Current implementation baseline
 
@@ -44,7 +44,7 @@ Nghiệm thu: [staging world](../artifacts/g-v1/staging-world.jpg), [Beacon take
 | ID | Status ruleVersion 1 | Evidence G-V1 local/dev |
 | --- | --- | --- |
 | PV01 profile/HUD | FULL (G-V1 local/dev · ruleVersion 1) | HUD/ví/private history; đổi actor và reload không lẫn inventory; test signed routes + browser |
-| PV02 world/HQ/fog/navigation | FULL (G-V1 local/dev · ruleVersion 1) | 8 HQ, 10 Landmark, 24 UniStop, 24 Chest; fog riêng 5×5, minimap/navigation; desktop/mobile verified |
+| PV02 world/HQ/fog/navigation | FULL (G-V1 local/dev · ruleVersion 1) | 8 HQ vòng tròn đồng tâm (R~220), 10 Landmark, 24 UniStop & 24 Chest bước đệm (0 overlap); fog riêng 5×5, minimap, Compass Card dẫn đường; desktop/mobile verified |
 | PV03 explore/review | FULL (G-V1 local/dev · ruleVersion 1) | 4-edge server authority: fresh 1 Point, own 0; protected HQ/cross-chunk/race/restart PASS; browser revisit 0 |
 | PV04 shared/giao lưu | FULL (G-V1 local/dev · ruleVersion 1) | Browser giao lưu 2 Points; cluster ghép 4-edge; max 2 trường và private party view được integration test |
 | PV05 upkeep/lifecycle | FULL (G-V1 local/dev · ruleVersion 1) | Browser upkeep 1 Point, consolidation 0/2 → 1/2 → expiry/refund; successful consolidation; guest/both lapse tests PASS |
@@ -64,4 +64,4 @@ Nghiệm thu: [staging world](../artifacts/g-v1/staging-world.jpg), [Beacon take
 
 ## Historical checkpoints
 
-Các [audit baseline](PROGRESS_AUDIT_2026-10-14.md), [increment03](COMPLETION_INCREMENT_03_2026-10-14.md) và [HQ/frontier correction](HQ_FRONTIER_INTEGRATION_2026-10-14.md) ghi lại trạng thái trước ruleVersion 1. Các dòng PARTIAL, approval pending, roster generic, campaign 94000000 và gameplay v0 trong những checkpoint đó không mô tả bản hiện tại. Campaign mặc định hiện tại là `96000000-0000-4000-8000-000000000000`, code `school-play-rule1-20261014`; restart giữ tiến độ trong cùng database.
+Các [audit baseline](PROGRESS_AUDIT_2026-10-14.md), [increment03](COMPLETION_INCREMENT_03_2026-10-14.md) và [HQ/frontier correction](HQ_FRONTIER_INTEGRATION_2026-10-14.md) ghi lại trạng thái trước ruleVersion 1. Các dòng PARTIAL, approval pending, roster generic, campaign 94000000 và gameplay v0 trong những checkpoint đó không mô tả bản hiện tại. Campaign mặc định hiện tại là `97000000-0000-4000-8000-000000000000`, code `school-play-rule1-layout2-20261014` (Phase 2 layout đồng tâm & bước đệm); restart giữ tiến độ trong cùng database.

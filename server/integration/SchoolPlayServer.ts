@@ -6,7 +6,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
-import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import { DevAccountService } from "./DevAccountService.ts";

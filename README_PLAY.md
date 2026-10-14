@@ -27,7 +27,7 @@ $env:R2PL_BOT_DATABASE_URL = 'postgresql://YOUR_LOCAL_USER:YOUR_LOCAL_PASSWORD@1
 npm run play:schools
 ```
 
-Database phải nằm trên loopback và có tên `r2pl_prep_test_*` hoặc `r2pl_bot_test_*`, ví dụ `r2pl_prep_test_gv1`. Giữ database để giữ ví, Knowledge, cooldowns, Chest claims, Gift entitlements, Crystal pots, Beacons, layout và history khi restart. Campaign mặc định: `96000000-0000-4000-8000-000000000000` (`school-play-rule1-20261014`).
+Database phải nằm trên loopback và có tên `r2pl_prep_test_*` hoặc `r2pl_bot_test_*`, ví dụ `r2pl_prep_test_gv1`. Giữ database để giữ ví, Knowledge, cooldowns, Chest claims, Gift entitlements, Crystal pots, Beacons, layout và history khi restart. Campaign mặc định: `97000000-0000-4000-8000-000000000000` (`school-play-rule1-layout2-20261014`).
 
 ## Thao tác chơi nhanh
 

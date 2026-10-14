@@ -14,7 +14,7 @@ import {
   seedHeadquarters,
   seedWorldObjects,
 } from "./SchoolHeadquarters.ts";
-export const SCHOOL_PLAY_CAMPAIGN = "96000000-0000-4000-8000-000000000000";
+export const SCHOOL_PLAY_CAMPAIGN = "97000000-0000-4000-8000-000000000000";
 export interface SchoolPlayActor extends DevIdentity {
   readonly role: "human" | BotRole;
   readonly ordinal: number;
@@ -39,7 +39,7 @@ export async function seedSchoolPlay(
     throw new RangeError("Invalid fixture campaign");
   const code =
     campaignId === SCHOOL_PLAY_CAMPAIGN
-      ? "school-play-rule1-20261014"
+      ? "school-play-rule1-layout2-20261014"
       : `bot-sim-${campaignId}`;
   const { schools, headquarters } = schoolPlayLayout();
   const actors: SchoolPlayActor[] = [];
