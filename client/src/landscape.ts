@@ -300,7 +300,7 @@ export class LandscapeEffects {
           for (const [dx, dz, rot] of edges) {
             const n = owned(wx + dx, wz + dz);
             if (n !== false) continue;
-            if ((wx + wz) % 2) continue;
+            if ((wx + wz) % 8) continue;
             if (excluded(wx, wz)) continue;
             dummy.position.set(
               wx + 0.5 + dx * 0.5 - HALF,
@@ -315,7 +315,7 @@ export class LandscapeEffects {
         }
         // Nature props on owned tiles, sparse and deterministic.
         if (inHq || excluded(wx, wz)) continue;
-        if (wx % 3 !== 0 || wz % 3 !== 0) continue;
+        if (wx % 6 !== 0 || wz % 6 !== 0) continue;
         const jx = wx + Math.floor(hash(wx, wz, 1.1) * 3) - 1;
         const jz = wz + Math.floor(hash(wx, wz, 2.2) * 3) - 1;
         if (excluded(jx, jz) || owned(jx, jz) !== true) continue;

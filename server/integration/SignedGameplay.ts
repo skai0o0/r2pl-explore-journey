@@ -9,6 +9,10 @@ import {
   parseGameCommand,
 } from "../../shared/gameplay/commands.ts";
 import {
+  edgeNeighbors,
+  headquartersOwner,
+} from "../../shared/gameplay/expansion.ts";
+import {
   GAME_CONFIG,
   LANDMARKS,
   type RewardOutcome,
@@ -16,10 +20,18 @@ import {
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
 import {
+  selectedTileAction,
+  type TileAction,
+} from "../../shared/gameplay/tileAction.ts";
+import {
   campaignWeekStart,
   parseRunningSnapshot,
 } from "../../shared/integration/running.ts";
-import { chunkId, localIndex } from "../../shared/world/coordinates.ts";
+import {
+  chunkId,
+  localIndex,
+  tileCoordinates,
+} from "../../shared/world/coordinates.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { campaignProviderFromEnv } from "./HttpCampaignProvider.ts";
 import type {
@@ -95,6 +107,53 @@ export class SignedGameplay {
     this.fixture = fixture;
     this.draw = draw;
     this.campaignProvider = campaignProvider;
+  }
+  async tileAction(actor: SchoolPlayActor, index: number): Promise<TileAction> {
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= GAME_CONFIG.world.width * GAME_CONFIG.world.height
+    )
+      throw new RangeError("Invalid tile");
+    const indexes = [index, ...edgeNeighbors(index)];
+    const tiles = indexes.map(tileCoordinates);
+    const ids = [
+      ...new Set(
+        tiles.map(({ x, z }) =>
+          chunkId(Math.floor(x / 64), Math.floor(z / 64)),
+        ),
+      ),
+    ];
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const rows = (
+        await db.query<{ chunk_id: number; mask: Buffer }>(
+          "SELECT chunk_id,mask FROM r2pl_v2.world_chunks WHERE campaign_id=$1 AND chunk_id=ANY($2::smallint[])",
+          [this.fixture.campaignId, ids],
+        )
+      ).rows;
+      const masks = new Map(rows.map((r) => [r.chunk_id, r.mask]));
+      const read = ({ x, z }: { x: number; z: number }): number =>
+        masks
+          .get(chunkId(Math.floor(x / 64), Math.floor(z / 64)))
+          ?.readUInt16LE(localIndex(x, z) * 2) ?? 0;
+      const owner = headquartersOwner(index, this.fixture.headquarters);
+      const result = selectedTileAction(
+        index,
+        read(tiles[0]!),
+        actor.schoolSlot,
+        tiles.slice(1).some((t) => !!(read(t) & (1 << actor.schoolSlot))),
+        owner !== undefined && owner !== actor.schoolSlot,
+      );
+      await db.query("COMMIT");
+      return result;
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
   }
   async settle(): Promise<void> {
     const db = await this.pool.connect();

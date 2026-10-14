@@ -380,6 +380,24 @@ async function startSchoolPlayServer(
       );
     };
     try {
+      if (path === "/api/game/tile") {
+        const actor = gameplay.actor(token);
+        if (!actor) {
+          response.writeHead(401).end();
+          return;
+        }
+        const raw = url.searchParams.get("index");
+        if (
+          raw === null ||
+          !/^\d{1,6}$/.test(raw) ||
+          Number(raw) >= GAME_CONFIG.world.width * GAME_CONFIG.world.height
+        ) {
+          response.writeHead(400).end();
+          return;
+        }
+        json(await gameplay.tileAction(actor, Number(raw)));
+        return;
+      }
       if (path === "/api/fixture/chests") {
         const actor = fixture.actors.find(
           (a) => a.token === token && a.role === "human",

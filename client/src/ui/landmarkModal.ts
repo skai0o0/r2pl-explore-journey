@@ -418,11 +418,13 @@ export class LandmarkModal {
                     : `Chưa chạm vùng Tri thức${data.distanceToPerimeter ? ` (Cách rìa gần nhất ${data.distanceToPerimeter} ô)` : ""} — Cần mở đường chạm viền 40×40 để nạp Tinh Thể`
                 }</span>
                 ${
-                  data.hasPath === false && data.x !== undefined && data.y !== undefined
+                  data.hasPath === false &&
+                  data.x !== undefined &&
+                  data.y !== undefined
                     ? `
                   <div class="check-action-row">
                     <button type="button" class="btn-check-guide" id="btn-guide-landmark">
-                      🧭 Dẫn đường mở ô tới đây
+                      ⌖ Đi tới công trình
                     </button>
                   </div>
                 `
@@ -731,7 +733,10 @@ export class LandmarkModal {
 
     const guideBtn = this.overlay.querySelector("#btn-guide-landmark");
     guideBtn?.addEventListener("click", () => {
-      if (this.currentData?.x !== undefined && this.currentData?.y !== undefined) {
+      if (
+        this.currentData?.x !== undefined &&
+        this.currentData?.y !== undefined
+      ) {
         this.close();
         this.callbacks.onGuidePath?.(this.currentData.x, this.currentData.y);
       }

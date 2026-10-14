@@ -26,6 +26,32 @@ export class CarouselModal {
   private confettiCanvas: HTMLCanvasElement;
   private confettiCtx: CanvasRenderingContext2D | null = null;
 
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+  private readonly frames = new Set<number>();
+
+  private later(callback: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      this.timers.delete(id);
+      callback();
+    }, ms);
+    this.timers.add(id);
+  }
+  private frame(callback: FrameRequestCallback): number {
+    const id = requestAnimationFrame((now) => {
+      this.frames.delete(id);
+      callback(now);
+    });
+    this.frames.add(id);
+    return id;
+  }
+  private clearAnimation(): void {
+    for (const id of this.timers) clearTimeout(id);
+    for (const id of this.frames) cancelAnimationFrame(id);
+    this.timers.clear();
+    this.frames.clear();
+    this.stopConfetti();
+  }
+
   private isSpinning = false;
   private audioCtx: AudioContext | null = null;
   private confettiAnimationId: number | null = null;
@@ -213,6 +239,7 @@ export class CarouselModal {
     skipBtn?.addEventListener("click", () => {
       if (this.isSpinning && this.currentOptions) {
         this.isSpinning = false;
+        this.clearAnimation();
         this.strip.style.transition = "none";
         this.strip.style.transform = `translateX(${this.targetTranslateX}px)`;
         this.onSpinComplete(this.currentOptions);
@@ -346,7 +373,7 @@ export class CarouselModal {
 
     // 4. Open Modal & Calculate Coordinates
     this.overlay.style.display = "flex";
-    requestAnimationFrame(() => {
+    this.frame(() => {
       this.overlay.classList.add("visible");
     });
 
@@ -366,7 +393,7 @@ export class CarouselModal {
     // 5. Run CS:GO Easing Animation
     const spinDuration = 4800; // 4.8 seconds
 
-    setTimeout(() => {
+    this.later(() => {
       this.strip.style.transition = `transform ${spinDuration}ms cubic-bezier(0.12, 0.8, 0.33, 1)`;
       this.strip.style.transform = `translateX(${targetTranslateX}px)`;
 
@@ -398,20 +425,20 @@ export class CarouselModal {
           ) {
             lastTickIndex = currentCardIndex;
             this.needle.classList.add("active-tick");
-            setTimeout(() => this.needle.classList.remove("active-tick"), 45);
+            this.later(() => this.needle.classList.remove("active-tick"), 45);
 
             const progress = elapsed / spinDuration;
             const pitch = 1200 - progress * 500;
             this.playTick(pitch);
           }
 
-          requestAnimationFrame(trackTicks);
+          this.frame(trackTicks);
         } else {
           this.onSpinComplete(options);
         }
       };
 
-      requestAnimationFrame(trackTicks);
+      this.frame(trackTicks);
     }, 150);
   }
 
@@ -441,7 +468,7 @@ export class CarouselModal {
     this.startConfetti();
 
     // Show Result Overlay after 450ms
-    setTimeout(() => {
+    this.later(() => {
       const rarityEl = this.overlay.querySelector(
         "#cmodal-result-rarity",
       ) as HTMLElement;
@@ -630,7 +657,7 @@ export class CarouselModal {
       }
 
       if (alive) {
-        this.confettiAnimationId = requestAnimationFrame(render);
+        this.confettiAnimationId = this.frame(render);
       }
     };
 
@@ -654,12 +681,12 @@ export class CarouselModal {
 
   public close(): void {
     this.isSpinning = false;
-    this.stopConfetti();
+    this.clearAnimation();
+    this.currentOptions = null;
     this.overlay.classList.remove("visible");
-    setTimeout(() => {
-      this.overlay.style.display = "none";
-      this.resultOverlay.classList.remove("show");
-    }, 250);
+    this.overlay.style.display = "none";
+    this.resultOverlay.classList.remove("show");
+    void this.audioCtx?.suspend();
   }
 
   public isOpen(): boolean {

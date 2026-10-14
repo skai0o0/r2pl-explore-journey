@@ -37,32 +37,48 @@ export class GameplayUI {
   private generation = 0;
   private refreshRequest = 0;
   private busy = false;
-  private chestModal = new ChestModal({
-    onOpenChest: (id) => void this.command({ action: "open", target: id }),
-    onFindKey: (tier) => {
-      const stop = this.objects.find(
-        (o) => o.kind === "unistop" && o.tier === tier,
-      );
-      if (stop) this.focus(stop.x, stop.z);
-    },
-    onGuidePath: (x, z) => this.onGuidePath?.(x, z),
-  });
+  private _chestModal: ChestModal | undefined;
+  private get chestModal(): ChestModal {
+    this._chestModal ??= new ChestModal({
+      onOpenChest: (id) => void this.command({ action: "open", target: id }),
+      onFindKey: (tier) => {
+        const stop = this.objects.find(
+          (o) => o.kind === "unistop" && o.tier === tier,
+        );
+        if (stop) this.focus(stop.x, stop.z);
+      },
+      onGuidePath: (x, z) => this.onGuidePath?.(x, z),
+    });
+    return this._chestModal;
+  }
   private panel = document.createElement("details");
   private seen = new Set<string>();
-  private landmark = new LandmarkModal({
-    onContributeCrystal: (id, amount) =>
-      void this.command({ action: "contribute", target: id, amount }),
-    onGuessLandmark: (id, guess) =>
-      void this.command({ action: "guess", target: id, guess }),
-    onFocusLandmark: (x, z) => this.focus(x, z),
-    onGuidePath: (x, z) => this.onGuidePath?.(x, z),
-  });
-  private unistop = new UniStopModal({
-    onClaim: (id) => void this.command({ action: "spin", target: id }),
-    onGuidePath: (x, z) => this.onGuidePath?.(x, z),
-    onSyncRunning: () => this.onSyncRunning?.(),
-  });
-  private carousel = new CarouselModal();
+  private _landmark: LandmarkModal | undefined;
+  private get landmark(): LandmarkModal {
+    this._landmark ??= new LandmarkModal({
+      onContributeCrystal: (id, amount) =>
+        void this.command({ action: "contribute", target: id, amount }),
+      onGuessLandmark: (id, guess) =>
+        void this.command({ action: "guess", target: id, guess }),
+      onFocusLandmark: (x, z) => this.focus(x, z),
+      onGuidePath: (x, z) => this.onGuidePath?.(x, z),
+    });
+    return this._landmark;
+  }
+  private _unistop: UniStopModal | undefined;
+  private get unistop(): UniStopModal {
+    this._unistop ??= new UniStopModal({
+      onClaim: (id) => void this.command({ action: "spin", target: id }),
+      onGuidePath: (x, z) => this.onGuidePath?.(x, z),
+      onSyncRunning: () => this.onSyncRunning?.(),
+    });
+    return this._unistop;
+  }
+  private _carousel: CarouselModal | undefined;
+  private get carousel(): CarouselModal {
+    this._carousel ??= new CarouselModal();
+    return this._carousel;
+  }
   constructor(
     private objects: readonly WorldObject[],
     private focus: (x: number, z: number) => void,
@@ -77,7 +93,7 @@ export class GameplayUI {
   ) {
     this.panel.className = "gameplay-menu";
     this.panel.innerHTML =
-      '<summary>Hành trang & nhiệm vụ</summary><div class="gameplay-navigation"><input type="number" min="0" max="999" aria-label="Tọa độ X" placeholder="X"><input type="number" min="0" max="999" aria-label="Tọa độ Z" placeholder="Z"><button type="button">Đi tới ô</button></div><details class="gameplay-guide"><summary>Hướng dẫn chơi</summary><p>Khám phá ô chung cạnh để mở rộng tri thức. Ô mới cần 1 Điểm; giao lưu ô của một trường khác cần 2 Điểm. Ô của trường mình không mất Điểm.</p><p>Chọn Tự Động để game chọn thao tác phù hợp. Ở Thủ Công, chọn Khám Phá hoặc Giao Lưu rồi xác nhận ô.</p><p>Tri thức chung miễn duy trì 24 giờ đầu, sau đó cần 1 Điểm mỗi ngày. Theo dõi hạn và góp Điểm trong mục tri thức chung.</p><p>Mở đường tới công trình, giải đố và góp Tinh Thể để thắp Đèn Hiệu cho trường. Nhận tài nguyên tại trạm tiếp tế; Bản Đồ Kho Báu chỉ ra rương riêng của bạn. Mở rương bằng Chìa Khóa cùng cấp.</p><p>Thành tích chạy trong tuần là điều kiện nhận quà hiện vật. Kéo để lia, cuộn để phóng to; H về trụ sở, L đến công trình, O xem toàn bản đồ, I đổi góc nhìn.</p></details><div class="gameplay-content"></div>';
+      '<summary>Hành trang & nhiệm vụ</summary><div class="gameplay-navigation"><input type="number" min="0" max="999" aria-label="Tọa độ X" placeholder="X"><input type="number" min="0" max="999" aria-label="Tọa độ Z" placeholder="Z"><button type="button">Đi tới ô</button></div><details class="gameplay-guide"><summary>Hướng dẫn chơi</summary><p>Khám phá ô chung cạnh để mở rộng tri thức. Ô mới cần 1 Điểm; giao lưu ô của một trường khác cần 2 Điểm. Ô của trường mình không mất Điểm.</p><p>Chạm ô để xem hành động phù hợp. Bật Mở Nhanh 1 Chạm để tự mở ô trống hợp lệ.</p><p>Tri thức chung miễn duy trì 24 giờ đầu, sau đó cần 1 Điểm mỗi ngày. Theo dõi hạn và góp Điểm trong mục tri thức chung.</p><p>Mở đường tới công trình, giải đố và góp Tinh Thể để thắp Đèn Hiệu cho trường. Nhận tài nguyên tại trạm tiếp tế; Bản Đồ Kho Báu chỉ ra rương riêng của bạn. Mở rương bằng Chìa Khóa cùng cấp.</p><p>Thành tích chạy trong tuần là điều kiện nhận quà hiện vật. Kéo để lia, cuộn để phóng to; H về trụ sở, L đến công trình, O xem toàn bản đồ, I đổi góc nhìn.</p></details><div class="gameplay-content"></div>';
     if (!this.devMode) {
       this.panel.querySelector(".gameplay-navigation")?.remove();
       this.panel.hidden = true;
@@ -118,12 +134,13 @@ export class GameplayUI {
           this.focus(x + 0.5, z + 0.5);
       });
     window.setInterval(() => {
-      if (this.player) void this.refresh();
+      if (this.player && !document.hidden) void this.refresh();
     }, 5000);
   }
   openInventory(): void {
     this.panel.hidden = false;
     this.panel.open = true;
+    this.render();
   }
   canShowObject(object: WorldObject): boolean {
     return this.devMode || this.visibleObject(object);
@@ -136,11 +153,11 @@ export class GameplayUI {
     );
   }
   get open(): boolean {
-    return (
-      this.landmark.isVisible() ||
-      this.unistop.isOpen() ||
-      this.carousel.isOpen() ||
-      this.chestModal.isVisible()
+    return !!(
+      this._landmark?.isVisible() ||
+      this._unistop?.isOpen() ||
+      this._carousel?.isOpen() ||
+      this._chestModal?.isVisible()
     );
   }
   select(player: DevPlayer): void {
@@ -148,17 +165,17 @@ export class GameplayUI {
     this.view = undefined;
     this.generation++;
     this.busy = false;
-    this.landmark.close();
-    this.unistop.close();
-    this.carousel.close();
-    this.chestModal.close();
+    this._landmark?.close();
+    this._unistop?.close();
+    this._carousel?.close();
+    this._chestModal?.close();
     NotificationBanner.clearAll();
     this.seen = new Set(
       JSON.parse(
         sessionStorage.getItem(`events-${this.scope}-${player.token}`) ?? "[]",
       ) as string[],
     );
-    this.render();
+    if (this.panel.open) this.render();
     void this.refresh();
   }
   private data(id: string) {
@@ -195,6 +212,10 @@ export class GameplayUI {
   }
   pick(o: WorldObject): void {
     if (!this.canShowObject(o)) return;
+    this._landmark?.close();
+    this._unistop?.close();
+    this._chestModal?.close();
+    this._carousel?.close();
     if (o.kind === "landmark") {
       const d = this.data(o.id);
       if (d) this.landmark.open(d);
@@ -217,7 +238,12 @@ export class GameplayUI {
       });
     } else if (o.kind === "chest" && o.tier && this.player) {
       const keysCount = Number(this.view?.keys[o.tier] ?? 0);
-      const claimed = (this.view?.chests.find((c) => c.id === o.id) as any)?.claimed ?? false;
+      const claimed =
+        (
+          this.view?.chests.find((c) => c.id === o.id) as
+            | (WorldObject & { claimed?: boolean })
+            | undefined
+        )?.claimed ?? false;
       this.chestModal.open({
         id: o.id,
         tier: o.tier as "aspire" | "nitro" | "predator",
@@ -246,13 +272,13 @@ export class GameplayUI {
       this.view = view;
       this.onView(view);
       this.onWallet();
-      this.render();
-      const id = this.landmark.getCurrentLandmarkId();
+      if (this.panel.open) this.render();
+      const id = this._landmark?.getCurrentLandmarkId();
       if (id && this.landmark.isVisible()) {
         const d = this.data(id);
         if (d) this.landmark.update(d);
       }
-      const stopId = this.unistop.getStopId();
+      const stopId = this._unistop?.getStopId();
       if (stopId && this.unistop.isOpen()) {
         const o = this.objects.find((x) => x.id === stopId);
         if (o && o.tier) {
@@ -355,9 +381,18 @@ export class GameplayUI {
         sessionStorage.removeItem(storage);
       if (generation !== this.generation) return;
 
+      if (receipt.status === "rejected") {
+        notifyActionError(
+          "Chưa thể thực hiện",
+          campaignDisplayText(receipt.message),
+        );
+        await this.refresh();
+        return;
+      }
+
       if (receipt.reward) {
-        this.unistop.close();
-        this.chestModal.close();
+        this._unistop?.close();
+        this._chestModal?.close();
         const o =
           this.objects.find((o) => o.id === c.target) ??
           this.view?.chests.find((o) => o.id === c.target);
@@ -488,7 +523,7 @@ export class GameplayUI {
     } finally {
       if (generation === this.generation) {
         this.busy = false;
-        this.unistop.finishRequest();
+        this._unistop?.finishRequest();
       }
     }
   }

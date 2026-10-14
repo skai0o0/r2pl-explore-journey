@@ -1,4 +1,5 @@
 import { ColyseusSDK, type Room } from "@colyseus/sdk";
+import type { GameView } from "../../shared/gameplay/commands.ts";
 import {
   edgeNeighbors,
   headquartersOwner,
@@ -12,6 +13,7 @@ import {
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
+import type { TileAction } from "../../shared/gameplay/tileAction.ts";
 import {
   ACK_STATUS,
   decodeAck,
@@ -25,33 +27,22 @@ import {
   REASON,
 } from "../../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../../shared/protocol/replica.ts";
-import type { GameView } from "../../shared/gameplay/commands.ts";
 import {
-  chunkCoordinatesForId,
   chunkCoordinatesForIndex,
   chunkId,
   localIndex,
   tileCoordinates,
-  tileIndex,
 } from "../../shared/world/coordinates.ts";
 import { GameplayUI } from "./gameplayUI.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
-import { CompassCard } from "./ui/compassCard.ts";
-import { FloatingTextManager } from "./ui/floatingText.ts";
 import { MiniMap } from "./ui/miniMap.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
-import {
-  notifyActionError,
-  notifyActionSuccess,
-  notifyGameEvent,
-} from "./ui/notifications.ts";
 import {
   objectDisplayName,
   uiModeFromSearch,
 } from "./ui/playerPresentation.ts";
 import { StatsOverlay } from "./ui/statsOverlay.ts";
-import { StudentActionDock } from "./ui/studentActionDock.ts";
 import {
   deriveDevCreditState,
   type PickedTile,
@@ -87,7 +78,7 @@ const publicWorld =
 await fetchModelManifest();
 const miniMap = new MiniMap();
 miniMap.setObjects(publicWorld);
-const dock = new StudentActionDock();
+
 const uiMode = uiModeFromSearch(location.search);
 const isDev = uiMode === "dev";
 document.body.dataset.mode = uiMode;
@@ -187,7 +178,12 @@ let profileBalance: string | undefined;
 let profileCost: string | undefined;
 let profileRequest = 0;
 const pending = new Map<string, PendingAction>();
-let nextStepTarget: { x: number; z: number } | undefined;
+let tileContext: TileAction | undefined;
+let contextSignature = "";
+let contextRequest = 0;
+let contextAbort: AbortController | undefined;
+let autoTarget: number | undefined;
+let autoExplore = localStorage.getItem("r2pl-auto-explore") === "true";
 let latestView: GameView | undefined;
 
 function lacksTestCredits(): boolean {
@@ -253,109 +249,66 @@ function expansionBlocked(tile: PickedTile): boolean {
   });
 }
 
-function findShortestPathTo(
-  targetX: number,
-  targetZ: number,
-): { x: number; z: number }[] | undefined {
-  const isOwned = (x: number, z: number): boolean => {
-    const chunk = chunkId(Math.floor(x / 64), Math.floor(z / 64));
-    if (!replica.hasChunk(chunk)) return false;
-    const local = (z % 64) * 64 + (x % 64);
-    return !!(replica.maskAt(chunk, local) & (1 << player.slot));
-  };
-
-  if (isOwned(targetX, targetZ)) return undefined;
-
-  const queue: [number, number][] = [[targetX, targetZ]];
-  const parent = new Map<number, number>();
-  const visited = new Set<number>([tileIndex(targetX, targetZ)]);
-
-  const minX = Math.max(0, Math.min(targetX, player.home.x) - 40);
-  const maxX = Math.min(999, Math.max(targetX, player.home.x) + 40);
-  const minZ = Math.max(0, Math.min(targetZ, player.home.z) - 40);
-  const maxZ = Math.min(999, Math.max(targetZ, player.home.z) + 40);
-
-  let reachedOwned: [number, number] | undefined;
-
-  while (queue.length > 0 && visited.size < 6000) {
-    const [cx, cz] = queue.shift()!;
-    if (isOwned(cx, cz)) {
-      reachedOwned = [cx, cz];
-      break;
-    }
-
-    const neighbors: readonly [number, number][] = [
-      [cx + 1, cz],
-      [cx - 1, cz],
-      [cx, cz + 1],
-      [cx, cz - 1],
-    ];
-
-    for (const [nx, nz] of neighbors) {
-      if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
-      const nIdx = tileIndex(nx, nz);
-      if (visited.has(nIdx)) continue;
-      visited.add(nIdx);
-      parent.set(nIdx, tileIndex(cx, cz));
-      queue.push([nx, nz]);
-    }
+function requestTileContext(tile: PickedTile): void {
+  const signature = [
+    generation,
+    tile.index,
+    ...[tile.index, ...edgeNeighbors(tile.index)].map((index) => {
+      const { chunkX, chunkZ } = chunkCoordinatesForIndex(index);
+      const id = chunkId(chunkX, chunkZ);
+      const { x, z } = tileCoordinates(index);
+      return replica.hasChunk(id)
+        ? String(!!(replica.maskAt(id, localIndex(x, z)) & (1 << player.slot)))
+        : "?";
+    }),
+  ].join(":");
+  if (signature === contextSignature) return;
+  contextSignature = signature;
+  tileContext = undefined;
+  contextAbort?.abort();
+  const controller = new AbortController();
+  contextAbort = controller;
+  const request = ++contextRequest;
+  const token = player.token;
+  if (session === LEGACY_DEV_SESSION) {
+    tileContext = {
+      tileIndex: tile.index,
+      action: "explore",
+      points: Number(profileCost ?? 0),
+    };
+    return;
   }
-
-  if (!reachedOwned) return undefined;
-  const [rx, rz] = reachedOwned;
-
-  const path: { x: number; z: number }[] = [];
-  let currIdx: number | undefined = parent.get(tileIndex(rx, rz));
-  const targetIdx = tileIndex(targetX, targetZ);
-
-  while (currIdx !== undefined) {
-    const coords = tileCoordinates(currIdx);
-    path.push(coords);
-    if (currIdx === targetIdx) break;
-    currIdx = parent.get(currIdx);
-  }
-
-  return path;
-}
-
-function refreshFrontierTiles(): void {
-  if (!room || !replica) return;
-  const frontiers: { x: number; z: number; isStudy?: boolean }[] = [];
-  const visibleChunks = world.visibleChunkIds(selected?.chunk);
-  const checked = new Set<number>();
-
-  for (const cId of visibleChunks) {
-    if (!replica.hasChunk(cId)) continue;
-    const { chunkX, chunkZ } = chunkCoordinatesForId(cId);
-    for (let local = 0; local < 4096; local++) {
-      const mask = replica.maskAt(cId, local);
-      if (!(mask & (1 << player.slot))) continue;
-      const tx = chunkX * 64 + (local % 64);
-      const tz = chunkZ * 64 + Math.floor(local / 64);
-      const neighbors: readonly [number, number][] = [
-        [tx + 1, tz],
-        [tx - 1, tz],
-        [tx, tz + 1],
-        [tx, tz - 1],
-      ];
-      for (const [nx, nz] of neighbors) {
-        if (nx < 0 || nx >= 1000 || nz < 0 || nz >= 1000) continue;
-        const nIdx = tileIndex(nx, nz);
-        if (checked.has(nIdx)) continue;
-        checked.add(nIdx);
-        const ncId = chunkId(Math.floor(nx / 64), Math.floor(nz / 64));
-        if (!replica.hasChunk(ncId)) continue;
-        const nLocal = (nz % 64) * 64 + (nx % 64);
-        const nMask = replica.maskAt(ncId, nLocal);
-        if (!(nMask & (1 << player.slot))) {
-          const isStudy = nMask !== 0;
-          frontiers.push({ x: nx, z: nz, isStudy });
-        }
+  void fetch(`/api/game/tile?index=${tile.index}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error("Tile context unavailable");
+      const context = (await response.json()) as TileAction;
+      if (
+        request !== contextRequest ||
+        selected?.index !== tile.index ||
+        player.token !== token
+      )
+        return;
+      tileContext = context;
+      updateTile();
+      if (
+        autoTarget === tile.index &&
+        autoExplore &&
+        context.action === "explore" &&
+        !ui.explore.disabled
+      ) {
+        autoTarget = undefined;
+        explore();
       }
-    }
-  }
-
-  world.setFrontierTiles(frontiers);
+    })
+    .catch(() => {
+      if (request === contextRequest && !controller.signal.aborted) {
+        contextSignature = "";
+        ui.knowledge.textContent = "Chưa đồng bộ được ô. Chạm lại để thử.";
+      }
+    });
 }
 
 function updateTile(): void {
@@ -404,66 +357,50 @@ function updateTile(): void {
           ? "Dùng Chìa Khóa cùng cấp để mở rương."
           : "Nhận tài nguyên khi trường bạn giữ trạm.";
     ui.explore.disabled = !gameplay.canShowObject(object);
-    ui.explore.textContent =
-      object.kind === "landmark"
-        ? "Xem công trình"
-        : object.kind === "chest"
-          ? "Xem rương"
-          : "Xem trạm tiếp tế";
+    ui.explore.textContent = "Mở Chi Tiết / Tương Tác";
     return;
   }
   if (owned) {
-    world.setPathPreview(undefined);
-    nextStepTarget = undefined;
     ui.knowledge.textContent =
-      "Ô này đã thuộc tri thức của trường bạn. Không mất Điểm Tri Thức.";
+      "Ô này đã thuộc tri thức của trường bạn. Không mất Points.";
     ui.explore.disabled = true;
-    ui.explore.textContent = "Đã mở · 0 Điểm";
+    ui.explore.textContent = "Đã mở · 0 Points";
     return;
   }
   if (expansionBlocked(selected)) {
-    const path = findShortestPathTo(selected.x, selected.z);
-    if (path && path.length > 0) {
-      world.setPathPreview(path);
-      nextStepTarget = path[0];
-      ui.knowledge.textContent = `Chưa chạm vùng Tri thức. Cần mở ${path.length} ô (~${path.length} Điểm) để tới đây.`;
-      ui.explore.disabled = !room || lacksTestCredits();
-      ui.explore.textContent = `⚡ Mở 1 ô tiến về mục tiêu (${path.length} ô)`;
-    } else {
-      world.setPathPreview(undefined);
-      nextStepTarget = undefined;
-      ui.knowledge.textContent =
-        "Chọn ô chung cạnh với vùng tri thức của trường. Trụ sở trường khác được bảo vệ.";
-      ui.explore.disabled = true;
-      ui.explore.textContent = "Cần mở đường tới đây";
-    }
-    return;
-  }
-  world.setPathPreview(undefined);
-  nextStepTarget = undefined;
-  if (dock.getActiveMode() === "beacon" && !dock.isSmart()) {
-    ui.knowledge.textContent = "Chọn một công trình để thắp Đèn Hiệu.";
+    ui.knowledge.textContent =
+      "Chọn ô chung cạnh với vùng Tri thức. HQ trường khác được bảo vệ.";
     ui.explore.disabled = true;
-    ui.explore.textContent = "Chọn công trình";
+    ui.explore.textContent = "Cần ô kề 4 cạnh";
     return;
   }
-  const study = !dock.isSmart() && dock.getActiveMode() === "study";
-  const cost = study
-    ? GAME_CONFIG.knowledge.sharedPoints
-    : GAME_CONFIG.knowledge.explorePoints;
-  ui.knowledge.textContent = dock.isSmart()
-    ? "Tự chọn Khám Phá hoặc Giao Lưu theo ô bạn chạm."
-    : study
-      ? "Giao lưu ô có tri thức của một trường khác."
-      : "Khám phá ô mới để mở rộng tri thức của trường.";
-  ui.explore.disabled = !room;
-  ui.explore.textContent = dock.isSmart()
-    ? "Mở tri thức · 1–2 Điểm"
-    : (study ? "Giao Lưu" : "Khám Phá") + " · " + cost + " Điểm";
+  requestTileContext(selected);
+  const context =
+    tileContext?.tileIndex === selected.index ? tileContext : undefined;
+  ui.explore.disabled =
+    !room ||
+    !context ||
+    context.action === "blocked" ||
+    context.action === "owned";
+  ui.knowledge.textContent = !context
+    ? "Đang kiểm tra ô…"
+    : context.action === "study"
+      ? "Giao lưu với Tri thức của trường khác."
+      : context.action === "explore"
+        ? "Mở rộng vùng Tri thức của trường bạn."
+        : "Ô này chưa thể mở.";
+  ui.explore.textContent = !context
+    ? "Đang kiểm tra…"
+    : context.action === "study"
+      ? `Giao Lưu Tri Thức · ${context.points} Points`
+      : context.action === "explore"
+        ? `Khám Phá Ô Này · ${context.points} Point`
+        : "Không thể mở ô";
   if (
+    context &&
     profileBalance !== undefined &&
     /^\d+$/.test(profileBalance) &&
-    BigInt(profileBalance) < BigInt(cost)
+    BigInt(profileBalance) < BigInt(context.points)
   )
     showInsufficientCredits();
 }
@@ -501,7 +438,6 @@ async function refreshProfile(token = player.token): Promise<void> {
     ui.cost.textContent = profile.cost;
     profileBalance = profile.balance;
     profileCost = profile.cost;
-    dock.setPoints(Number(profile.balance));
     stats.updateStats({
       studentName: profile.name,
       displayName:
@@ -513,15 +449,8 @@ async function refreshProfile(token = player.token): Promise<void> {
       schoolColor: SCHOOLS[player.slot]?.color ?? "#fff",
       points: Number(profile.balance),
     });
-    if (profile.inventory) {
-      dock.setCrystals(Number(profile.inventory.crystals));
-    }
     updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
-    if (!welcomed.has(token) && profile.balance !== undefined) {
-      welcomed.add(token);
-      compass.welcome(profile.schoolName, profile.balance);
-    }
   } catch {
     if (attempt === generation && token === player.token)
       activity("Chưa đồng bộ được số dư. Vui lòng thử lại.", "error");
@@ -541,30 +470,30 @@ const world = new WorldView(
       return;
     }
     selected = tile;
-    updateTile();
+    contextSignature = "";
     const object = objectAt(tile.x, tile.z, [
       ...publicWorld,
       ...privateObjects,
     ]);
+    autoTarget = !object && autoExplore ? tile.index : undefined;
+    updateTile();
     world.setSelectedObject(object?.id);
-    if (object && object.kind !== "hq" && gameplay.canShowObject(object))
-      gameplay.pick(object);
-    else if (dock.isSmart()) explore();
-    else if (dock.getActiveMode() === "beacon")
-      activity("Chọn một công trình để thắp Đèn Hiệu.");
+    if (
+      autoTarget === tile.index &&
+      tileContext?.action === "explore" &&
+      !ui.explore.disabled
+    ) {
+      autoTarget = undefined;
+      explore();
+    }
   },
   () => {
     scheduleSubscribe();
     const camera = world.viewState;
     miniMap.updateCamera(camera.x, camera.z, camera.span);
-    refreshFrontierTiles();
   },
   (hovered) => {
     updateHover(hovered);
-    const object = hovered
-      ? objectAt(hovered.x, hovered.z, [...publicWorld, ...privateObjects])
-      : undefined;
-    world.setHoveredObject(object?.id);
   },
   session.headquarters
     ? {
@@ -616,12 +545,7 @@ const operator =
     : undefined;
 const stats = new StatsOverlay();
 stats.onInventoryRequested = () => gameplay.openInventory();
-const compass = new CompassCard(publicWorld, {
-  nearestOwned: (target) => world.nearestOwned(target),
-  focus: (x, z, span) => world.animateFocus(x, z, span),
-});
-if (isDev) Object.assign(window, { world, compass });
-const welcomed = new Set<string>();
+if (isDev) Object.assign(window, { world });
 /** First Landmark on this school's stepping-stone path (falls back to the map centre). */
 function homeLandmark(): { x: number; z: number; id: string } {
   const id = FIRST_LANDMARK_BY_SLOT[player.slot] ?? "fansipan";
@@ -687,22 +611,17 @@ const gameplay = new GameplayUI(
   (view) => {
     latestView = view;
     world.setBeacons(view.landmarks);
-    compass.setSolvedLandmarks(
-      view.landmarks.filter((l) => l.solved).map((l) => l.id),
-    );
     const sharedTiles = new Map<number, readonly number[]>();
     for (const cluster of view.shared)
       for (const tile of cluster.tileIndexes ?? [])
         sharedTiles.set(tile, cluster.pair);
     world.setSharedTiles(sharedTiles);
-    compass.refreshSoon();
     stats.updateExploration(
       view.revealedTiles,
       (view.revealedTiles /
         (GAME_CONFIG.world.width * GAME_CONFIG.world.height)) *
         100,
     );
-    dock.setCrystals(Number(view.crystals));
     stats.updateStats({
       crystals: Number(view.crystals),
       aspireKeys: Number(view.keys.aspire),
@@ -717,11 +636,6 @@ const gameplay = new GameplayUI(
           return l ? [{ name: l.name, description: l.buffDescription }] : [];
         }),
     });
-    dock.setKeys(
-      Number(view.keys.aspire),
-      Number(view.keys.nitro),
-      Number(view.keys.predator),
-    );
     privateObjects = view.chests;
     world.setPrivateObjects(view.chests);
     miniMap.setObjects([...publicWorld, ...view.chests]);
@@ -730,25 +644,9 @@ const gameplay = new GameplayUI(
   session.campaignId ?? "",
   (id) => world.setChestOpen(id, true),
   isDev,
-  (object) => object.kind !== "unistop" || world.isObjectDiscovered(object),
+  () => true,
   (targetX, targetZ) => {
     world.animateFocus(targetX, targetZ, 120);
-    const path = findShortestPathTo(targetX, targetZ);
-    if (path && path.length > 0) {
-      world.setPathPreview(path);
-      const frontier = path[0]!;
-      const tile: PickedTile = {
-        x: frontier.x,
-        z: frontier.z,
-        index: tileIndex(frontier.x, frontier.z),
-        chunk: chunkId(Math.floor(frontier.x / 64), Math.floor(frontier.z / 64)),
-        local: (frontier.z % 64) * 64 + (frontier.x % 64),
-      };
-      selected = tile;
-      world.select(tile);
-      updateTile();
-      activity(`Đã dẫn đường tới mục tiêu: Cần mở ${path.length} ô.`, "normal");
-    }
   },
   () => {
     void gameplay.command({
@@ -763,20 +661,18 @@ miniMap.onZoomIn = () => world.zoom(0.72);
 miniMap.onZoomOut = () => world.zoom(1.38);
 miniMap.onRecenter = () =>
   world.animateFocus(player.home.x, player.home.z, 100);
-dock.onToggleSmart = () => updateTile();
-dock.onModeChange(() => {
-  if (selected) updateTile();
+const quickLabel = document.createElement("label");
+quickLabel.className = "auto-explore-toggle";
+const quickInput = document.createElement("input");
+quickInput.type = "checkbox";
+quickInput.checked = autoExplore;
+quickInput.addEventListener("change", () => {
+  autoTarget = undefined;
+  autoExplore = quickInput.checked;
+  localStorage.setItem("r2pl-auto-explore", String(autoExplore));
 });
-dock.onBeaconAction = () => {
-  const l = objectAt(selected?.x ?? 500, selected?.z ?? 500, publicWorld);
-  if (l?.kind === "landmark") gameplay.pick(l);
-  else {
-    const first = homeLandmark();
-    world.animateFocus(first.x, first.z, 200);
-    const o = publicWorld.find((o) => o.id === first.id);
-    if (o) gameplay.pick(o);
-  }
-};
+quickLabel.append(quickInput, "⚡ Mở Nhanh 1 Chạm");
+ui.explore.closest(".tile-panel")!.append(quickLabel);
 const overviewButton = get<HTMLButtonElement>("overview-button");
 const worldHost = get<HTMLElement>("world-view");
 
@@ -830,24 +726,17 @@ function explore(): void {
     if (gameplay.canShowObject(object)) gameplay.pick(object);
     return;
   }
-  if (!dock.isSmart() && dock.getActiveMode() === "beacon") return;
   if (!room || !selected) {
     activity("Chọn một ô khi đã kết nối.", "error");
     return;
   }
 
-  const actTile: PickedTile = nextStepTarget
-    ? {
-        x: nextStepTarget.x,
-        z: nextStepTarget.z,
-        index: tileIndex(nextStepTarget.x, nextStepTarget.z),
-        chunk: chunkId(
-          Math.floor(nextStepTarget.x / 64),
-          Math.floor(nextStepTarget.z / 64),
-        ),
-        local: (nextStepTarget.z % 64) * 64 + (nextStepTarget.x % 64),
-      }
-    : selected;
+  const actTile = selected;
+  if ([...pending.values()].some((a) => a.tile.index === actTile.index)) return;
+  const context =
+    tileContext?.tileIndex === actTile.index ? tileContext : undefined;
+  if (!context || (context.action !== "explore" && context.action !== "study"))
+    return;
 
   if (expansionBlocked(actTile)) {
     updateTile();
@@ -858,10 +747,7 @@ function explore(): void {
     );
     return;
   }
-  const required =
-    !dock.isSmart() && dock.getActiveMode() === "study"
-      ? GAME_CONFIG.knowledge.sharedPoints
-      : GAME_CONFIG.knowledge.explorePoints;
+  const required = context.points;
   if (
     profileBalance !== undefined &&
     /^\d+$/.test(profileBalance) &&
@@ -878,14 +764,7 @@ function explore(): void {
       key,
       tileIndex: actTile.index,
       ruleVersion: session === LEGACY_DEV_SESSION ? 0 : GAME_CONFIG.ruleVersion,
-      ...(session === LEGACY_DEV_SESSION || dock.isSmart()
-        ? {}
-        : {
-            intent:
-              dock.getActiveMode() === "study"
-                ? ("study" as const)
-                : ("explore" as const),
-          }),
+      ...(session === LEGACY_DEV_SESSION ? {} : { intent: context.action }),
     }),
     tile: actTile,
     token: player.token,
@@ -907,31 +786,14 @@ function handleFrame(raw: Uint8Array): void {
         const action = pending.get(keyHex(ack.key));
         if (!action) break;
         pending.delete(action.key);
+        contextSignature = "";
+        autoTarget = undefined;
         world.setPending(Array.from(pending.values()).at(-1)?.tile);
         updatePending();
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
           activity("Đã mở tri thức cho trường bạn.", "success");
           world.playReveal(action.tile.x, action.tile.z, player.slot);
-          const screenPos = world.projectToScreen(
-            action.tile.x,
-            action.tile.z,
-          );
-          if (screenPos) {
-            FloatingTextManager.spawn(
-              screenPos.x,
-              screenPos.y - 12,
-              "-1 Point",
-              "cost",
-            );
-            setTimeout(() => {
-              FloatingTextManager.spawn(
-                screenPos.x,
-                screenPos.y - 32,
-                "+1 Ô Tri Thức",
-                "knowledge",
-              );
-            }, 100);
-          }
+
           if (session !== LEGACY_DEV_SESSION) {
             const fogChunks = new Set<number>();
             for (
@@ -958,37 +820,12 @@ function handleFrame(raw: Uint8Array): void {
             "Ô này đã có tri thức của trường bạn · không mất Điểm.",
             "normal",
           );
-          const screenPos = world.projectToScreen(
-            action.tile.x,
-            action.tile.z,
-          );
-          if (screenPos) {
-            FloatingTextManager.spawn(
-              screenPos.x,
-              screenPos.y - 12,
-              "Đã có tri thức",
-              "gain",
-            );
-          }
         } else {
-          const screenPos = world.projectToScreen(
-            action.tile.x,
-            action.tile.z,
-          );
-          if (screenPos) {
-            FloatingTextManager.spawn(
-              screenPos.x,
-              screenPos.y - 12,
-              "Bị từ chối",
-              "error",
-            );
-          }
           const errDetail =
             ack.reason === REASON.WRONG_ACTION
-              ? "Ô này không phù hợp với thao tác đã chọn. Hãy chuyển sang Tự Động hoặc đổi Khám Phá/Giao Lưu."
+              ? "Ô này không phù hợp với thao tác đã chọn. Chạm lại ô để cập nhật hành động."
               : "Ô này chưa chung cạnh biên giới hoặc bạn chưa đủ Điểm Tri Thức.";
           activity(errDetail, "error");
-          notifyActionError("Chưa thể mở ô này", errDetail);
           world.playReject(action.tile.x, action.tile.z);
         }
         updateTile();
@@ -999,9 +836,7 @@ function handleFrame(raw: Uint8Array): void {
         const snapshot = decodeSnapshot(frame.payload);
         replica.applySnapshot(snapshot);
         world.paintChunk(snapshot.chunkId, replica);
-        compass.refreshSoon();
         miniMap.paintProjection(snapshot.chunkId, replica);
-        refreshFrontierTiles();
         updateTile();
         break;
       }
@@ -1012,9 +847,7 @@ function handleFrame(raw: Uint8Array): void {
           room?.sendBytes("m2", encodeResync(delta.chunkId));
         } else if (result === "applied") {
           world.paintTile(delta.chunkId, delta.localIndex, replica);
-          compass.refreshSoon();
           miniMap.paintProjection(delta.chunkId, replica);
-          refreshFrontierTiles();
           updateTile();
           refreshBalanceSoon();
         }
@@ -1024,7 +857,7 @@ function handleFrame(raw: Uint8Array): void {
         activity("Chưa thể thực hiện thao tác. Vui lòng thử lại.", "error");
         break;
     }
-  } catch (error) {
+  } catch {
     activity("Đang đồng bộ lại bản đồ…", "error");
     for (const id of world.visibleChunkIds(selected?.chunk))
       room?.sendBytes("m2", encodeResync(id));
@@ -1058,8 +891,11 @@ async function connect(nextPlayer: Player): Promise<void> {
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
+  contextSignature = "";
+  tileContext = undefined;
+  contextAbort?.abort();
+  contextRequest++;
   world.setSchool(player.slot);
-  compass.setSchool(player.slot);
   miniMap.setSchool(player.slot);
   miniMap.setPlayerHQ(
     SCHOOLS[player.slot]?.id ?? "",
@@ -1129,6 +965,10 @@ get("camera-button").addEventListener("click", () => {
 });
 get("tile-close").addEventListener("click", () => {
   selected = undefined;
+  autoTarget = undefined;
+  contextAbort?.abort();
+  contextRequest++;
+  world.select(undefined);
   world.setSelectedObject(undefined);
   updateTile();
 });

@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import {
   LANDMARKS,
-  objectAt,
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
@@ -35,13 +34,7 @@ import {
 import { LandscapeEffects } from "./landscape.ts";
 import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import {
-  createTileLayerMaterial,
-  type TilePulses,
-  tileFxTime,
-} from "./tileFx.ts";
-import {
   footprintDiscovered,
-  layoutMapLabels,
   objectDisplayName,
 } from "./ui/playerPresentation.ts";
 
@@ -346,10 +339,13 @@ const CLEARINGS: readonly {
   })),
 ];
 
+const FOG_TEXTURE_SIZE = 128;
 function foggedBaseTerrainPixels(): Uint8Array {
-  const pixels = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT * 4);
-  for (let z = 0; z < WORLD_HEIGHT; z++) {
-    for (let x = 0; x < WORLD_WIDTH; x++) {
+  const pixels = new Uint8Array(FOG_TEXTURE_SIZE * FOG_TEXTURE_SIZE * 4);
+  for (let row = 0; row < FOG_TEXTURE_SIZE; row++) {
+    for (let col = 0; col < FOG_TEXTURE_SIZE; col++) {
+      const x = (col * WORLD_WIDTH) / FOG_TEXTURE_SIZE;
+      const z = (row * WORLD_HEIGHT) / FOG_TEXTURE_SIZE;
       const mistWave =
         Math.sin(x * 0.012 + z * 0.008) * 0.5 +
         Math.cos(x * 0.007 - z * 0.015) * 0.5;
@@ -370,7 +366,8 @@ function foggedBaseTerrainPixels(): Uint8Array {
         b = Math.round(b * (1 - t) + c.color[2] * t);
       }
 
-      const offset = ((WORLD_HEIGHT - 1 - z) * WORLD_WIDTH + x) * 4;
+      const offset =
+        ((FOG_TEXTURE_SIZE - 1 - row) * FOG_TEXTURE_SIZE + col) * 4;
       pixels[offset] = r;
       pixels[offset + 1] = g;
       pixels[offset + 2] = b;
@@ -403,10 +400,11 @@ export class WorldView {
       pixels: Uint8Array;
       texture: THREE.DataTexture;
       mesh: THREE.Mesh;
-      pulses: TilePulses;
     }
   >();
-  #fxFrame: number | undefined;
+  #renderFrame: number | undefined;
+  #renderWidth = 0;
+  #renderHeight = 0;
   readonly #markerElements: HTMLElement[] = [];
   readonly #markers: WorldMarker[];
   readonly #baseCatalog: readonly WorldObject[];
@@ -416,6 +414,9 @@ export class WorldView {
   #selectedObject: string | undefined;
   #hoveredObject: string | undefined;
   #privateDigest = "";
+  #beaconDigest = "";
+  #sharedDigest = "";
+  #objectById = new Map<string, WorldObject>();
   readonly #assetMounts: AssetMount[] = [];
   readonly #assetRoots: THREE.Group[] = [];
   readonly #privateObjects = new THREE.Group();
@@ -427,10 +428,7 @@ export class WorldView {
   readonly #mistTexture: THREE.CanvasTexture;
   #shared: ReadonlyMap<number, readonly number[]> = new Map();
   #replica: ProjectionReplica | undefined;
-  #tickTimer: number | undefined;
   readonly #editorPreview = new THREE.Group();
-  readonly #pathPreviewGroup = new THREE.Group();
-  readonly #frontierGroup = new THREE.Group();
   readonly #tileIndicators = new TileIndicatorLayer();
   readonly #selection: HTMLElement;
   readonly #hoverElement: HTMLElement;
@@ -479,9 +477,8 @@ export class WorldView {
     this.#markers = [...(layout.markers ?? markers)];
     this.#baseCatalog = layout.objects ?? [];
     this.#catalog = [...this.#baseCatalog];
+    this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
     this.#isDev = document.body.dataset.debug === "true";
-    this.#scene.add(this.#pathPreviewGroup);
-    this.#scene.add(this.#frontierGroup);
 
     this.#renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -491,7 +488,7 @@ export class WorldView {
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.#renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.#renderer.toneMappingExposure = 1.15;
-    this.#renderer.shadowMap.enabled = true;
+    this.#renderer.shadowMap.enabled = false;
     this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.append(this.#renderer.domElement);
     this.#scene.background = new THREE.Color(0x0b1a20);
@@ -506,7 +503,7 @@ export class WorldView {
     const dirLight = new THREE.DirectionalLight(0xfff1d6, 2.4);
     dirLight.position.set(...SUN_OFFSET);
     dirLight.target.position.set(0, 0, 0);
-    dirLight.castShadow = true;
+    dirLight.castShadow = false;
     dirLight.shadow.mapSize.set(2048, 2048);
     dirLight.shadow.camera.near = 1;
     dirLight.shadow.camera.far = 1500;
@@ -522,14 +519,14 @@ export class WorldView {
       new THREE.ShadowMaterial({ color: 0x050a10, opacity: 0.38 }),
     );
     shadowGround.position.z = 0.08;
-    shadowGround.receiveShadow = true;
+    shadowGround.receiveShadow = false;
     shadowGround.renderOrder = 1;
     this.#scene.add(shadowGround);
 
     const terrain = new THREE.DataTexture(
       foggedBaseTerrainPixels(),
-      WORLD_WIDTH,
-      WORLD_HEIGHT,
+      FOG_TEXTURE_SIZE,
+      FOG_TEXTURE_SIZE,
       THREE.RGBAFormat,
     );
     terrain.magFilter = THREE.NearestFilter;
@@ -580,7 +577,6 @@ export class WorldView {
     // Above the fog base, below explored chunk layers (z 0.05): drifts only over unexplored land.
     this.#mist.position.z = 0.03;
     this.#scene.add(this.#mist);
-    this.#tickTimer = window.setInterval(this.#tick, 80);
     this.#scene.add(this.#privateObjects);
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
@@ -714,10 +710,13 @@ export class WorldView {
       detail.hidden = !this.#isDev;
       element.dataset.markerId = marker.id ?? marker.title;
       copy.append(title, detail);
+      copy.append(title);
       element.append(glyph, copy);
       element.addEventListener("click", (e) => {
         e.stopPropagation();
-        const obj = this.#catalog.find((o) => o.id === (marker.id ?? marker.title));
+        const obj = this.#catalog.find(
+          (o) => o.id === (marker.id ?? marker.title),
+        );
         if (obj) {
           const tile: PickedTile = {
             x: obj.x,
@@ -790,11 +789,11 @@ export class WorldView {
   dispose(): void {
     window.clearTimeout(this.#revealTimer);
     window.clearTimeout(this.#rejectTimer);
-    window.clearInterval(this.#tickTimer);
     this.#landscape.dispose();
     this.#mistTexture.dispose();
+    if (this.#renderFrame !== undefined)
+      cancelAnimationFrame(this.#renderFrame);
     if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
-    if (this.#fxFrame !== undefined) cancelAnimationFrame(this.#fxFrame);
     this.#scene.remove(this.#tileIndicators.object);
     this.#tileIndicators.dispose();
     for (const mount of this.#assetMounts) mount.dispose();
@@ -823,6 +822,9 @@ export class WorldView {
       solved?: boolean;
     }[],
   ): void {
+    const digest = JSON.stringify(beacons);
+    if (digest === this.#beaconDigest) return;
+    this.#beaconDigest = digest;
     for (const child of [...this.#beacons.children]) {
       this.#beacons.remove(child);
       this.#disposeGroup(child);
@@ -974,6 +976,7 @@ export class WorldView {
     return footprintDiscovered(object, this.#replica);
   }
   setSelectedObject(id: string | undefined): void {
+    if (this.#selectedObject === id) return;
     this.#selectedObject = id;
     this.#render();
   }
@@ -1048,6 +1051,7 @@ export class WorldView {
       this.#markerElements.push(element);
     }
     this.#catalog = [...this.#baseCatalog, ...objects];
+    this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
     this.#render();
   }
   get viewState(): { x: number; z: number; span: number } {
@@ -1059,6 +1063,8 @@ export class WorldView {
     this.#selectedObject = undefined;
     this.#hoveredObject = undefined;
     this.#solvedLandmarks.clear();
+    this.#beaconDigest = "";
+    this.#sharedDigest = "";
     this.#replica = undefined;
     this.#selected = undefined;
     this.#hovered = undefined;
@@ -1144,102 +1150,13 @@ export class WorldView {
     this.animateFocus(this.#centerX, this.#centerZ, this.#span * factor, 240);
   }
 
-  select(tile: PickedTile): void {
+  select(tile: PickedTile | undefined): void {
     this.#selected = tile;
     this.#render();
   }
 
   setPending(tile: PickedTile | undefined): void {
     this.#pendingTile = tile;
-    this.#render();
-  }
-
-  setPathPreview(path: { x: number; z: number }[] | undefined): void {
-    while (this.#pathPreviewGroup.children.length > 0) {
-      const child = this.#pathPreviewGroup.children[0]!;
-      this.#pathPreviewGroup.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry?.dispose();
-        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-        else child.material?.dispose();
-      }
-    }
-    if (!path || path.length === 0) {
-      this.#render();
-      return;
-    }
-    const dotGeo = new THREE.PlaneGeometry(0.75, 0.75);
-    const dotMat = new THREE.MeshBasicMaterial({
-      color: 0x00ffe8,
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-    });
-    for (let i = 0; i < path.length; i++) {
-      const p = path[i]!;
-      const mesh = new THREE.Mesh(dotGeo, dotMat);
-      mesh.position.set(p.x - 500 + 0.5, 500 - p.z - 0.5, 0.16);
-      this.#pathPreviewGroup.add(mesh);
-    }
-    this.#render();
-  }
-
-  setFrontierTiles(tiles: readonly { x: number; z: number; isStudy?: boolean }[]): void {
-    while (this.#frontierGroup.children.length > 0) {
-      const child = this.#frontierGroup.children[0]!;
-      this.#frontierGroup.remove(child);
-      if (child instanceof THREE.LineSegments) {
-        child.geometry.dispose();
-        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-        else child.material?.dispose();
-      }
-    }
-    if (!tiles || tiles.length === 0) {
-      this.#render();
-      return;
-    }
-
-    const wildPoints: number[] = [];
-    const studyPoints: number[] = [];
-
-    for (const t of tiles) {
-      const minX = t.x - 500 + 0.05;
-      const maxX = t.x - 500 + 0.95;
-      const minZ = 500 - t.z - 0.95;
-      const maxZ = 500 - t.z - 0.05;
-      const arr = t.isStudy ? studyPoints : wildPoints;
-      arr.push(
-        minX, minZ, 0.14,  maxX, minZ, 0.14,
-        maxX, minZ, 0.14,  maxX, maxZ, 0.14,
-        maxX, maxZ, 0.14,  minX, maxZ, 0.14,
-        minX, maxZ, 0.14,  minX, minZ, 0.14,
-      );
-    }
-
-    if (wildPoints.length > 0) {
-      const wildGeo = new THREE.BufferGeometry();
-      wildGeo.setAttribute("position", new THREE.Float32BufferAttribute(wildPoints, 3));
-      const wildMat = new THREE.LineBasicMaterial({
-        color: 0x00ffe8,
-        transparent: true,
-        opacity: 0.45,
-        depthWrite: false,
-      });
-      this.#frontierGroup.add(new THREE.LineSegments(wildGeo, wildMat));
-    }
-
-    if (studyPoints.length > 0) {
-      const studyGeo = new THREE.BufferGeometry();
-      studyGeo.setAttribute("position", new THREE.Float32BufferAttribute(studyPoints, 3));
-      const studyMat = new THREE.LineBasicMaterial({
-        color: 0xffb703,
-        transparent: true,
-        opacity: 0.65,
-        depthWrite: false,
-      });
-      this.#frontierGroup.add(new THREE.LineSegments(studyGeo, studyMat));
-    }
-
     this.#render();
   }
 
@@ -1342,39 +1259,10 @@ export class WorldView {
   paintTile(id: number, local: number, replica: ProjectionReplica): void {
     this.#replica = replica;
     const layer = this.#layer(id);
-    const offset = (63 - Math.floor(local / 64)) * 64 * 4 + (local % 64) * 4;
-    const before = layer.pixels.slice(offset, offset + 4);
     this.#paintLocal(layer.pixels, id, local, replica);
     layer.texture.needsUpdate = true;
-    const after = layer.pixels.subarray(offset, offset + 4);
-    const changed = before.some((value, i) => value !== after[i]);
-    if (changed && !document.hidden) {
-      layer.pulses.add(
-        local,
-        performance.now() / 1000,
-        after[3] === 0 ? "loss" : "gain",
-      );
-      this.#startFx();
-    }
     this.#landscape.rebuildSoon(id, replica);
     this.#render();
-  }
-
-  /** Smooth (per-frame) rendering while any tile animation is alive. */
-  #startFx(): void {
-    if (this.#fxFrame !== undefined) return;
-    const step = (): void => {
-      this.#fxFrame = undefined;
-      this.#render();
-      const now = performance.now() / 1000;
-      for (const layer of this.#chunkLayers.values()) {
-        if (layer.pulses.active(now)) {
-          this.#fxFrame = requestAnimationFrame(step);
-          return;
-        }
-      }
-    };
-    this.#fxFrame = requestAnimationFrame(step);
   }
 
   /**
@@ -1382,6 +1270,9 @@ export class WorldView {
    * Painted as a two-colour weave so the overlap with the rival is obvious.
    */
   setSharedTiles(tiles: ReadonlyMap<number, readonly number[]>): void {
+    const digest = JSON.stringify([...tiles]);
+    if (digest === this.#sharedDigest) return;
+    this.#sharedDigest = digest;
     const touched = new Set<number>();
     for (const index of [...this.#shared.keys(), ...tiles.keys()])
       touched.add(
@@ -1474,11 +1365,15 @@ export class WorldView {
     texture.minFilter = THREE.NearestFilter;
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.needsUpdate = true;
-    const { material, pulses } = createTileLayerMaterial(texture);
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), material);
     mesh.position.set(chunkX * 64 - 500 + 32, 500 - chunkZ * 64 - 32, 0.05);
     this.#scene.add(mesh);
-    layer = { pixels, texture, mesh, pulses };
+    layer = { pixels, texture, mesh };
     this.#chunkLayers.set(id, layer);
     return layer;
   }
@@ -1528,6 +1423,7 @@ export class WorldView {
   }
 
   #pointerDown = (event: PointerEvent): void => {
+    if ((event.target as Element).closest(".map-marker")) return;
     if (event.button !== 0 && event.pointerType === "mouse") return;
     this.#host.setPointerCapture(event.pointerId);
     this.#pointers.set(event.pointerId, {
@@ -1604,6 +1500,7 @@ export class WorldView {
         chunk: chunkId(Math.floor(x / 64), Math.floor(z / 64)),
         local: (z % 64) * 64 + (x % 64),
       };
+      if (this.#hovered?.index === tile.index) return;
       this.#hovered = tile;
       this.#onHover?.(tile);
       this.#render();
@@ -1633,10 +1530,9 @@ export class WorldView {
       chunk: chunkId(Math.floor(x / 64), Math.floor(z / 64)),
       local: (z % 64) * 64 + (x % 64),
     };
-    const obj = objectAt(x, z, this.#catalog);
+    if (event.type === "pointercancel") return;
     this.select(tile);
     this.#onPick(tile);
-    if (obj && obj.kind !== "hq") this.#onPickObject?.(obj);
   };
 
   #pointerLeave = (): void => {
@@ -1715,69 +1611,55 @@ export class WorldView {
     }
   }
 
-  /** ~12 fps ambient motion: drifting mist and pulsing Beacon beams. */
-  #tick = (): void => {
-    if (document.hidden) return;
-    const t = performance.now() / 1000;
-    const map = this.#mistTexture;
-    map.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
-    for (const beam of this.#beacons.children) {
-      const pulse = 1 + Math.sin(t * 2.4) * 0.08;
-      beam.scale.set(pulse, pulse, 1);
-    }
-    this.#render();
+  #render = (): void => {
+    if (this.#renderFrame !== undefined) return;
+    this.#renderFrame = requestAnimationFrame(() => {
+      this.#renderFrame = undefined;
+      this.#draw();
+    });
   };
 
-  #render = (): void => {
-    tileFxTime.value = performance.now() / 1000;
+  #draw = (): void => {
     const width = Math.max(2, this.#host.clientWidth);
     const height = Math.max(2, this.#host.clientHeight);
-    this.#renderer.setSize(width, height, false);
+    if (this.#renderWidth !== width || this.#renderHeight !== height) {
+      this.#renderWidth = width;
+      this.#renderHeight = height;
+      this.#renderer.setSize(width, height, false);
+    }
     this.#syncCamera(width, height);
     this.#updateReticles();
 
-    const candidates = this.#markers.map((marker, index) => {
+    for (let index = 0; index < this.#markers.length; index++) {
+      const marker = this.#markers[index]!;
       const element = this.#markerElements[index]!;
-      const object = this.#catalog.find((o) => o.id === marker.id);
-      const position = this.#position(
-        marker.x,
-        marker.z + (object?.height ?? 2) / 2,
-      );
-      Object.assign(element.style, position);
-      const copy = element.querySelector<HTMLElement>(".marker-copy");
-      const nameWidth =
-        Math.min(
-          210,
-          (copy?.querySelector("b")?.textContent?.length ?? 12) * 7 + 18,
-        ) + 30;
-      return {
-        id: marker.id ?? marker.title,
-        kind: marker.kind,
-        ownHq: marker.kind === "hq" && marker.schoolSlot === this.#schoolSlot,
-        discovered:
-          marker.kind === "chest" ||
-          (!!object && this.isObjectDiscovered(object)),
-        selected: marker.id === this.#selectedObject,
-        hovered: marker.id === this.#hoveredObject,
-        x: (parseFloat(position.left) * width) / 100,
-        y: (parseFloat(position.top) * height) / 100,
-        width: nameWidth,
-        height: 32,
-      };
-    });
-    const labels = layoutMapLabels(candidates, this.#span, { width, height });
-    this.#markers.forEach((marker, index) => {
-      const element = this.#markerElements[index]!;
-      const visibility = labels.get(marker.id ?? marker.title) ?? "hidden";
-      element.hidden = visibility === "hidden";
-      element.classList.toggle("icon-only", visibility !== "name");
+      const object = this.#objectById.get(marker.id ?? "");
+      const supply = marker.kind === "unistop" || marker.kind === "chest";
+      this.#projectedPoint
+        .set(marker.x - WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - marker.z, 0)
+        .project(this.#camera);
+      const point = this.#projectedPoint;
+      const visible =
+        Math.abs(point.x) <= 1 &&
+        Math.abs(point.y) <= 1 &&
+        Math.abs(point.z) <= 1 &&
+        !(supply && this.#span > 320) &&
+        (marker.kind !== "unistop" ||
+          this.#isDev ||
+          (!!object && this.isObjectDiscovered(object)));
+      element.hidden = !visible;
+      if (!visible) continue;
+      element.style.left = "0";
+      element.style.top = "0";
+      element.style.transform = `translate3d(${(point.x * 0.5 + 0.5) * width}px, ${(-point.y * 0.5 + 0.5) * height}px, 0) translate(-50%, -100%)`;
+      element.classList.toggle("icon-only", supply && this.#span > 160);
       element.classList.toggle(
         "is-emphasized",
-        marker.id === this.#selectedObject || marker.id === this.#hoveredObject,
+        marker.id === this.#selectedObject,
       );
-    });
+    }
     for (const [id, mesh] of this.#unistopMeshes) {
-      const object = this.#catalog.find((o) => o.id === id);
+      const object = this.#objectById.get(id);
       mesh.visible =
         this.#isDev || (!!object && this.isObjectDiscovered(object));
     }

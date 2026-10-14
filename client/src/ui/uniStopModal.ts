@@ -140,38 +140,52 @@ export class UniStopModal {
     const config = UNISTOP_CONFIGS[d.tier];
     const state = this.availability();
 
-    const isOwnedByMySchool = !!d.ownerSchoolId && d.ownerSchoolId === d.schoolId;
+    const isOwnedByMySchool =
+      !!d.ownerSchoolId && d.ownerSchoolId === d.schoolId;
     const ownerSchoolName =
       d.ownerSchoolId && SCHOOL_ROSTER[d.ownerSchoolId]
         ? SCHOOL_ROSTER[d.ownerSchoolId]?.name
         : "Trạm Trung Lập";
 
-    const tierName = d.tier === "predator" ? "Predator" : d.tier === "nitro" ? "Nitro" : "Aspire";
-    const tierColor = d.tier === "predator" ? "#a855f7" : d.tier === "nitro" ? "#00ffe8" : "#fbbf24";
+    const tierName =
+      d.tier === "predator"
+        ? "Predator"
+        : d.tier === "nitro"
+          ? "Nitro"
+          : "Aspire";
+    const tierColor =
+      d.tier === "predator"
+        ? "#a855f7"
+        : d.tier === "nitro"
+          ? "#00ffe8"
+          : "#fbbf24";
 
     // Drop table preview
     const outcomes = GAME_CONFIG.rewards.unistop[d.tier]?.outcomes ?? [];
     const totalWeight = outcomes.reduce((sum, r) => sum + r.weight, 0);
 
-    const lootRows = outcomes.map((r) => {
-      const pct = totalWeight > 0 ? ((r.weight / totalWeight) * 100).toFixed(1) : "0";
-      const name =
-        r.kind === "gift"
-          ? "🎁 Quà Hiện Vật"
-          : r.kind === "crystals"
-            ? `💎 Tinh Thể ×${r.quantity}`
-            : r.kind === "points"
-              ? `⚡ Điểm Tri Thức ×${r.quantity}`
-              : r.kind === "key"
-                ? `🔑 Chìa Khóa ×${r.quantity}`
-                : `🗺️ Bản Đồ Kho Báu ×${r.quantity}`;
-      return `
+    const lootRows = outcomes
+      .map((r) => {
+        const pct =
+          totalWeight > 0 ? ((r.weight / totalWeight) * 100).toFixed(1) : "0";
+        const name =
+          r.kind === "gift"
+            ? "🎁 Quà Hiện Vật"
+            : r.kind === "crystals"
+              ? `💎 Tinh Thể ×${r.quantity}`
+              : r.kind === "points"
+                ? `⚡ Điểm Tri Thức ×${r.quantity}`
+                : r.kind === "key"
+                  ? `🔑 Chìa Khóa ×${r.quantity}`
+                  : `🗺️ Bản Đồ Kho Báu ×${r.quantity}`;
+        return `
         <div class="loot-preview-row">
           <span class="loot-name">${name}</span>
           <span class="loot-pct">${pct}%</span>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
 
     this.overlay.innerHTML = `
       <section class="guidance-modal unistop-modal-card" role="dialog" aria-modal="true" aria-labelledby="unistop-title">
@@ -203,7 +217,9 @@ export class UniStopModal {
                   isOwnedByMySchool
                     ? `Trường bạn đang giữ trạm (${ownerSchoolName})`
                     : `Chưa chạm vùng Tri thức (Đang giữ: ${ownerSchoolName}${
-                        d.distanceToTerritory ? ` · Cách rìa gần nhất ${d.distanceToTerritory} ô` : ""
+                        d.distanceToTerritory
+                          ? ` · Cách rìa gần nhất ${d.distanceToTerritory} ô`
+                          : ""
                       })`
                 }</span>
                 ${
@@ -211,7 +227,7 @@ export class UniStopModal {
                     ? `
                   <div class="check-action-row">
                     <button type="button" class="btn-check-guide" id="btn-guide-unistop">
-                      🧭 Dẫn đường mở ô tới đây
+                      ⌖ Đi tới công trình
                     </button>
                   </div>
                 `
@@ -283,9 +299,12 @@ export class UniStopModal {
     `;
 
     // Event binding
-    this.overlay.querySelector(".guidance-close")?.addEventListener("click", () => this.close());
+    this.overlay
+      .querySelector(".guidance-close")
+      ?.addEventListener("click", () => this.close());
 
-    const claimBtn = this.overlay.querySelector<HTMLButtonElement>(".unistop-claim");
+    const claimBtn =
+      this.overlay.querySelector<HTMLButtonElement>(".unistop-claim");
     claimBtn?.addEventListener("click", () => {
       if (!this.data || this.pending || !this.availability().canClaim) return;
       this.pending = true;

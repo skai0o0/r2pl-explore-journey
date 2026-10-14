@@ -12,7 +12,11 @@ import {
   STAGING_OBJECTS,
 } from "../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../shared/world/checksum.ts";
-import { chunkId, localIndex } from "../shared/world/coordinates.ts";
+import {
+  chunkId,
+  localIndex,
+  tileCoordinates,
+} from "../shared/world/coordinates.ts";
 
 const url = process.env.R2PL_PREPARATION_DATABASE_URL;
 test("signed config publishes exact roster, footprints, costs and unnormalized reward tables", () => {
@@ -72,6 +76,49 @@ test("signed routes keep chests private, persist Running into playable wallet, r
     assert(world.objects.every((o) => o.kind !== "chest"));
     assert.equal((await fetch(`${base}/api/game`)).status, 401);
     assert.equal((await fetch(`${base}/api/admin`)).status, 403);
+    assert.equal((await fetch(`${base}/api/game/tile?index=1`)).status, 401);
+    for (const index of ["-1", "1000000", "1.5", ""]) {
+      assert.equal(
+        (await fetch(`${base}/api/game/tile?index=${index}`, { headers }))
+          .status,
+        400,
+      );
+    }
+    const readAction = (index: number) =>
+      fetch(`${base}/api/game/tile?index=${index}`, { headers }).then((r) =>
+        r.json(),
+      );
+    const home = tileCoordinates(server.fixture.schools[0]!.home);
+    assert.equal((await readAction(home.z * 1000 + home.x)).action, "owned");
+    const rivalHome = tileCoordinates(server.fixture.schools[1]!.home);
+    assert.deepEqual(await readAction(rivalHome.z * 1000 + rivalHome.x), {
+      tileIndex: rivalHome.z * 1000 + rivalHome.x,
+      action: "blocked",
+      points: 0,
+    });
+    await path(pool, campaign, 0, 63, 63);
+    assert.deepEqual(await readAction(63 * 1000 + 64), {
+      tileIndex: 63064,
+      action: "explore",
+      points: 1,
+    });
+    await path(pool, campaign, 1, 64, 63);
+    assert.deepEqual(await readAction(63064), {
+      tileIndex: 63064,
+      action: "study",
+      points: 2,
+    });
+    assert.deepEqual(await readAction(64064), {
+      tileIndex: 64064,
+      action: "blocked",
+      points: 0,
+    });
+    await path(pool, campaign, 2, 64, 63);
+    assert.deepEqual(await readAction(63064), {
+      tileIndex: 63064,
+      action: "blocked",
+      points: 0,
+    });
     const before = await server.accounts.profile(actor.token);
     const command = {
       ruleVersion: 1,
