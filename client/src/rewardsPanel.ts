@@ -23,11 +23,18 @@ export class RewardsPanel {
   readonly #open = element<HTMLButtonElement>("inventory-button");
   readonly #session: RewardSession;
   #label = "";
-  constructor(enabled: boolean, committed: (token: string) => void) {
+  constructor(
+    enabled: boolean,
+    committed: (token: string) => void,
+    scope = "",
+  ) {
     this.#session = new RewardSession(
       sessionStorage,
       (state) => this.#render(state),
       committed,
+      undefined,
+      undefined,
+      scope,
     );
     this.#open.hidden = !enabled;
     this.#open.addEventListener("click", () => {

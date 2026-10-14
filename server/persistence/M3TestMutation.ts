@@ -22,6 +22,12 @@ import {
 } from "../../shared/world/coordinates.ts";
 import { schoolBit } from "../../shared/world/registry.ts";
 
+import {
+  checkExploreBoundary,
+  type ExploreBoundary,
+  lockExploreNeighborhood,
+} from "./ExploreBoundary.ts";
+
 export type WriteStrategy = "full_chunk" | "mutation_log";
 export interface M3TestCommand {
   readonly campaignId: string;
@@ -33,7 +39,11 @@ export interface M3TestCommand {
 }
 export interface M3TestResult {
   readonly status: "test_applied" | "test_no_change" | "rejected";
-  readonly reason: "none" | "insufficient_fixture_credit";
+  readonly reason:
+    | "none"
+    | "insufficient_fixture_credit"
+    | "not_adjacent"
+    | "protected_hq";
   readonly chunkId: number;
   readonly revision: string;
   readonly balance: string;
@@ -181,16 +191,19 @@ export class M3TestMutationService {
   readonly #pool: Pool;
   readonly #realtimeViews: boolean;
   readonly #devExplore: EvaluateDevExplore | undefined;
+  readonly #boundary: ExploreBoundary | undefined;
   constructor(
     pool: Pool,
     options: {
       readonly realtimeViews?: boolean;
       readonly devExplore?: EvaluateDevExplore;
+      readonly boundary?: ExploreBoundary;
     } = {},
   ) {
     this.#pool = pool;
     this.#realtimeViews = options.realtimeViews ?? false;
     this.#devExplore = options.devExplore;
+    this.#boundary = options.boundary;
   }
 
   async apply(
@@ -283,6 +296,15 @@ export class M3TestMutationService {
         [command.campaignId, command.schoolSlot],
       );
       if (school.rowCount !== 1) throw new Error("School slot not registered");
+      if (this.#boundary) {
+        if (campaign.rows[0].write_strategy !== "full_chunk")
+          throw new Error("Expansion requires full-chunk persistence");
+        await lockExploreNeighborhood(
+          client,
+          command.campaignId,
+          command.tileIndex,
+        );
+      }
       const createdHead = await client.query(
         "INSERT INTO world_chunk_heads(campaign_id,chunk_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING chunk_id",
         [command.campaignId, id],
@@ -360,6 +382,16 @@ export class M3TestMutationService {
             "Development rule disagrees with durable fixture contract",
           );
       }
+      const spatialRejection =
+        this.#boundary && !alreadyExplored
+          ? await checkExploreBoundary(
+              client,
+              command.campaignId,
+              command.schoolSlot,
+              command.tileIndex,
+              this.#boundary,
+            )
+          : undefined;
       let result: M3TestResult;
       if (alreadyExplored) {
         const wallet = await client.query<{ balance: string }>(
@@ -378,7 +410,7 @@ export class M3TestMutationService {
         };
       } else {
         const wallet =
-          devDecision?.kind === "reject"
+          spatialRejection || devDecision?.kind === "reject"
             ? { rows: [] as { balance: string }[] }
             : await client.query<{ balance: string }>(
                 "UPDATE wallet_accounts SET balance=balance-$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' AND balance >= $3 RETURNING balance",
@@ -391,7 +423,7 @@ export class M3TestMutationService {
           );
           result = {
             status: "rejected",
-            reason: "insufficient_fixture_credit",
+            reason: spatialRejection ?? "insufficient_fixture_credit",
             chunkId: id,
             revision: chunk.revision.toString(),
             balance: current.rows[0]?.balance ?? "0",

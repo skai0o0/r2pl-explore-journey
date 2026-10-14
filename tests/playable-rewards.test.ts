@@ -8,6 +8,7 @@ import {
   parseRewardCatalog,
   parseRewardReceipt,
 } from "../shared/rewards/playable.ts";
+import { tileIndex } from "../shared/world/coordinates.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -130,7 +131,7 @@ test(
         45,
       );
       await peer.connect();
-      const intent = peer.planner.next("connector")!;
+      const intent = { tile: tileIndex(actor.home.x + 10, actor.home.z) };
       const conflict = await peer.explore(
         intent.tile,
         Uint8Array.from(Buffer.from(chest.key.replaceAll("-", ""), "hex")),

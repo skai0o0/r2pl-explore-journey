@@ -41,6 +41,7 @@ export class RewardSession {
   readonly #committed: (token: string) => void;
   readonly #factory: (token: string) => ClientPort;
   readonly #uuid: () => string;
+  readonly #scope: string;
   constructor(
     storage: StoragePort,
     changed: (state: RewardState) => void,
@@ -48,18 +49,20 @@ export class RewardSession {
     factory: (token: string) => ClientPort = (token) =>
       new DevRewardClient(token),
     uuid: () => string = () => crypto.randomUUID(),
+    scope = "",
   ) {
     this.#storage = storage;
     this.#changed = changed;
     this.#committed = committed;
     this.#factory = factory;
     this.#uuid = uuid;
+    this.#scope = scope;
   }
   get state(): RewardState {
     return this.#state;
   }
   #key(token: string, field: string): string {
-    return `r2pl-rewards-v1:${token}:${field}`;
+    return `r2pl-rewards-v1:${this.#scope ? `${this.#scope}:` : ""}${token}:${field}`;
   }
   #read<T>(field: string, parser: (value: unknown) => T): T | undefined {
     try {

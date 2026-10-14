@@ -92,6 +92,7 @@ async function startSchoolPlayServer(
     {},
     undefined,
     evaluateDevExplore,
+    { headquarters: fixture.headquarters },
   );
   await realtime.server.listen(ports.websocket, "127.0.0.1");
   const address = realtime.transport.server?.address();
@@ -149,6 +150,9 @@ async function startSchoolPlayServer(
           version: 1,
           websocketPort: address.port,
           players: fixture.players,
+          campaignId: fixture.campaignId,
+          adjacentOnly: true,
+          headquarters: fixture.headquarters,
         });
         return;
       }

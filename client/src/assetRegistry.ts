@@ -6,7 +6,7 @@ export const MODEL_ASSETS = {
 export type ModelAssetId = keyof typeof MODEL_ASSETS;
 
 export interface ModelPlacement {
-  readonly id: "dawn-hq" | "dusk-hq" | "landmark";
+  readonly id: string;
   readonly asset: ModelAssetId;
   readonly worldX: number;
   readonly worldZ: number;

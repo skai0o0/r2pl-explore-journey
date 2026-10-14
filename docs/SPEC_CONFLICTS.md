@@ -52,3 +52,7 @@
 ## 2026-10-13 completion planning reconciliation queue
 
 [V2 completion plan R0](V2_COMPLETION_PLAN_2026-10-13.md) requires a single current implementation spec before dependent gameplay work: reconcile Knowledge entry/upkeep/claim clocks/scoring (C01/C03/C08/C12), Landmark 100/120 vs1000/+5% (C02/C09), HQ/UniStop/landmark footprints (C04/C05), and non-running student UniStop access versus Gift eligibility (C06/C10/C11). The owner selected the Gamenote as the latest idea reference on2026-10-13; historical Round4/canonical candidates do not become signed production rules through this planning update. Existing preparation direction for non-running ingame loot is retained; unresolved values are not silently selected. V1 behavior is a parity reference, not an override. No C-ID is marked approved or resolved by this note.
+
+## Implementation gap corrected — 2026-10-14
+
+Owner identified missing HQ seed and authoritative adjacency. Prior bot frontier planning did not enforce gameplay legality. Four-edge expansion and initial HQ Knowledge now run in the new eight-school dev campaign. Latest Gamenote20×20 is used for development; this does not resolve the production footprint/map freeze against historical Round4 alternatives. [Report](HQ_FRONTIER_INTEGRATION_2026-10-14.md).

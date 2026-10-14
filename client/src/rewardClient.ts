@@ -16,7 +16,10 @@ import {
 export class DevRewardClient {
   readonly #token: string;
   readonly #fetch: typeof fetch;
-  constructor(token: string, transport: typeof fetch = fetch) {
+  constructor(
+    token: string,
+    transport: typeof fetch = (input, init) => fetch(input, init),
+  ) {
     if (!/^[a-zA-Z0-9-]{1,100}$/.test(token))
       throw new TypeError("Invalid synthetic token");
     this.#token = token;

@@ -6,6 +6,7 @@ import { DevRewardClient } from "../client/src/rewardClient.ts";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
 import { cleanupSchoolRewards } from "../server/integration/SchoolRewardFixture.ts";
 import { REWARD_PREPARATION_VERSION } from "../shared/rewards/commands.ts";
+import { tileIndex } from "../shared/world/coordinates.ts";
 import { BotPeer } from "./simulation/BotPeer.ts";
 import { botDatabase } from "./simulation/config.ts";
 import { cleanupBotFixture, migrateBotFixture } from "./simulation/fixture.ts";
@@ -47,7 +48,7 @@ try {
     42,
   );
   await peer.connect();
-  const intent = peer.planner.next("connector")!;
+  const intent = { tile: tileIndex(actor.home.x + 10, actor.home.z) };
   const ack = await peer.explore(
     intent.tile,
     Uint8Array.from(Buffer.from(randomUUID().replaceAll("-", ""), "hex")),

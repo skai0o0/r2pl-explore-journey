@@ -3,6 +3,7 @@ import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { Pool } from "pg";
 import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
 import type { SchoolRegistry } from "../../shared/world/registry.ts";
+import type { ExploreBoundary } from "../persistence/ExploreBoundary.ts";
 import type { FaultHooks } from "../persistence/M3TestMutation.ts";
 import { M35FixtureAuthority } from "../persistence/M35FixtureAuthority.ts";
 import { DurableRealtimeCore } from "./DurableRealtimeCore.ts";
@@ -19,6 +20,7 @@ export async function createDurableSyntheticServer(
   faultHooks: FaultHooks = {},
   traceCorrelationIds?: ReadonlySet<string>,
   devExplore?: EvaluateDevExplore,
+  boundary?: ExploreBoundary,
 ): Promise<{
   readonly server: Server;
   readonly transport: WebSocketTransport;
@@ -31,6 +33,7 @@ export async function createDurableSyntheticServer(
     explicitFixtureCost,
     faultHooks,
     devExplore,
+    boundary,
   );
   await authority.validateCampaign(registry);
   const core = new DurableRealtimeCore(authority, {

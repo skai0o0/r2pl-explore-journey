@@ -19,6 +19,7 @@ import {
 } from "../../shared/world/coordinates.ts";
 import type { SchoolRegistry } from "../../shared/world/registry.ts";
 import { schoolBit } from "../../shared/world/registry.ts";
+import type { ExploreBoundary } from "./ExploreBoundary.ts";
 import {
   type ApplyOutcome,
   type FaultHooks,
@@ -68,6 +69,7 @@ export class M35FixtureAuthority {
     explicitFixtureCost: bigint,
     faultHooks: FaultHooks = {},
     devExplore?: EvaluateDevExplore,
+    boundary?: ExploreBoundary,
   ) {
     if (explicitFixtureCost < 0n)
       throw new RangeError("Invalid explicit fixture cost");
@@ -77,6 +79,7 @@ export class M35FixtureAuthority {
     this.#mutations = new M3TestMutationService(pool, {
       realtimeViews: true,
       ...(devExplore ? { devExplore } : {}),
+      ...(boundary ? { boundary } : {}),
     });
     this.#relay = new OutboxRelay(pool);
     this.#faultHooks = faultHooks;

@@ -1,3 +1,7 @@
+import {
+  type HeadquartersArea,
+  headquartersOwner,
+} from "../gameplay/expansion.ts";
 /** Non-authoritative bot intentions. Uses only each school's projected knowledge + public fixture goals. */
 import { chunkId, tileCoordinates, tileIndex } from "../world/coordinates.ts";
 export type BotRole = "explorer" | "connector" | "steward";
@@ -15,6 +19,7 @@ export interface BotSchool {
   readonly region: BotRegion;
   readonly home: number;
   readonly meeting: number;
+  readonly protectedHeadquarters?: readonly HeadquartersArea[];
 }
 const labels = [
   "HCMUT",
@@ -174,7 +179,15 @@ export class BotPlanner {
       const neighbor = tileIndex(nx!, nz!);
       if (
         regionContains(this.#school.region, neighbor) &&
-        !this.#owned.has(neighbor)
+        !this.#owned.has(neighbor) &&
+        (headquartersOwner(
+          neighbor,
+          this.#school.protectedHeadquarters ?? [],
+        ) === undefined ||
+          headquartersOwner(
+            neighbor,
+            this.#school.protectedHeadquarters ?? [],
+          ) === this.#school.slot)
       )
         this.#frontier.add(neighbor);
     }

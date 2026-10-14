@@ -1,16 +1,16 @@
 # Tiến độ kế hoạch hoàn thiện — checkpoint 2026-10-14
 
-Kế hoạch: [V2 completion / G-V1 và G-FULL](V2_COMPLETION_PLAN_2026-10-13.md). Hiện gồm increment03; inventory/reward UI đã tích hợp trực tiếp bởi Codex theo owner reassignment. Browser reward mutation acceptance còn chờ explicit approval do auto-review. Đây là trạng thái triển khai, không là signed production ruleVersion. Build này giữ protocol v1 và fixture-credit v0.
+Kế hoạch: [V2 completion / G-V1 và G-FULL](V2_COMPLETION_PLAN_2026-10-13.md). Hiện gồm increment03 và HQ/frontier correction; inventory/reward UI đã tích hợp trực tiếp bởi Codex theo owner reassignment. Browser reward mutation acceptance còn chờ explicit approval do auto-review. Đây là trạng thái triển khai, không là signed production ruleVersion. Build này giữ protocol v1 và fixture-credit v0.
 
 ## Current implementation baseline
 
 | Boundary | Hiện đang chạy | Quyết định còn chờ / implementation tiếp |
 | --- | --- | --- |
 | Roster/session | 8 generic fixture-school slots0–7, 16 human aliases và24 bot, validated bootstrap; campaign synthetic persistent | Real school IDs/mapping/HQ và auth từ campaign |
-| World/authority | 1000×1000,64×64 chunks, own-school mask/fog; bot và browser dùng cùng server/campaign | Object layout/protected footprints/visibility party/admin, full gameplay |
+| World/authority | 1000×1000,64×64 chunks, own-school mask/fog;400 HQ tiles/trường, frontier4 cạnh enforced server; bot và browser dùng cùng campaign mới | Object layout/protected footprints/visibility party/admin, full gameplay |
 | Wallet/explore | M3 wallet_accounts/ledger_entries/idempotency/outbox; resource fixture-credit, ruleVersion0, cost1; profile/receipt riêng actor | Points/Crystals/inventory chung, promotion running/reward prep, approved numeric rules |
-| UI | Existing Three.js renderer/HUD/selection; dynamic roster/ws port/home anchor; own bot Knowledge visible | 8 HQ artwork/markers, map editor, landmark/shared modals và reward mutation browser acceptance, branding/device QA |
-| Knowledge lifecycle | Explore/no-change/retry only | Shared fees/upkeep/consolidation/decay/refund và private party views; legacy candidates stay inactive |
+| UI | Existing Three.js renderer/HUD/selection; dynamic roster/ws port/home anchor; own bot Knowledge visible | 8 HQ artwork riêng (markers đã có), map editor, landmark/shared modals và reward mutation browser acceptance, branding/device QA |
+| Knowledge lifecycle | HQ seed + orthogonal expansion/no-change/retry; opponent HQ protected | Shared fees/upkeep/consolidation/decay/refund và private party views; legacy candidates stay inactive |
 | Rewards/Running | Aspire/fixed Chest dùng chung dev wallet qua private HTTP; running preparation vẫn riêng | Live feature adapters/account integration; no Gift-bearing draw or external endpoint enabled |
 | Outbox failure | On any batch processing failure, release all remaining own-token leases, keep delivered/newer-owned leases intact | Reproduce original triggering relay error if it returns, large hotspot capacity; DB outage still uses lease expiry |
 
@@ -39,8 +39,8 @@ PARTIAL does not satisfy G-V1. All remaining player/operator journeys are still 
 | ID | Status after this build | Remaining acceptance |
 | --- | --- | --- |
 | PV01 profile/HUD | PARTIAL | Points/Crystals/Keys production account and complete error/inventory UX |
-| PV02 world/HQ/fog/navigation | PARTIAL |8 HQ objects/full layout/minimap/mobile |
-| PV03 explore/review | PARTIAL | Approved review semantics |
+| PV02 world/HQ/fog/navigation | PARTIAL |8 HQ dùng model placeholder đúng tọa độ; full layout/minimap/mobile còn thiếu |
+| PV03 explore/review | PARTIAL; HQ/frontier dev integrated | Server/HQ/cross-chunk/restart acceptance đã test; review semantics còn thiếu |
 | PV04 shared/giao lưu | PARTIAL fixture overlap | Actual shared commands/private party UI |
 | PV05 upkeep/lifecycle | NOT DONE | Durable deadlines/claims/refunds |
 | PV06 resources/conversion | PARTIAL common dev inventory API | Running account, approved conversion và browser reward mutation acceptance |
@@ -58,3 +58,5 @@ PARTIAL does not satisfy G-V1. All remaining player/operator journeys are still 
 | PV18 visual/normal-dev separation | PARTIAL | Existing visual assets only;8-school polish/device QA |
 
 Inventory/reward panel đã triển khai theo owner reassignment; xem [Increment03 report](COMPLETION_INCREMENT_03_2026-10-14.md). Bước browser mutation acceptance bị auto-review chặn việc tiêu synthetic Key/credit; cần owner cho phép test này. Các phần độc lập tiếp theo: hoàn thiện world objects/8 HQ và hướng dẫn synthetic play, chuẩn bị Landmark/Knowledge commands trong phạm vi dev đã duyệt. R0 decisions và production gates vẫn riêng.
+
+HQ/frontier correction: [report](HQ_FRONTIER_INTEGRATION_2026-10-14.md),124/124 passing tests. Original plan missed this core acceptance condition; R2-00 now precedes dependent gameplay. Default campaign94000000 replaces the active dev session while preserving93000000 data. User clarification governs this core invariant; official production map and other pending rules remain gated.

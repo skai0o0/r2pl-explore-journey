@@ -123,3 +123,7 @@ Owner authorized implementation. [Increment report](COMPLETION_INCREMENT_01_2026
 ## 2026-10-14 completion increment02 — common dev reward/account backend
 
 [Increment02 report](COMPLETION_INCREMENT_02_2026-10-14.md): Aspire/fixed Chest now grants/spends through the same v0 wallet/ledger as exploration, separate Crystals/Key/Treasure Map inventory, global command-key namespace, atomic receipt/cooldown/claim/private outbox and authenticated bounded HTTP APIs.114/114 regression pass. [Frontend handoff](FRONTEND_REWARD_HANDOFF_2026-10-14.md) is ready; inventory/reward UI remains unimplemented because the assigned Antigravity tool bridge is unavailable. Nitro/Predator/Gifts, running integration, world contact/catalog and G-V1/G-FULL stay gated. No protocolv1 or production migration change.
+
+## Checkpoint 2026-10-14 — HQ/frontier correction
+
+Owner-authorized core development correction implemented: free initial400-tile HQ Knowledge per school, server-enforced four-edge expansion, protected dev HQ, UI/bot integration and cross-chunk/restart acceptance.124/124 tests pass. This closes a missing gameplay-baseline invariant, not G-V1 or production launch. New versioned synthetic campaign preserves the old unrestricted fixture. [Report](HQ_FRONTIER_INTEGRATION_2026-10-14.md), [updated completion status](COMPLETION_PROGRESS.md).

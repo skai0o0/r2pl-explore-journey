@@ -92,3 +92,7 @@ Owner instruction Triển khai starts bounded development work from the completi
 ## 2026-10-14 owner update — direct Codex implementation
 
 Owner instruction: “Hiện tại có thể tự làm hết, không cần qua Antigravity!” Codex may implement frontend and remaining bounded development directly; Antigravity assignment no longer blocks presentation work. This changes implementation ownership, not production rules, external API authorization or milestone acceptance. Inventory/reward panel is implemented under existing synthetic fixture permissions. [Increment03 report](COMPLETION_INCREMENT_03_2026-10-14.md).
+
+## 2026-10-14 owner correction — HQ and adjacency
+
+Owner clarified that exploration must grow from pre-owned HQ area through adjacent tiles, then instructed integration. Implemented four-edge expansion and protected initial HQ Knowledge in the eight-school development build;20×20 follows latest Gamenote, with non-overlapping synthetic placements. New fixture campaign preserves old unrestricted-world data. This authorizes the core development invariant, not signed production coordinates, school mapping or the remaining rule freeze. [Implementation and acceptance](HQ_FRONTIER_INTEGRATION_2026-10-14.md).

@@ -12,6 +12,7 @@ import {
   parseDevSession,
 } from "../shared/integration/devSession.ts";
 import { ACK_STATUS } from "../shared/protocol/m2.ts";
+import { tileIndex } from "../shared/world/coordinates.ts";
 
 test("dev session contract validates synthetic identities, homes and transport bounds", () => {
   assert.deepEqual(parseDevSession(LEGACY_DEV_SESSION), LEGACY_DEV_SESSION);
@@ -85,7 +86,7 @@ test("eight-school playable server shares durable bot/student world with actor-p
       987,
     );
     await peer.connect();
-    const intent = peer.planner.next("connector")!;
+    const intent = { tile: tileIndex(actor.home.x + 10, actor.home.z) };
     const key = Uint8Array.from(
       Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
     );
@@ -143,4 +144,34 @@ test("eight-school playable server shares durable bot/student world with actor-p
     await cleanupBotFixture(pool, campaignId);
     await pool.end();
   }
+});
+
+test("expansion bootstrap rejects malformed HQ geometry, duplicate schools and campaign scope", () => {
+  const areas = [
+    { schoolSlot: 0, x: 205, z: 225, size: 20 },
+    { schoolSlot: 15, x: 775, z: 755, size: 20 },
+  ];
+  const value = {
+    ...LEGACY_DEV_SESSION,
+    adjacentOnly: true,
+    headquarters: areas,
+    campaignId: "94000000-0000-4000-8000-000000000000",
+  };
+  assert.equal(parseDevSession(value).headquarters?.length, 2);
+  assert.throws(() => parseDevSession({ ...value, campaignId: "untrusted" }));
+  assert.throws(() =>
+    parseDevSession({ ...value, headquarters: [areas[0], areas[0]] }),
+  );
+  assert.throws(() =>
+    parseDevSession({
+      ...value,
+      headquarters: [areas[0], { ...areas[1], x: 210, z: 230 }],
+    }),
+  );
+  assert.throws(() =>
+    parseDevSession({
+      ...value,
+      headquarters: [areas[0], { ...areas[1], x: 999 }],
+    }),
+  );
 });

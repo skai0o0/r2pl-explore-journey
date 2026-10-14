@@ -1,14 +1,12 @@
 import type { Pool } from "pg";
+import type { HeadquartersArea } from "../../shared/gameplay/expansion.ts";
 import type { DevPlayer } from "../../shared/integration/devSession.ts";
-import {
-  type BotRole,
-  type BotSchool,
-  botSchools,
-} from "../../shared/simulation/schoolBots.ts";
+import type { BotRole, BotSchool } from "../../shared/simulation/schoolBots.ts";
 import { tileCoordinates } from "../../shared/world/coordinates.ts";
 import { SchoolRegistry } from "../../shared/world/registry.ts";
 import type { DevIdentity } from "./DevAccountService.ts";
-export const SCHOOL_PLAY_CAMPAIGN = "93000000-0000-4000-8000-000000000000";
+import { schoolPlayLayout, seedHeadquarters } from "./SchoolHeadquarters.ts";
+export const SCHOOL_PLAY_CAMPAIGN = "94000000-0000-4000-8000-000000000000";
 export interface SchoolPlayActor extends DevIdentity {
   readonly role: "human" | BotRole;
   readonly ordinal: number;
@@ -16,6 +14,7 @@ export interface SchoolPlayActor extends DevIdentity {
 export interface SchoolPlayFixture {
   readonly campaignId: string;
   readonly schools: readonly BotSchool[];
+  readonly headquarters: readonly HeadquartersArea[];
   readonly registry: SchoolRegistry;
   readonly actors: readonly SchoolPlayActor[];
   readonly players: readonly DevPlayer[];
@@ -32,9 +31,9 @@ export async function seedSchoolPlay(
     throw new RangeError("Invalid fixture campaign");
   const code =
     campaignId === SCHOOL_PLAY_CAMPAIGN
-      ? "school-play-dev-v0"
+      ? "school-play-expansion-v1"
       : `bot-sim-${campaignId}`;
-  const schools = botSchools("gather");
+  const { schools, headquarters } = schoolPlayLayout();
   const actors: SchoolPlayActor[] = [];
   const players: DevPlayer[] = [];
   for (const school of schools)
@@ -67,8 +66,8 @@ export async function seedSchoolPlay(
   const db = await pool.connect();
   try {
     await db.query("BEGIN");
-    await db.query(
-      "INSERT INTO r2pl_v2.campaigns(id,code,write_strategy) VALUES($1,$2,'full_chunk') ON CONFLICT DO NOTHING",
+    const created = await db.query(
+      "INSERT INTO r2pl_v2.campaigns(id,code,write_strategy) VALUES($1,$2,'full_chunk') ON CONFLICT DO NOTHING RETURNING id",
       [campaignId, code],
     );
     const campaign = (
@@ -102,6 +101,8 @@ export async function seedSchoolPlay(
         "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,opening_balance,balance) VALUES($1,$2,'fixture-credit',$3,$3) ON CONFLICT DO NOTHING",
         [campaignId, actor.actorId, actor.role === "human" ? 1000 : 5000],
       );
+    if (created.rowCount === 1)
+      await seedHeadquarters(db, campaignId, headquarters);
     await db.query("COMMIT");
   } catch (error) {
     await db.query("ROLLBACK");
@@ -112,6 +113,7 @@ export async function seedSchoolPlay(
   return {
     campaignId,
     schools,
+    headquarters,
     registry,
     actors,
     players,

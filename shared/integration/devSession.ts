@@ -1,3 +1,7 @@
+import {
+  type HeadquartersArea,
+  headquartersTiles,
+} from "../gameplay/expansion.ts";
 /** Local development bootstrap only. Never accepts production identity or wallet authority. */
 import { tileIndex } from "../world/coordinates.ts";
 export interface DevPlayer {
@@ -12,6 +16,9 @@ export interface DevSessionConfig {
   readonly version: 1;
   readonly websocketPort: number;
   readonly players: readonly DevPlayer[];
+  readonly campaignId?: string;
+  readonly adjacentOnly?: true;
+  readonly headquarters?: readonly HeadquartersArea[];
 }
 export function parseDevSession(input: unknown): DevSessionConfig {
   if (!input || typeof input !== "object" || Array.isArray(input))
@@ -64,11 +71,56 @@ export function parseDevSession(input: unknown): DevSessionConfig {
       home: { x: home.x, z: home.z },
     };
   });
+  if (
+    value.campaignId !== undefined &&
+    (typeof value.campaignId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        value.campaignId,
+      ))
+  )
+    throw new TypeError("Invalid fixture campaign scope");
+  let headquarters: HeadquartersArea[] | undefined;
+  if (value.adjacentOnly !== undefined) {
+    if (
+      value.adjacentOnly !== true ||
+      !Array.isArray(value.headquarters) ||
+      value.headquarters.length !== new Set(players.map((p) => p.slot)).size
+    )
+      throw new TypeError("Invalid expansion bootstrap");
+    const occupied = new Set<number>();
+    const slots = new Set<number>();
+    headquarters = value.headquarters.map((raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw))
+        throw new TypeError("Invalid headquarters");
+      const area = raw as HeadquartersArea;
+      const tiles = headquartersTiles(area);
+      if (
+        slots.has(area.schoolSlot) ||
+        !players.some((p) => p.slot === area.schoolSlot)
+      )
+        throw new TypeError("Invalid headquarters school");
+      slots.add(area.schoolSlot);
+      for (const tile of tiles) {
+        if (occupied.has(tile)) throw new TypeError("Overlapping headquarters");
+        occupied.add(tile);
+      }
+      return {
+        schoolSlot: area.schoolSlot,
+        x: area.x,
+        z: area.z,
+        size: area.size,
+      };
+    });
+  }
   return {
     fixtureOnly: true,
     version: 1,
     websocketPort: Number(value.websocketPort),
     players,
+    ...(typeof value.campaignId === "string"
+      ? { campaignId: value.campaignId }
+      : {}),
+    ...(headquarters ? { adjacentOnly: true as const, headquarters } : {}),
   };
 }
 export const LEGACY_DEV_SESSION: DevSessionConfig = {

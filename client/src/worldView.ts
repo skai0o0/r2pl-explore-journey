@@ -12,7 +12,11 @@ import {
 } from "../../shared/world/coordinates.ts";
 import { ModelAssetLoader } from "./assetLoader.ts";
 import { type AssetMount, mountModelAsset } from "./assetPipeline.ts";
-import { MODEL_ASSETS, MODEL_PLACEMENTS } from "./assetRegistry.ts";
+import {
+  MODEL_ASSETS,
+  MODEL_PLACEMENTS,
+  type ModelPlacement,
+} from "./assetRegistry.ts";
 
 export interface PickedTile {
   readonly x: number;
@@ -208,7 +212,14 @@ export class TileIndicatorLayer {
   }
 }
 
-const markers = [
+export interface WorldMarker {
+  readonly x: number;
+  readonly z: number;
+  readonly title: string;
+  readonly detail: string;
+  readonly kind: string;
+}
+const markers: readonly WorldMarker[] = [
   {
     x: 215,
     z: 235,
@@ -316,6 +327,7 @@ export class WorldView {
     { pixels: Uint8Array; texture: THREE.DataTexture; mesh: THREE.Mesh }
   >();
   readonly #markerElements: HTMLElement[] = [];
+  readonly #markers: readonly WorldMarker[];
   readonly #assetMounts: AssetMount[] = [];
   readonly #assetRoots: THREE.Group[] = [];
   readonly #modelSupports: THREE.Mesh[] = [];
@@ -351,11 +363,16 @@ export class WorldView {
     onPick: (tile: PickedTile) => void,
     onViewChange: () => void,
     onHover?: (tile: PickedTile | undefined) => void,
+    layout: {
+      readonly markers?: readonly WorldMarker[];
+      readonly placements?: readonly ModelPlacement[];
+    } = {},
   ) {
     this.#host = host;
     this.#onPick = onPick;
     this.#onViewChange = onViewChange;
     this.#onHover = onHover;
+    this.#markers = layout.markers ?? markers;
 
     this.#renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -406,7 +423,7 @@ export class WorldView {
     );
 
     const assetLoader = new ModelAssetLoader();
-    for (const placement of MODEL_PLACEMENTS) {
+    for (const placement of layout.placements ?? MODEL_PLACEMENTS) {
       // The synthetic fixture glTFs are intentionally flat. Keep their loaded
       // geometry visible while giving the preview a small amount of real depth.
       const supportHeight = placement.asset === "hq" ? 3 : 5;
@@ -456,10 +473,20 @@ export class WorldView {
       );
     }
 
-    for (const marker of markers) {
+    for (const marker of this.#markers) {
       const element = document.createElement("div");
       element.className = `map-marker ${marker.kind}`;
-      element.innerHTML = `<span class="marker-glyph">${marker.kind === "landmark" ? "◆" : "⌂"}</span><span class="marker-copy"><b>${marker.title}</b><small>${marker.detail}</small></span>`;
+      const glyph = document.createElement("span");
+      glyph.className = "marker-glyph";
+      glyph.textContent = marker.kind === "landmark" ? "◆" : "⌂";
+      const copy = document.createElement("span");
+      copy.className = "marker-copy";
+      const title = document.createElement("b");
+      title.textContent = marker.title;
+      const detail = document.createElement("small");
+      detail.textContent = marker.detail;
+      copy.append(title, detail);
+      element.append(glyph, copy);
       host.append(element);
       this.#markerElements.push(element);
     }
@@ -1021,7 +1048,7 @@ export class WorldView {
     this.#updateReticles();
     this.#renderer.render(this.#scene, this.#camera);
 
-    markers.forEach((marker, index) => {
+    this.#markers.forEach((marker, index) => {
       const el = this.#markerElements[index];
       if (el) {
         Object.assign(el.style, this.#position(marker.x, marker.z));

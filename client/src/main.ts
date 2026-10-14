@@ -1,5 +1,10 @@
 import { ColyseusSDK, type Room } from "@colyseus/sdk";
 import {
+  edgeNeighbors,
+  headquartersOwner,
+  isExpansionEdge,
+} from "../../shared/gameplay/expansion.ts";
+import {
   ACK_STATUS,
   decodeAck,
   decodeDelta,
@@ -13,6 +18,12 @@ import {
   REASON,
 } from "../../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import {
+  chunkCoordinatesForIndex,
+  chunkId,
+  localIndex,
+  tileCoordinates,
+} from "../../shared/world/coordinates.ts";
 import {
   deriveDevCreditState,
   type PickedTile,
@@ -153,6 +164,26 @@ function updatePending(): void {
   }
 }
 
+function expansionBlocked(tile: PickedTile): boolean {
+  if (!session.adjacentOnly) return false;
+  const owner = headquartersOwner(tile.index, session.headquarters ?? []);
+  if (owner !== undefined && owner !== player.slot) return true;
+  if (
+    replica.hasChunk(tile.chunk) &&
+    replica.maskAt(tile.chunk, tile.local) & (1 << player.slot)
+  )
+    return false;
+  return !isExpansionEdge(tile.index, (neighbor) => {
+    const { chunkX, chunkZ } = chunkCoordinatesForIndex(neighbor);
+    const id = chunkId(chunkX, chunkZ);
+    const { x, z } = tileCoordinates(neighbor);
+    return (
+      replica.hasChunk(id) &&
+      !!(replica.maskAt(id, localIndex(x, z)) & (1 << player.slot))
+    );
+  });
+}
+
 function updateTile(): void {
   if (!selected) {
     ui.tile.textContent = "— / —";
@@ -180,12 +211,30 @@ function updateTile(): void {
     return;
   }
 
+  if (expansionBlocked(selected)) {
+    ui.knowledge.textContent =
+      "Chỉ mở ô chung cạnh với tri thức của trường; HQ trường khác được bảo vệ.";
+    ui.badge.textContent = "OUTSIDE FRONTIER";
+    ui.badge.className = "badge-tag fogged";
+    ui.explore.disabled = true;
+    ui.explore.textContent = "Chọn ô liền kề vùng của trường";
+    return;
+  }
+
   // Check public fixtures
-  if (selected.x === 215 && selected.z === 235) {
+  if (
+    session === LEGACY_DEV_SESSION &&
+    selected.x === 215 &&
+    selected.z === 235
+  ) {
     ui.knowledge.textContent = "Dawn Headquarters · Public sanctuary fixture";
     ui.badge.textContent = "DAWN HQ";
     ui.badge.className = "badge-tag fixture";
-  } else if (selected.x === 785 && selected.z === 765) {
+  } else if (
+    session === LEGACY_DEV_SESSION &&
+    selected.x === 785 &&
+    selected.z === 765
+  ) {
     ui.knowledge.textContent = "Dusk Headquarters · Public sanctuary fixture";
     ui.badge.textContent = "DUSK HQ";
     ui.badge.className = "badge-tag fixture";
@@ -207,7 +256,12 @@ function updateTile(): void {
         0;
 
     if (isOwned) {
-      ui.knowledge.textContent = `${player.schoolName} territory · Authorized presence`;
+      ui.knowledge.textContent =
+        session.adjacentOnly &&
+        headquartersOwner(selected.index, session.headquarters ?? []) ===
+          player.slot
+          ? `${player.schoolName} HQ · Vùng tri thức khởi tạo 20×20 · không tốn credit`
+          : `${player.schoolName} territory · Authorized presence`;
       ui.badge.textContent = "OWNED";
       ui.badge.className = "badge-tag owned";
       ui.explore.disabled = true;
@@ -292,9 +346,13 @@ function refreshBalanceSoon(): void {
   balanceTimer = window.setTimeout(() => void refreshProfile(), 180);
 }
 
-const rewards = new RewardsPanel(session !== LEGACY_DEV_SESSION, (token) => {
-  if (token === player.token) void refreshProfile(token);
-});
+const rewards = new RewardsPanel(
+  session !== LEGACY_DEV_SESSION,
+  (token) => {
+    if (token === player.token) void refreshProfile(token);
+  },
+  session.campaignId,
+);
 
 const world = new WorldView(
   get("world-view"),
@@ -307,6 +365,44 @@ const world = new WorldView(
   (hovered) => {
     updateHover(hovered);
   },
+  session.headquarters
+    ? {
+        markers: [
+          ...session.headquarters.map((area) => ({
+            x: area.x + area.size / 2,
+            z: area.z + area.size / 2,
+            title: `${players.find((p) => p.slot === area.schoolSlot)!.schoolName} HQ`,
+            detail: `${area.size}×${area.size} · protected dev HQ`,
+            kind: area.schoolSlot === 0 ? "dawn" : "dusk",
+          })),
+          {
+            x: 510,
+            z: 485,
+            title: "LANDMARK",
+            detail: "Visual placeholder · no rewards",
+            kind: "landmark",
+          },
+        ],
+        placements: [
+          ...session.headquarters.map((area) => ({
+            id: `school-${area.schoolSlot}-hq`,
+            asset: "hq" as const,
+            worldX: area.x + area.size / 2,
+            worldZ: area.z + area.size / 2,
+            scale: 12,
+            rotationZ: 0,
+          })),
+          {
+            id: "landmark",
+            asset: "landmark" as const,
+            worldX: 510,
+            worldZ: 485,
+            scale: 15,
+            rotationZ: 0,
+          },
+        ],
+      }
+    : {},
 );
 
 const overviewButton = get<HTMLButtonElement>("overview-button");
@@ -331,7 +427,20 @@ function scheduleSubscribe(): void {
 
 function subscribeNow(): void {
   if (!room) return;
-  const ids = world.visibleChunkIds(selected?.chunk);
+  const neighborChunks =
+    selected && session.adjacentOnly
+      ? edgeNeighbors(selected.index).map((tile) => {
+          const { chunkX, chunkZ } = chunkCoordinatesForIndex(tile);
+          return chunkId(chunkX, chunkZ);
+        })
+      : [];
+  const ids = [
+    ...new Set([
+      ...(selected ? [selected.chunk] : []),
+      ...neighborChunks,
+      ...world.visibleChunkIds(selected?.chunk),
+    ]),
+  ].slice(0, 64);
   const signature = ids.join(",");
   if (signature === subscribed) return;
   subscribed = signature;
@@ -342,6 +451,15 @@ function subscribeNow(): void {
 function explore(): void {
   if (!room || !selected) {
     activity("Select a tile while connected", "error");
+    return;
+  }
+  if (expansionBlocked(selected)) {
+    updateTile();
+    scheduleSubscribe();
+    activity(
+      "Ô này chưa nằm sát vùng tri thức của trường hoặc thuộc HQ trường khác.",
+      "normal",
+    );
     return;
   }
   if (lacksTestCredits()) {

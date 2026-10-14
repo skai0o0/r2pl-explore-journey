@@ -14,6 +14,10 @@ V1 là chuẩn mức độ chức năng và trải nghiệm, không là nguồn 
 
 Mỗi feature chỉ tính DONE khi có đủ: contract/rule version rõ, pure rules nếu cần, transaction server, projection đúng quyền, UI thật, test network/PostgreSQL, browser playtest và báo cáo review. CLI/demo, pure candidate hay endpoint chưa có consumer UI chỉ là PARTIAL. Owner review sau mỗi build playable; production activation là bước riêng sau G-FULL.
 
+## Core gameplay prerequisite — owner correction 2026-10-14
+
+R2-00 is mandatory before higher-level gameplay acceptance: durable free initial HQ Knowledge/fog; server-enforced four-edge expansion from own-school Knowledge; no diagonal/opponent anchor; same-school simultaneous boundary commands, cross-chunk growth, no-charge rejection/retry and restart. A bot planner obeying adjacency is not proof of server enforcement. This omission in the original plan is corrected by [HQ/frontier integration](HQ_FRONTIER_INTEGRATION_2026-10-14.md). Require this journey in future gameplay regressions; do not count historical arbitrary-target fixture benchmarks as playable acceptance.
+
 ## 2. Nguồn và trạng thái thực tế
 
 Nguồn kế hoạch: [Master Implementation Plan](../writing-block.md), [ROADMAP](ROADMAP.md), [Gamenote cuối](../R2PL_Gamenote_V2_Dong_bo_2026-10-12.txt), [GAME_SPEC](GAME_SPEC.md), [DECISIONS](DECISIONS.md), [conflicts](SPEC_CONFLICTS.md), [V1 reuse audit](V1_REUSE_MATRIX.md). Đối chiếu bổ sung V1 README, docs/architecture.md, CampusRoom handlers và các module UI/test; đây là source audit, chưa phải chạy lại V1 để chứng nhận browser parity.
@@ -39,7 +43,7 @@ Mỗi hàng là điều kiện độc lập của G-V1, không lấy điểm m�
 | --- | --- | --- | --- | --- |
 | PV01 | Student profile, school selection, wallet/HUD | Synthetic Dawn/Dusk, fixture-credit | 8 trường fixture trong UI, Points/Crystals/Keys tách biệt, loading/error/receipt/balance khớp server; real identity sau đó | R1/R3/R8 |
 | PV02 | World 1000×1000, HQ, fog, camera/minimap, picking | Foundation + fixture assets | 8 HQ staging, object placement hợp lệ, overview/detail, navigation/minimap, input desktop/mobile | R3 |
-| PV03 | Explore và study/review | Explore v0; review chưa là luật hoàn chỉnh | Explore và ôn/review đúng spec được chốt; retry/no-change không mất tiền ngoài luật; UI giải thích giá và effect | R2 |
+| PV03 | Explore và study/review | Explore v0; review chưa là luật hoàn chỉnh | HQ-owned seed + four-edge frontier enforced server-side; Explore và ôn/review đúng spec được chốt; retry/no-change không mất tiền ngoài luật; UI giải thích giá và effect | R2 |
 | PV04 | School coexistence/giao lưu và pha màu | Bot overlap; legacy pure contest | Quan hệ shared/contest được duyệt, lệnh tham gia/duy trì/đóng góp, UI trạng thái/deadline/lý do từ chối; giới hạn số trường theo rule | R2/R3 |
 | PV05 | Retention/housekeeping | Không có lifecycle live | Upkeep/forgetting/claim thay thế decay V1 theo rule mới; durable deadlines, exact refunds và recovery | R2 |
 | PV06 | Profile resources và conversion UI | Preparation wallets riêng | Một authoritative account model, inventory và lịch sử receipt; conversion chỉ khi có luật riêng, không lén chọn 1:1 | R1/R4 |

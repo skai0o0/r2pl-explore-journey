@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DevRewardClient } from "../client/src/rewardClient.ts";
 import { RewardSession } from "../client/src/rewardSession.ts";
 import type {
   RewardPreparationCommand,
@@ -236,4 +237,63 @@ test("an old completion never deletes a newer recovery command after returning t
     JSON.parse(saved.getItem("r2pl-rewards-v1:actor-a:pending")!).key,
     next.key,
   );
+});
+
+test("recovery from one campaign cannot be replayed in a new campaign", async () => {
+  const saved = storage();
+  const failing = client(async () => {
+    throw new Error("uncertain");
+  });
+  const old = new RewardSession(
+    saved,
+    () => {},
+    () => {},
+    () => failing,
+    () => key,
+    "campaign-old",
+  );
+  old.select("actor-a");
+  await tick();
+  await old.act(target);
+  assert.ok(old.state.pending);
+  const fresh = new RewardSession(
+    saved,
+    () => {},
+    () => {},
+    () => failing,
+    () => key,
+    "campaign-new",
+  );
+  fresh.select("actor-a");
+  await tick();
+  assert.equal(fresh.state.pending, undefined);
+  assert.equal(fresh.state.receipt, undefined);
+  const back = new RewardSession(
+    saved,
+    () => {},
+    () => {},
+    () => failing,
+    () => key,
+    "campaign-old",
+  );
+  back.select("actor-a");
+  assert.equal(back.state.pending?.key, key);
+});
+
+test("default transport invokes native fetch without binding it to the client instance", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async function (this: unknown) {
+      assert.ok(!(this instanceof DevRewardClient));
+      return new Response(JSON.stringify({ fixtureOnly: true, inventory }), {
+        status: 200,
+      });
+    };
+    assert.deepEqual(
+      await new DevRewardClient("actor-a").inventory(),
+      inventory,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });
