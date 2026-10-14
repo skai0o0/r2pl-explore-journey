@@ -18,6 +18,10 @@ import type { DevPlayer } from "../../shared/integration/devSession.ts";
 import { CarouselModal } from "./ui/carouselModal.ts";
 import { LandmarkModal } from "./ui/landmarkModal.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
+import {
+  campaignDisplayText,
+  objectDisplayName,
+} from "./ui/playerPresentation.ts";
 import { UniStopModal } from "./ui/uniStopModal.ts";
 import type { LootItem } from "./ui/v1Adapters.ts";
 import "./ui/v1.css";
@@ -48,20 +52,27 @@ export class GameplayUI {
     private onWallet: () => void,
     private scope = "",
     private onChestOpened?: (id: string) => void,
+    private devMode = false,
+    private visibleObject: (object: WorldObject) => boolean = () => true,
   ) {
     this.panel.className = "gameplay-menu";
     this.panel.innerHTML =
-      '<summary>Địa danh · Tiếp tế · Running</summary><div class="gameplay-navigation"><input type="number" min="0" max="999" aria-label="Tọa độ X" placeholder="X"><input type="number" min="0" max="999" aria-label="Tọa độ Z" placeholder="Z"><button type="button">Đi tới ô</button></div><details class="gameplay-guide"><summary>Hướng dẫn chơi</summary><p>Khám phá ô kề 4 cạnh: 1 Point. Ô của trường mình: 0 Point. Giao lưu ô một trường khác: 2 Points, tối đa hai trường.</p><p>Shared Knowledge miễn upkeep 24 giờ đầu, sau đó 1 Point mỗi 24 giờ cho mỗi cluster. Incumbent hết hạn: guest góp ceil(số ô / 2) trong 48 giờ, rolling timer 2 giờ; quá hạn hoàn Points.</p><p>Giải đố địa danh để nhận 10% mốc vào Crystal pot của trường; cần Knowledge chạm địa danh. Nạp Crystal để thắp Beacon; takeover tăng mốc 5% base.</p><p>Quay Aspire/Nitro/Predator để nhận tài nguyên, Keys và Treasure Map. Map chỉ ra Chest riêng của bạn. Chest cần 1 Key đúng tier. Chạy giả lập để sync Points vào ví và đủ điều kiện Gift staging.</p><p>Kéo để lia, cuộn để zoom; H về HQ, L đến địa danh, O toàn bản đồ, I đổi camera. Bản đồ nhỏ có thể bấm để dẫn đường.</p></details><div class="gameplay-content"></div>';
+      '<summary>Hành trang & nhiệm vụ</summary><div class="gameplay-navigation"><input type="number" min="0" max="999" aria-label="Tọa độ X" placeholder="X"><input type="number" min="0" max="999" aria-label="Tọa độ Z" placeholder="Z"><button type="button">Đi tới ô</button></div><details class="gameplay-guide"><summary>Hướng dẫn chơi</summary><p>Khám phá ô chung cạnh để mở rộng tri thức. Ô mới cần 1 Điểm; giao lưu ô của một trường khác cần 2 Điểm. Ô của trường mình không mất Điểm.</p><p>Chọn Tự Động để game chọn thao tác phù hợp. Ở Thủ Công, chọn Khám Phá hoặc Giao Lưu rồi xác nhận ô.</p><p>Tri thức chung miễn duy trì 24 giờ đầu, sau đó cần 1 Điểm mỗi ngày. Theo dõi hạn và góp Điểm trong mục tri thức chung.</p><p>Mở đường tới công trình, giải đố và góp Tinh Thể để thắp Đèn Hiệu cho trường. Nhận tài nguyên tại trạm tiếp tế; Bản Đồ Kho Báu chỉ ra rương riêng của bạn. Mở rương bằng Chìa Khóa cùng cấp.</p><p>Thành tích chạy trong tuần là điều kiện nhận quà hiện vật. Kéo để lia, cuộn để phóng to; H về trụ sở, L đến công trình, O xem toàn bản đồ, I đổi góc nhìn.</p></details><div class="gameplay-content"></div>';
+    if (!this.devMode) {
+      this.panel.querySelector(".gameplay-navigation")?.remove();
+      this.panel.hidden = true;
+    }
     document.body.append(this.panel);
     this.panel.addEventListener("toggle", () => {
+      if (!this.panel.open && !this.devMode) this.panel.hidden = true;
       if (this.panel.open)
         document
           .querySelector<HTMLDetailsElement>(".operator-menu")
           ?.removeAttribute("open");
     });
     this.panel
-      .querySelector(".gameplay-navigation button")!
-      .addEventListener("click", () => {
+      .querySelector(".gameplay-navigation button")
+      ?.addEventListener("click", () => {
         const x = Number(
             (
               this.panel.querySelector(
@@ -89,6 +100,20 @@ export class GameplayUI {
     window.setInterval(() => {
       if (this.player) void this.refresh();
     }, 5000);
+  }
+  openInventory(): void {
+    this.panel.hidden = false;
+    this.panel.open = true;
+  }
+  canShowObject(object: WorldObject): boolean {
+    return this.devMode || this.visibleObject(object);
+  }
+  objectName(object: WorldObject): string {
+    return objectDisplayName(
+      object,
+      object.kind !== "landmark" ||
+        !!this.view?.landmarks.find((l) => l.id === object.id)?.solved,
+    );
   }
   get open(): boolean {
     return (
@@ -151,6 +176,7 @@ export class GameplayUI {
     };
   }
   pick(o: WorldObject): void {
+    if (!this.canShowObject(o)) return;
     if (o.kind === "landmark") {
       const d = this.data(o.id);
       if (d) this.landmark.open(d);
@@ -176,11 +202,11 @@ export class GameplayUI {
       this.chestDialog = dialog;
       dialog.className = "chest-dialog";
       const title = document.createElement("h2");
-      title.textContent = o.name;
+      title.textContent = this.objectName(o);
       const info = document.createElement("p");
-      info.textContent = `Mở rương: ${GAME_CONFIG.rewards.chestKeyCost} Key ${o.tier}`;
+      info.textContent = `Mở rương: ${GAME_CONFIG.rewards.chestKeyCost} Chìa Khóa ${o.tier}`;
       const button = document.createElement("button");
-      button.textContent = "Mở Chest";
+      button.textContent = "Mở rương";
       button.disabled =
         !o.tier ||
         Number(this.view?.keys[o.tier] ?? 0) < GAME_CONFIG.rewards.chestKeyCost;
@@ -248,7 +274,10 @@ export class GameplayUI {
         .filter((e) => !this.seen.has(e.id));
       for (const e of unseen) this.seen.add(e.id);
       for (const e of unseen.slice(-3))
-        NotificationBanner.show({ title: e.title, body: e.body });
+        NotificationBanner.show({
+          title: campaignDisplayText(e.title),
+          body: campaignDisplayText(e.body),
+        });
       sessionStorage.setItem(
         `events-${this.scope}-${token}`,
         JSON.stringify([...this.seen].slice(-200)),
@@ -256,13 +285,16 @@ export class GameplayUI {
     } catch {
       if (generation === this.generation && request === this.refreshRequest)
         this.panel.querySelector(".gameplay-content")!.textContent =
-          "Chưa đồng bộ gameplay · tự động thử lại";
+          "Đang đồng bộ hành trang…";
     }
   }
   private loot(r: RewardOutcome): LootItem {
     return {
       id: `${r.kind}-${r.quantity}`,
-      name: r.kind === "gift" ? "Gift (staging)" : `${r.kind} ×${r.quantity}`,
+      name:
+        r.kind === "gift"
+          ? "Quà hiện vật"
+          : `${{ points: "Điểm Tri Thức", crystals: "Tinh Thể", key: "Chìa Khóa", treasure_map: "Bản Đồ Kho Báu" }[r.kind]} ×${r.quantity}`,
       type:
         r.kind === "crystals"
           ? "crystal"
@@ -271,7 +303,7 @@ export class GameplayUI {
             : r.kind,
       description:
         r.kind === "gift"
-          ? "Gift giả lập đã lưu trong hành trang của bạn."
+          ? "Quà hiện vật đã lưu trong hành trang của bạn."
           : "Phần thưởng đã được cộng vào ví đang chơi.",
       rarity:
         r.kind === "gift" ? "legendary" : r.quantity >= 4 ? "epic" : "common",
@@ -340,7 +372,7 @@ export class GameplayUI {
                 ),
           );
         this.carousel.spin({
-          title: o?.name ?? "Phần thưởng",
+          title: o ? this.objectName(o) : "Phần thưởng",
           sourceType: c.action === "open" ? "chest" : "unistop",
           tier: o?.tier ?? "aspire",
           items,
@@ -358,7 +390,7 @@ export class GameplayUI {
       if (generation === this.generation)
         NotificationBanner.show({
           title: "Chưa nhận được xác nhận",
-          body: "Lệnh được giữ để gửi lại bằng cùng key khi kết nối lại.",
+          body: "Thao tác được lưu để thử lại khi kết nối ổn định.",
         });
     } finally {
       if (generation === this.generation) {
@@ -384,11 +416,9 @@ export class GameplayUI {
     }
     const inventory = document.createElement("p");
     inventory.textContent =
-      "Crystal " +
-      (this.view?.crystals ?? "—") +
-      " · Maps " +
+      "Bản Đồ Kho Báu: " +
       (this.view?.treasureMaps ?? "—") +
-      " · Keys A/N/P " +
+      " · Chìa Khóa Aspire/Nitro/Predator: " +
       (this.view ? Object.values(this.view.keys).join("/") : "—");
     content.append(inventory);
     const gifts = this.view?.gifts ?? [];
@@ -400,7 +430,7 @@ export class GameplayUI {
       const heading = document.createElement("div");
       heading.style.cssText =
         "font-weight:700;color:#00e5ff;margin-bottom:8px;font-size:13px;display:flex;align-items:center;gap:6px;";
-      heading.innerHTML = "🎁 <span>Kho Quà Hiện Vật & Check-in</span>";
+      heading.innerHTML = "🎁 <span>Quà hiện vật</span>";
       section.append(heading);
 
       for (const gift of gifts) {
@@ -411,9 +441,9 @@ export class GameplayUI {
         const code = gift.giftCode || gift.id;
         card.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-weight:700;color:#ffd700;text-transform:uppercase">${gift.tier} GIFT</span>
+            <span style="font-weight:700;color:#ffd700;text-transform:uppercase">${gift.tier} · QUÀ HIỆN VẬT</span>
             <span style="font-size:11px;font-weight:600;color:${isRedeemed ? "#5fffd0" : "#ff9d00"}">
-              ${isRedeemed ? "✓ ĐÃ NHẬN" : "⏳ CHỜ CHECK-IN"}
+              ${isRedeemed ? "✓ ĐÃ NHẬN" : "⏳ CHỜ NHẬN QUÀ"}
             </span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin:4px 0">
@@ -444,34 +474,35 @@ export class GameplayUI {
     const running = document.createElement("button");
     running.textContent =
       this.view?.runningMode === "http"
-        ? "Đồng bộ Running từ chiến dịch"
-        : `Chạy giả lập 1 km · +${GAME_CONFIG.running.kmToPointsRate} Points`;
+        ? "Đồng bộ thành tích chạy"
+        : `Chạy giả lập 1 km · +${GAME_CONFIG.running.kmToPointsRate} Điểm`;
     running.onclick = () =>
       void this.command({
         action: "running",
         ...(this.view?.runningMode === "http" ? {} : { amount: 1000 }),
       });
-    content.append(running);
+    if (this.devMode || this.view?.runningMode === "http")
+      content.append(running);
     const km = document.createElement("p");
     km.textContent = `Tuần này: ${this.view?.weeklyKm ?? 0} km`;
     content.append(km);
     for (const cluster of this.view?.shared ?? []) {
       const box = document.createElement("div");
       const text = document.createElement("p");
-      text.textContent = `${cluster.pair.map((s) => SCHOOLS[s]!.shortName).join(" + ")} · ${cluster.tiles} ô · ${cluster.status === "shared" ? `Upkeep hạn ${new Date(cluster.due).toLocaleString()}` : `Consolidation ${cluster.contributed}/${cluster.required} · hết hạn ${new Date(Math.min(cluster.hardUntil, cluster.rollingUntil)).toLocaleString()}`}`;
+      text.textContent = `${cluster.pair.map((s) => SCHOOLS[s]!.shortName).join(" + ")} · ${cluster.tiles} ô · ${cluster.status === "shared" ? `Duy trì đến ${new Date(cluster.due).toLocaleString()}` : `Góp Điểm giữ tri thức ${cluster.contributed}/${cluster.required} · hết hạn ${new Date(Math.min(cluster.hardUntil, cluster.rollingUntil)).toLocaleString()}`}`;
       const pay = document.createElement("button");
       pay.textContent =
         cluster.status === "shared"
-          ? `Đóng upkeep ${GAME_CONFIG.knowledge.upkeepPoints} Point`
-          : "Đóng góp consolidation 1 Point";
+          ? `Duy trì tri thức ${GAME_CONFIG.knowledge.upkeepPoints} Điểm`
+          : "Góp 1 Điểm giữ tri thức";
       pay.disabled =
         cluster.status === "shared"
           ? Date.now() < cluster.freeUntil
           : cluster.guest !== this.player?.slot;
       if (cluster.status === "shared" && pay.disabled)
-        pay.textContent = `Miễn upkeep đến ${new Date(cluster.freeUntil).toLocaleString()}`;
+        pay.textContent = `Miễn duy trì đến ${new Date(cluster.freeUntil).toLocaleString()}`;
       if (cluster.status !== "shared" && pay.disabled)
-        pay.textContent = "Guest đang đóng góp consolidation";
+        pay.textContent = "Trường khách đang góp Điểm";
       pay.onclick = () =>
         void this.command({
           action: cluster.status === "shared" ? "upkeep" : "consolidate",
@@ -481,29 +512,36 @@ export class GameplayUI {
       box.append(text, pay);
       content.append(box);
     }
+    const destinations = document.createElement("details");
+    const destinationSummary = document.createElement("summary");
+    destinationSummary.textContent = "Công trình & trạm tiếp tế";
+    destinations.append(destinationSummary);
     for (const o of [
       ...this.objects.filter((o) => o.kind !== "hq"),
       ...(this.view?.chests ?? []),
     ]) {
+      if (!this.canShowObject(o)) continue;
       const row = document.createElement("div"),
         focus = document.createElement("button"),
         open = document.createElement("button");
       focus.textContent = "⌖";
-      focus.title = `Đi tới ${o.name}`;
+      focus.title = `Đi tới ${this.objectName(o)}`;
       focus.onclick = () => this.focus(o.x, o.z);
-      open.textContent =
-        o.kind === "chest" ? `${o.name} · (${o.x}, ${o.z})` : o.name;
+      open.textContent = this.devMode
+        ? `${o.name} · (${o.x}, ${o.z})`
+        : this.objectName(o);
       open.onclick = () => this.pick(o);
       row.append(focus, open);
-      content.append(row);
+      destinations.append(row);
     }
+    content.append(destinations);
     const history = document.createElement("details");
     const summary = document.createElement("summary");
     summary.textContent = "Lịch sử & thông báo";
     history.append(summary);
     for (const event of this.view?.events ?? []) {
       const row = document.createElement("p");
-      row.textContent = `${event.title} · ${event.body}`;
+      row.textContent = campaignDisplayText(`${event.title} · ${event.body}`);
       history.append(row);
     }
     content.append(history);

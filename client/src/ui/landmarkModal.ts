@@ -418,7 +418,7 @@ export class LandmarkModal {
             <div class="lm-progress-note">
               ${
                 isLit
-                  ? `⚡ Đèn hiệu đang chiếu rọi hào quang buff tri thức cho <strong>${litSchool?.shortName || litSchoolName}</strong>. Trường khác có thể nạp vượt mốc (cao hơn ít nhất 5%, hiện cần ${targetCrystals.toLocaleString()} tinh thể) để thắp Đèn hiệu!`
+                  ? `⚡ Đèn hiệu đang chiếu rọi đặc quyền tri thức cho <strong>${litSchool?.shortName || litSchoolName}</strong>. Trường khác có thể nạp vượt mốc (cao hơn ít nhất 5%, hiện cần ${targetCrystals.toLocaleString()} tinh thể) để thắp Đèn hiệu!`
                   : `💡 Đạt mốc ${maxCrystals} Tinh thể để thắp sáng Đèn hiệu tri thức và kích hoạt đặc quyền toàn trường!`
               }
             </div>
@@ -428,7 +428,7 @@ export class LandmarkModal {
           <div class="lm-buff-box ${data.buffActive ? "buff-active" : ""}">
             <div class="lm-buff-header">
               <span class="lm-buff-icon">${Icons.lightning(16)}</span>
-              <span class="lm-buff-label">HIỆU ỨNG ĐẶC QUYỀN TRI THỨC (BUFF)</span>
+              <span class="lm-buff-label">ĐẶC QUYỀN TRI THỨC</span>
               ${
                 data.buffActive
                   ? `<span class="lm-buff-badge active">${Icons.check(12)} ĐANG KÍCH HOẠT</span>`
@@ -436,11 +436,7 @@ export class LandmarkModal {
               }
             </div>
             <div class="lm-buff-content">
-              ${mySchoolGuessed ? data.buffDescription : "Buff được khám phá khi trường thắp Đèn hiệu."}
-            </div>
-            <div class="lm-buff-foot">
-              <span>Quy mô footprint: <strong>${data.footprint?.width || 40} × ${data.footprint?.height || 40} ô tiles</strong></span>
-              <span>Vị trí: <strong>(${data.x}, ${data.y})</strong></span>
+              ${mySchoolGuessed ? data.buffDescription : "Đặc quyền được khám phá khi trường thắp Đèn hiệu."}
             </div>
           </div>
 
@@ -512,12 +508,12 @@ export class LandmarkModal {
           <div class="lm-schools-leaderboard">
             <div class="lm-section-title">
               ${Icons.trophy(14)}
-              <span>CRYSTAL POT CỦA TRƯỜNG BẠN</span>
+              <span>TINH THỂ TRƯỜNG BẠN ĐÃ GÓP</span>
             </div>
             <div class="lm-schools-list">
               ${
                 schoolCrystalEntries.length === 0
-                  ? `<div class="lm-no-fuel lm-no-crystals">Trường bạn chưa đóng góp Crystal vào công trình này.</div>`
+                  ? `<div class="lm-no-fuel lm-no-crystals">Trường bạn chưa góp Tinh Thể vào công trình này.</div>`
                   : schoolCrystalEntries
                       .map((entry, idx) => {
                         const sc = SCHOOL_ROSTER[entry.schoolId];
@@ -588,7 +584,7 @@ export class LandmarkModal {
                 .map((amount) => {
                   const canAfford =
                     userCrystals >= amount && data.hasPath !== false;
-                  return `<button class="lm-crystal-btn ${canAfford ? "can-afford" : "cannot-afford"}" data-amount="${amount}" ${canAfford ? "" : "disabled"}><span class="lm-btn-icon">${Icons.crystal(16)}</span><span class="lm-btn-text">${amount === targetCrystals - myCrystals ? "Nạp đủ mốc" : "Nạp"} +${amount} Tinh Thể</span><span class="lm-btn-cost">-${amount} Crystal</span></button>`;
+                  return `<button class="lm-crystal-btn ${canAfford ? "can-afford" : "cannot-afford"}" data-amount="${amount}" ${canAfford ? "" : "disabled"}><span class="lm-btn-icon">${Icons.crystal(16)}</span><span class="lm-btn-text">${amount === targetCrystals - myCrystals ? "Nạp đủ mốc" : "Nạp"} +${amount} Tinh Thể</span><span class="lm-btn-cost">-${amount} Tinh Thể</span></button>`;
                 })
                 .join("")}
             </div>

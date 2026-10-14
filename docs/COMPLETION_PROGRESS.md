@@ -63,7 +63,7 @@ Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [steppin
 | PV15 editor/admin | FULL (G-V1 local/dev · ruleVersion 1) | 3 mẫu UniStop và 3 mẫu Chest trung lập; thêm/xóa/di dời trực quan trên 3D map; validate/publish/rollback transactional |
 | PV16 reconnect/recovery | FULL (G-V1 local/dev · ruleVersion 1) | PG durable command-key replay; reload/server reconstruction giữ ví, Key, Chest claim, Gift, pots, Beacon, deadlines/history; actor recovery scoped |
 | PV17 provider/campaign | FULL (G-V1 local/dev · ruleVersion 1) | Synthetic + HttpCampaignProvider; env CAMPAIGN_API_URL/CAMPAIGN_SHARED_SECRET; verified session khớp running_bindings; snapshot identity/revision được kiểm tra, convert Points một lần; contract trong README_PLAY và .env.example |
-| PV18 visual/normal-dev separation | FULL (G-V1 local/dev · ruleVersion 1) | Normal play/Dev tools tách riêng; V1 modules mounted; desktop/mobile guidance, minimap, modal/carousel QA; ảnh trong artifacts/g-v1 |
+| PV18 visual/normal-dev separation | FULL (G-V1 local/dev · ruleVersion 1) | Player UI Polish: một HUD, hành trang theo yêu cầu, thẻ ô theo ngữ cảnh, nhãn neo chân công trình và chống chồng lấp/thu gọn khi zoom xa; UniStop ẩn theo fog; Dev/Admin chỉ mount qua query/shortcut. Dock thủ công được PostgreSQL kiểm tra intent trước debit, replay ổn định. Nghiệm thu desktop/mobile tại 4176, 147/147 test PASS, build PASS. |
 
 ## Historical checkpoints
 

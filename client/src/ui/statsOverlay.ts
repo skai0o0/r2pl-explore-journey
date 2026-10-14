@@ -54,6 +54,7 @@ export class StatsOverlay {
   };
 
   public onFlyToHQRequested?: () => void;
+  public onInventoryRequested?: () => void;
   public onSchoolChange?: (schoolId: string) => void;
 
   constructor(parent?: HTMLElement, initialStats?: Partial<StudentStats>) {
@@ -80,7 +81,7 @@ export class StatsOverlay {
       explorationPercentage: 0.0,
       revealedTilesCount: 0,
       totalMapTiles: 1000000,
-      mode: "dev",
+      mode: "normal",
       isLocked: false,
       litLandmarksCount: 0,
       ...initialStats,
@@ -367,8 +368,8 @@ export class StatsOverlay {
       ? document.activeElement?.id
       : undefined;
     this.element.innerHTML = `
-      <button class="hud-identity" id="btnFlyHQ" title="Về trụ sở HQ">
-        <div class="hud-brand-tag"><span class="brand-predator-text">PREDATOR</span><span class="brand-r2pl-badge">R2PL</span></div>
+      <button class="hud-identity" id="btnFlyHQ" title="Về trụ sở (H)" aria-label="Về trụ sở">
+        <span class="hud-home-icon" aria-hidden="true">⌂</span>
         <span class="school-pill" style="--school-color:${this.stats.schoolColor}">
           <strong>${this.stats.schoolName || this.stats.schoolId.toUpperCase()}</strong>
         </span>
@@ -377,8 +378,9 @@ export class StatsOverlay {
         <div class="stat-points hud-resource" aria-label="Điểm Tri Thức">${Icons.star(18)}<span class="stat-content"><span class="stat-label">Điểm Tri Thức</span><strong class="stat-value">${this.stats.points.toLocaleString()}</strong></span></div>
         <div class="stat-crystals hud-resource" aria-label="Tinh Thể">${Icons.crystal(18)}<span class="stat-content"><span class="stat-label">Tinh Thể</span><strong class="stat-value">${(this.stats.crystals || 0).toLocaleString()}</strong></span></div>
       </div>
+      <button id="btnInventory" class="hud-inventory" aria-label="Mở hành trang" title="Chìa Khóa và hành trang">${Icons.key(18)}<strong>${(this.stats.aspireKeys ?? 0) + (this.stats.nitroKeys ?? 0) + (this.stats.predatorKeys ?? 0)}</strong><span>Hành trang</span></button>
       <div class="hud-progress-strip">
-        <div class="stat-territory"><span class="stat-label">Ô Tri Thức: </span><span class="stat-value">${(this.stats.totalSchoolTiles || 0).toLocaleString()} <small>ô (${(this.stats.controlPercentage || 0).toFixed(4)}%)</small></span></div>
+        <div class="stat-territory"><span class="stat-label">Ô Tri Thức: </span><span class="stat-value">${(this.stats.totalSchoolTiles || 0).toLocaleString()} <small>ô (${(this.stats.controlPercentage || 0).toFixed(2)}%)</small></span></div>
         <div class="stat-exploration"><span class="stat-label">Khám phá</span><span class="stat-value">${(this.stats.explorationPercentage || 0).toFixed(2)}% <small class="exploration-sub">(${(this.stats.revealedTilesCount || 0).toLocaleString()} ô)</small></span><progress class="hud-exploration-meter" max="100" value="${this.stats.explorationPercentage || 0}" aria-label="Tiến độ khám phá"></progress></div>
         <button class="stat-school-rank" id="btnSchoolRankPopover" aria-label="Xem bảng xếp hạng" aria-expanded="${this.showRankingPopover}">${Icons.trophy(18)}<span id="stat-school-rank-text">${this.getSchoolRankText()}</span><span aria-hidden="true">›</span></button>
       </div>
@@ -387,8 +389,8 @@ export class StatsOverlay {
         <header><strong>Hành trình khám phá</strong><button id="btnHudMenuClose" class="hud-menu-close" aria-label="Đóng menu">×</button></header>
         <p class="hud-player-name"></p>
         <div class="stat-beacons">Đèn hiệu đã thắp <strong class="stat-value">${this.stats.litLandmarksCount || 0} công trình</strong></div><div class="active-buffs">${this.stats.buffs?.map((b) => `<p>◆ ${b.name}: ${b.description}</p>`).join("") ?? ""}</div>
-        <div>Đã khám phá <strong>${this.stats.claimedTiles} ô</strong></div>
-        <p class="hud-menu-hint">Chạm tên trường để về HQ. Chạm bản đồ để tương tác với ô tri thức.</p>
+        <div>Đã khám phá <strong>${this.stats.revealedTilesCount ?? 0} ô</strong></div><p>Chìa Khóa: Aspire ${this.stats.aspireKeys ?? 0} · Nitro ${this.stats.nitroKeys ?? 0} · Predator ${this.stats.predatorKeys ?? 0}</p>
+        <p class="hud-menu-hint">Chạm tên trường để về trụ sở. Chạm bản đồ để tương tác với ô tri thức.</p>
       </section>
       <section class="school-ranking-popover" ${this.showRankingPopover ? "" : "hidden"} aria-label="Bảng xếp hạng">
         <header><strong>Bảng xếp hạng Ô Tri Thức</strong><button id="btn-close-ranking-popover" aria-label="Đóng bảng xếp hạng">×</button></header>
@@ -402,6 +404,9 @@ export class StatsOverlay {
   }
 
   private bindEvents(): void {
+    this.element
+      .querySelector("#btnInventory")
+      ?.addEventListener("click", () => this.onInventoryRequested?.());
     this.element
       .querySelector("#btnFlyHQ")
       ?.addEventListener("click", () => this.onFlyToHQRequested?.());

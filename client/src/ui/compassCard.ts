@@ -69,6 +69,11 @@ export function nearestTarget(
 }
 
 export class CompassCard {
+  private solved = new Set<string>();
+  setSolvedLandmarks(ids: readonly string[]): void {
+    this.solved = new Set(ids);
+    this.refreshSoon();
+  }
   readonly element = document.createElement("section");
   readonly #objects: readonly WorldObject[];
   readonly #hooks: CompassHooks;
@@ -103,7 +108,10 @@ export class CompassCard {
     const station = nearestTarget(
       this.#objects,
       this.#hooks,
-      (o) => o.kind === "unistop" && o.tier === "aspire",
+      (o) =>
+        o.kind === "unistop" &&
+        o.tier === "aspire" &&
+        o.ownerSchoolSlot !== this.#slot,
     );
     const landmark = nearestTarget(
       this.#objects,
@@ -113,7 +121,7 @@ export class CompassCard {
     this.element.replaceChildren();
     const title = document.createElement("p");
     title.className = "eyebrow";
-    title.textContent = "MỤC TIÊU TIẾP THEO";
+    title.textContent = "MỤC TIÊU";
     this.element.append(title);
     if (station)
       this.element.append(
@@ -124,13 +132,13 @@ export class CompassCard {
           "Mở đường ngay!",
         ),
       );
-    if (landmark)
+    if (landmark && (!station || station.distance === 0))
       this.element.append(
         this.#row(
           "compass-landmark",
-          `Địa danh gần nhất · ${landmark.object.name}`,
+          `Công trình gần nhất · ${this.solved.has(landmark.object.id) ? landmark.object.name : "Bí ẩn đang chờ bạn"}`,
           landmark,
-          "Tích Points mở đường!",
+          "Mở đường để khám phá!",
         ),
       );
   }
@@ -181,7 +189,7 @@ export class CompassCard {
     const toast = document.createElement("div");
     toast.className = "welcome-toast glass";
     toast.setAttribute("role", "status");
-    toast.textContent = `Chào mừng chiến binh ${schoolName}! Bạn đang có ${points} Points từ giải chạy.`;
+    toast.textContent = `Chào mừng chiến binh ${schoolName}! Bạn đang có ${points} Điểm Tri Thức từ giải chạy.`;
     document.body.append(toast);
     this.#toast = toast;
     window.setTimeout(() => toast.remove(), 7000);

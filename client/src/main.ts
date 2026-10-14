@@ -16,7 +16,6 @@ import {
   ACK_STATUS,
   decodeAck,
   decodeDelta,
-  decodeError,
   decodeFrame,
   decodeSnapshot,
   encodeExplore,
@@ -37,9 +36,13 @@ import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
 import { CompassCard } from "./ui/compassCard.ts";
 import { MiniMap } from "./ui/miniMap.ts";
+import { NotificationBanner } from "./ui/notificationBanner.ts";
+import {
+  objectDisplayName,
+  uiModeFromSearch,
+} from "./ui/playerPresentation.ts";
 import { StatsOverlay } from "./ui/statsOverlay.ts";
 import { StudentActionDock } from "./ui/studentActionDock.ts";
-import { TileTooltip } from "./ui/tileTooltip.ts";
 import {
   deriveDevCreditState,
   type PickedTile,
@@ -52,7 +55,6 @@ import {
   LEGACY_DEV_SESSION,
   parseDevSession,
 } from "../../shared/integration/devSession.ts";
-import { RewardsPanel } from "./rewardsPanel.ts";
 
 // Codex-owned transport bootstrap contract; existing presentation stays intact.
 const bootstrapResponse = await fetch("/api/fixture/bootstrap", {
@@ -77,18 +79,19 @@ await fetchModelManifest();
 const miniMap = new MiniMap();
 miniMap.setObjects(publicWorld);
 const dock = new StudentActionDock();
-const tooltip = new TileTooltip();
-document.body.dataset.debug = "false";
-const devToggle = document.createElement("button");
-devToggle.className = "dev-toggle";
-devToggle.textContent = "Dev tools";
-devToggle.setAttribute("aria-pressed", "false");
-devToggle.onclick = () => {
-  const on = document.body.dataset.debug !== "true";
-  document.body.dataset.debug = String(on);
-  devToggle.setAttribute("aria-pressed", String(on));
-};
-document.body.append(devToggle);
+const uiMode = uiModeFromSearch(location.search);
+const isDev = uiMode === "dev";
+document.body.dataset.mode = uiMode;
+document.body.dataset.debug = String(isDev);
+if (isDev) {
+  const template = document.getElementById(
+    "dev-tools-template",
+  ) as HTMLTemplateElement;
+  document
+    .querySelector(".game-shell")!
+    .append(template.content.cloneNode(true));
+}
+miniMap.element.append(document.querySelector(".map-tools")!);
 const players = session.players;
 type Player = DevPlayer;
 
@@ -111,6 +114,27 @@ interface PendingAction {
 
 const get = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
+  if (
+    !element &&
+    [
+      "school-name",
+      "player-name",
+      "balance",
+      "explore-cost",
+      "pending-count",
+      "viewport-count",
+      "activity-list",
+      "player-select",
+      "strip-hover",
+    ].includes(id)
+  )
+    return document.createElement(
+      id === "player-select"
+        ? "select"
+        : id === "activity-list"
+          ? "ul"
+          : "span",
+    ) as T;
   if (!element) throw new Error(`Missing game UI element: ${id}`);
   return element as T;
 };
@@ -161,8 +185,7 @@ function lacksTestCredits(): boolean {
 
 function showInsufficientCredits(): void {
   ui.explore.disabled = true;
-  ui.explore.innerHTML =
-    "<span>✦</span> Not enough Points <small>Explore unavailable</small>";
+  ui.explore.textContent = "Chưa đủ Điểm Tri Thức";
 }
 
 function activity(message: string, kind = "normal"): void {
@@ -175,6 +198,11 @@ function activity(message: string, kind = "normal"): void {
   }
   ui.action.textContent = message;
   ui.action.dataset.kind = kind;
+  if (kind === "error" || (kind === "success" && selected))
+    NotificationBanner.show({
+      title: kind === "error" ? "Chưa thể thực hiện" : "Hành trình khám phá",
+      body: message,
+    });
 }
 
 function status(label: string, online: boolean): void {
@@ -192,19 +220,6 @@ function keyHex(bytes: Uint8Array): string {
 
 function updatePending(): void {
   ui.pending.textContent = String(pending.size);
-  if (selected) {
-    const isThisPending = Array.from(pending.values()).some(
-      (a) => a.tile.index === selected?.index,
-    );
-    if (isThisPending) {
-      ui.explore.disabled = true;
-      ui.explore.innerHTML =
-        '<span class="spin">✦</span> Committing… <small>1 / 2 Points</small>';
-      ui.badge.textContent = "COMMITTING";
-      ui.badge.className = "badge-tag committing";
-      return;
-    }
-  }
 }
 
 function expansionBlocked(tile: PickedTile): boolean {
@@ -228,118 +243,98 @@ function expansionBlocked(tile: PickedTile): boolean {
 }
 
 function updateTile(): void {
-  if (!selected) {
-    ui.tile.textContent = "— / —";
-    ui.knowledge.textContent = "Select a tile on the map";
-    ui.badge.textContent = "IDLE";
-    ui.badge.className = "badge-tag";
-    ui.explore.disabled = true;
-    ui.explore.innerHTML =
-      "<span>✦</span> Explore tile <small>1 / 2 Points</small>";
-    return;
-  }
-
-  ui.tile.textContent = `${selected.x.toString().padStart(3, "0")} / ${selected.z.toString().padStart(3, "0")}`;
-
-  const isPending = Array.from(pending.values()).some(
-    (a) => a.tile.index === selected?.index,
+  get("explore-button").closest<HTMLElement>(".tile-panel")!.hidden = !selected;
+  if (!selected) return;
+  const object = objectAt(selected.x, selected.z, [
+    ...publicWorld,
+    ...privateObjects,
+  ]);
+  const owned =
+    replica.hasChunk(selected.chunk) &&
+    !!(replica.maskAt(selected.chunk, selected.local) & (1 << player.slot));
+  const discovered =
+    replica.hasChunk(selected.chunk) &&
+    replica.isDiscovered(selected.chunk, selected.local);
+  ui.tile.textContent = object
+    ? gameplay.objectName(object)
+    : owned
+      ? "Tri thức trường mình"
+      : discovered
+        ? "Vùng đã khám phá"
+        : "Vùng sương mù";
+  if (isDev) ui.tile.textContent += " · " + selected.x + ", " + selected.z;
+  ui.action.textContent = "";
+  ui.badge.textContent = owned
+    ? "ĐÃ MỞ"
+    : discovered
+      ? "ĐÃ KHÁM PHÁ"
+      : "CHƯA KHÁM PHÁ";
+  ui.badge.className = "badge-tag " + (owned ? "owned" : "fogged");
+  const waiting = [...pending.values()].some(
+    (a) => a.tile.index === selected!.index,
   );
-  if (isPending) {
-    ui.knowledge.textContent = "Exploration sent · Awaiting PostgreSQL commit";
-    ui.badge.textContent = "COMMITTING";
-    ui.badge.className = "badge-tag committing";
+  if (waiting) {
+    ui.knowledge.textContent = "Đang xác nhận thao tác của bạn…";
+    ui.badge.textContent = "ĐANG XỬ LÝ";
     ui.explore.disabled = true;
-    ui.explore.innerHTML =
-      '<span class="spin">✦</span> Committing… <small>1 / 2 Points</small>';
+    ui.explore.textContent = "Đang xử lý…";
     return;
   }
-
+  if (object && object.kind !== "hq") {
+    ui.knowledge.textContent =
+      object.kind === "landmark"
+        ? "Giải đố và góp Tinh Thể để thắp Đèn Hiệu."
+        : object.kind === "chest"
+          ? "Dùng Chìa Khóa cùng cấp để mở rương."
+          : "Nhận tài nguyên khi trường bạn giữ trạm.";
+    ui.explore.disabled = !gameplay.canShowObject(object);
+    ui.explore.textContent =
+      object.kind === "landmark"
+        ? "Xem công trình"
+        : object.kind === "chest"
+          ? "Xem rương"
+          : "Xem trạm tiếp tế";
+    return;
+  }
+  if (owned) {
+    ui.knowledge.textContent =
+      "Ô này đã thuộc tri thức của trường bạn. Không mất Điểm Tri Thức.";
+    ui.explore.disabled = true;
+    ui.explore.textContent = "Đã mở · 0 Điểm";
+    return;
+  }
   if (expansionBlocked(selected)) {
     ui.knowledge.textContent =
-      "Chỉ mở ô chung cạnh với tri thức của trường; HQ trường khác được bảo vệ.";
-    ui.badge.textContent = "OUTSIDE FRONTIER";
-    ui.badge.className = "badge-tag fogged";
+      "Chọn ô chung cạnh với vùng tri thức của trường. Trụ sở trường khác được bảo vệ.";
     ui.explore.disabled = true;
-    ui.explore.textContent = "Chọn ô liền kề vùng của trường";
+    ui.explore.textContent = "Cần mở đường tới đây";
     return;
   }
-
-  // Check public fixtures
+  if (dock.getActiveMode() === "beacon" && !dock.isSmart()) {
+    ui.knowledge.textContent = "Chọn một công trình để thắp Đèn Hiệu.";
+    ui.explore.disabled = true;
+    ui.explore.textContent = "Chọn công trình";
+    return;
+  }
+  const study = !dock.isSmart() && dock.getActiveMode() === "study";
+  const cost = study
+    ? GAME_CONFIG.knowledge.sharedPoints
+    : GAME_CONFIG.knowledge.explorePoints;
+  ui.knowledge.textContent = dock.isSmart()
+    ? "Tự chọn Khám Phá hoặc Giao Lưu theo ô bạn chạm."
+    : study
+      ? "Giao lưu ô có tri thức của một trường khác."
+      : "Khám phá ô mới để mở rộng tri thức của trường.";
+  ui.explore.disabled = !room;
+  ui.explore.textContent = dock.isSmart()
+    ? "Mở tri thức · 1–2 Điểm"
+    : (study ? "Giao Lưu" : "Khám Phá") + " · " + cost + " Điểm";
   if (
-    session === LEGACY_DEV_SESSION &&
-    selected.x === 215 &&
-    selected.z === 235
-  ) {
-    ui.knowledge.textContent = "Dawn Headquarters · Public sanctuary fixture";
-    ui.badge.textContent = "DAWN HQ";
-    ui.badge.className = "badge-tag fixture";
-  } else if (
-    session === LEGACY_DEV_SESSION &&
-    selected.x === 785 &&
-    selected.z === 765
-  ) {
-    ui.knowledge.textContent = "Dusk Headquarters · Public sanctuary fixture";
-    ui.badge.textContent = "DUSK HQ";
-    ui.badge.className = "badge-tag fixture";
-  } else if (selected.x === 510 && selected.z === 485) {
-    ui.knowledge.textContent =
-      "Scenic Landmark · Visual placeholder (no rewards)";
-    ui.badge.textContent = "LANDMARK";
-    ui.badge.className = "badge-tag fixture";
-  } else if (!replica.hasChunk(selected.chunk)) {
-    ui.knowledge.textContent =
-      "Unsubscribed sector · Click to explore & subscribe";
-    ui.badge.textContent = "STREAMING";
-    ui.badge.className = "badge-tag streaming";
-  } else {
-    const isDiscovered = replica.isDiscovered(selected.chunk, selected.local);
-    const isOwned =
-      isDiscovered &&
-      (replica.maskAt(selected.chunk, selected.local) & (1 << player.slot)) !==
-        0;
-
-    if (isOwned) {
-      ui.knowledge.textContent =
-        session.adjacentOnly &&
-        headquartersOwner(selected.index, session.headquarters ?? []) ===
-          player.slot
-          ? `${player.schoolName} HQ · Vùng tri thức khởi tạo 20×20 · không tốn credit`
-          : `${player.schoolName} territory · Authorized presence`;
-      ui.badge.textContent = "OWNED";
-      ui.badge.className = "badge-tag owned";
-      ui.explore.disabled = true;
-      ui.explore.innerHTML =
-        "<span>✓</span> Already Explored <small>0 Points</small>";
-      return;
-    }
-
-    if (isDiscovered) {
-      ui.knowledge.textContent =
-        "Discovered territory · Unclaimed university presence";
-      ui.badge.textContent = "SCOUTED";
-      ui.badge.className = "badge-tag scouted";
-      if (lacksTestCredits()) {
-        showInsufficientCredits();
-      } else {
-        ui.explore.disabled = !room;
-        ui.explore.innerHTML =
-          "<span>✦</span> Establish Knowledge <small>1 / 2 Points</small>";
-      }
-      return;
-    }
-
-    ui.knowledge.textContent = "Unexplored territory · Shrouded in Fog of War";
-    ui.badge.textContent = "FOGGED";
-    ui.badge.className = "badge-tag fogged";
-  }
-
-  if (lacksTestCredits()) {
+    profileBalance !== undefined &&
+    /^\d+$/.test(profileBalance) &&
+    BigInt(profileBalance) < BigInt(cost)
+  )
     showInsufficientCredits();
-  } else {
-    ui.explore.disabled = !room;
-    ui.explore.innerHTML =
-      "<span>✦</span> Explore tile <small>1 / 2 Points</small>";
-  }
 }
 
 function updateHover(hovered?: PickedTile): void {
@@ -378,7 +373,10 @@ async function refreshProfile(token = player.token): Promise<void> {
     dock.setPoints(Number(profile.balance));
     stats.updateStats({
       studentName: profile.name,
-      displayName: profile.name,
+      displayName:
+        !isDev && /Explorer|explorer|connector|steward/.test(profile.name)
+          ? `Chiến binh ${profile.schoolName}`
+          : profile.name,
       schoolId: SCHOOLS[player.slot]?.id ?? "hcmut",
       schoolName: profile.schoolName,
       schoolColor: SCHOOLS[player.slot]?.color ?? "#fff",
@@ -387,7 +385,6 @@ async function refreshProfile(token = player.token): Promise<void> {
     if (profile.inventory) {
       dock.setCrystals(Number(profile.inventory.crystals));
     }
-    rewards.refresh();
     updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
     if (!welcomed.has(token) && profile.balance !== undefined) {
@@ -396,7 +393,7 @@ async function refreshProfile(token = player.token): Promise<void> {
     }
   } catch {
     if (attempt === generation && token === player.token)
-      activity("Balance temporarily unavailable", "error");
+      activity("Chưa đồng bộ được số dư. Vui lòng thử lại.", "error");
   }
 }
 
@@ -405,18 +402,10 @@ function refreshBalanceSoon(): void {
   balanceTimer = window.setTimeout(() => void refreshProfile(), 180);
 }
 
-const rewards = new RewardsPanel(
-  false,
-  (token) => {
-    if (token === player.token) void refreshProfile(token);
-  },
-  session.campaignId,
-);
-
 const world = new WorldView(
   get("world-view"),
   (tile) => {
-    if (operator.relocating) {
+    if (operator?.relocating) {
       operator.relocate(tile.x, tile.z);
       return;
     }
@@ -426,8 +415,12 @@ const world = new WorldView(
       ...publicWorld,
       ...privateObjects,
     ]);
-    if (object && object.kind !== "hq") gameplay.pick(object);
-    else explore();
+    world.setSelectedObject(object?.id);
+    if (object && object.kind !== "hq" && gameplay.canShowObject(object))
+      gameplay.pick(object);
+    else if (dock.isSmart()) explore();
+    else if (dock.getActiveMode() === "beacon")
+      activity("Chọn một công trình để thắp Đèn Hiệu.");
   },
   () => {
     scheduleSubscribe();
@@ -436,22 +429,10 @@ const world = new WorldView(
   },
   (hovered) => {
     updateHover(hovered);
-    if (hovered)
-      tooltip.show({
-        x: hovered.x,
-        z: hovered.z,
-        owned: !!(
-          replica.maskAt(hovered.chunk, hovered.local) &
-          (1 << player.slot)
-        ),
-        discovered: replica.isDiscovered(hovered.chunk, hovered.local),
-        adjacent: !expansionBlocked(hovered),
-        object: objectAt(hovered.x, hovered.z, [
-          ...publicWorld,
-          ...privateObjects,
-        ]),
-      });
-    else tooltip.hide();
+    const object = hovered
+      ? objectAt(hovered.x, hovered.z, [...publicWorld, ...privateObjects])
+      : undefined;
+    world.setHoveredObject(object?.id);
   },
   session.headquarters
     ? {
@@ -463,8 +444,9 @@ const world = new WorldView(
               : SCHOOLS[o.schoolSlot]!.color,
           x: o.x,
           z: o.z,
-          title: o.name,
-          detail: `${o.width}×${o.height}`,
+          title: objectDisplayName(o, false),
+          detail: "",
+          schoolSlot: o.schoolSlot,
           kind: o.kind,
         })),
         placements: publicWorld
@@ -482,16 +464,20 @@ const world = new WorldView(
     : {},
 );
 
-const operator = new OperatorUI(
-  (x, z) => world.animateFocus(x, z, 100),
-  (objects) => world.setEditorPreview(objects),
-);
+const operator =
+  uiMode !== "player"
+    ? new OperatorUI(
+        (x, z) => world.animateFocus(x, z, 100),
+        (objects) => world.setEditorPreview(objects),
+      )
+    : undefined;
 const stats = new StatsOverlay();
+stats.onInventoryRequested = () => gameplay.openInventory();
 const compass = new CompassCard(publicWorld, {
   nearestOwned: (target) => world.nearestOwned(target),
   focus: (x, z, span) => world.animateFocus(x, z, span),
 });
-Object.assign(window, { world, compass });
+if (isDev) Object.assign(window, { world, compass });
 const welcomed = new Set<string>();
 /** First Landmark on this school's stepping-stone path (falls back to the map centre). */
 function homeLandmark(): { x: number; z: number; id: string } {
@@ -536,7 +522,7 @@ window.setInterval(() => {
         }
       }
       if (changed) {
-        miniMap.setObjects(publicWorld);
+        miniMap.setObjects([...publicWorld, ...privateObjects]);
         world.updateObjects(publicWorld);
       }
       if (
@@ -545,7 +531,7 @@ window.setInterval(() => {
       ) {
         const update = document.createElement("button");
         update.className = "layout-update";
-        update.textContent = "Bản đồ đã cập nhật · Tải layout mới";
+        update.textContent = "Bản đồ có thay đổi · Làm mới";
         update.onclick = () => location.reload();
         document.body.append(update);
       }
@@ -557,6 +543,9 @@ const gameplay = new GameplayUI(
   (x, z) => world.focus(x, z, 100),
   (view) => {
     world.setBeacons(view.landmarks);
+    compass.setSolvedLandmarks(
+      view.landmarks.filter((l) => l.solved).map((l) => l.id),
+    );
     const sharedTiles = new Map<number, readonly number[]>();
     for (const cluster of view.shared)
       for (const tile of cluster.tileIndexes ?? [])
@@ -596,6 +585,8 @@ const gameplay = new GameplayUI(
   () => void refreshProfile(),
   session.campaignId ?? "",
   (id) => world.setChestOpen(id, true),
+  isDev,
+  (object) => object.kind !== "unistop" || world.isObjectDiscovered(object),
 );
 miniMap.onPanRequested = (x, z) => world.animateFocus(x, z, 100);
 miniMap.onPanLive = (x, z) => world.focus(x, z, 100);
@@ -603,6 +594,7 @@ miniMap.onZoomIn = () => world.zoom(0.72);
 miniMap.onZoomOut = () => world.zoom(1.38);
 miniMap.onRecenter = () =>
   world.animateFocus(player.home.x, player.home.z, 100);
+dock.onToggleSmart = () => updateTile();
 dock.onModeChange(() => {
   if (selected) updateTile();
 });
@@ -620,13 +612,15 @@ const overviewButton = get<HTMLButtonElement>("overview-button");
 const worldHost = get<HTMLElement>("world-view");
 
 function announceCameraMode(log: boolean): void {
-  const label = world.cameraMode === "isometric" ? "Isometric 3D" : "Top-down";
-  overviewButton.title = `World overview (O) · ${label} view · toggle view (I)`;
+  const label =
+    world.cameraMode === "isometric" ? "Góc nhìn 3D" : "Góc nhìn từ trên";
+  overviewButton.title = "Toàn bản đồ (O)";
+  get("camera-button").setAttribute("aria-label", `Đổi góc nhìn · ${label}`);
   worldHost.setAttribute(
     "aria-label",
-    `Interactive thousand by thousand tile world, ${label} view. Press I to toggle camera view.`,
+    `Bản đồ Hành trình Khám phá. ${label}. Nhấn I để đổi góc nhìn.`,
   );
-  if (log) activity(`${label} camera · press I to toggle view`);
+  if (log && isDev) activity(`${label} · nhấn I để đổi góc nhìn`);
 }
 
 announceCameraMode(true);
@@ -660,8 +654,16 @@ function subscribeNow(): void {
 }
 
 function explore(): void {
+  const object = selected
+    ? objectAt(selected.x, selected.z, [...publicWorld, ...privateObjects])
+    : undefined;
+  if (object && object.kind !== "hq") {
+    if (gameplay.canShowObject(object)) gameplay.pick(object);
+    return;
+  }
+  if (!dock.isSmart() && dock.getActiveMode() === "beacon") return;
   if (!room || !selected) {
-    activity("Select a tile while connected", "error");
+    activity("Chọn một ô khi đã kết nối.", "error");
     return;
   }
   if (expansionBlocked(selected)) {
@@ -673,9 +675,17 @@ function explore(): void {
     );
     return;
   }
-  if (lacksTestCredits()) {
+  const required =
+    !dock.isSmart() && dock.getActiveMode() === "study"
+      ? GAME_CONFIG.knowledge.sharedPoints
+      : GAME_CONFIG.knowledge.explorePoints;
+  if (
+    profileBalance !== undefined &&
+    /^\d+$/.test(profileBalance) &&
+    BigInt(profileBalance) < BigInt(required)
+  ) {
     showInsufficientCredits();
-    activity("Not enough Points to explore", "normal");
+    activity("Chưa đủ Điểm Tri Thức để mở ô.", "normal");
     return;
   }
   const key = crypto.getRandomValues(new Uint8Array(16));
@@ -685,6 +695,14 @@ function explore(): void {
       key,
       tileIndex: selected.index,
       ruleVersion: session === LEGACY_DEV_SESSION ? 0 : GAME_CONFIG.ruleVersion,
+      ...(session === LEGACY_DEV_SESSION || dock.isSmart()
+        ? {}
+        : {
+            intent:
+              dock.getActiveMode() === "study"
+                ? ("study" as const)
+                : ("explore" as const),
+          }),
     }),
     tile: selected,
     token: player.token,
@@ -693,10 +711,7 @@ function explore(): void {
   world.setPending(selected);
   updatePending();
   updateTile();
-  activity(
-    `Exploring ${selected.x}, ${selected.z} · awaiting durable commit`,
-    "pending",
-  );
+  activity("Đang mở tri thức…", "pending");
   room.sendBytes("m2", action.frame);
 }
 
@@ -711,9 +726,8 @@ function handleFrame(raw: Uint8Array): void {
         pending.delete(action.key);
         world.setPending(Array.from(pending.values()).at(-1)?.tile);
         updatePending();
-        const place = `${action.tile.x}, ${action.tile.z}`;
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
-          activity(`Explored ${place} · committed`, "success");
+          activity("Đã mở tri thức cho trường bạn.", "success");
           world.playReveal(action.tile.x, action.tile.z, player.slot);
           if (session !== LEGACY_DEV_SESSION) {
             const fogChunks = new Set<number>();
@@ -737,13 +751,17 @@ function handleFrame(raw: Uint8Array): void {
             for (const id of fogChunks) room?.sendBytes("m2", encodeResync(id));
           }
         } else if (ack.status === ACK_STATUS.TEST_NO_CHANGE) {
-          activity(`${place} already explored · no credit spent`, "normal");
+          activity(
+            "Ô này đã có tri thức của trường bạn · không mất Điểm.",
+            "normal",
+          );
         } else {
-          const reasonCode =
-            Object.entries(REASON).find(
-              ([, value]) => value === ack.reason,
-            )?.[0] ?? String(ack.reason);
-          activity(`Exploration failed (${reasonCode})`, "error");
+          activity(
+            ack.reason === REASON.WRONG_ACTION
+              ? "Ô này không phù hợp với thao tác đã chọn. Chuyển sang Tự Động hoặc đổi Khám Phá/Giao Lưu."
+              : "Chưa thể mở ô này. Kiểm tra đường đi và số Điểm của bạn.",
+            "error",
+          );
           world.playReject(action.tile.x, action.tile.z);
         }
         updateTile();
@@ -774,17 +792,11 @@ function handleFrame(raw: Uint8Array): void {
         break;
       }
       case M2_KIND.ERROR:
-        activity(
-          `Server request rejected (${decodeError(frame.payload)})`,
-          "error",
-        );
+        activity("Chưa thể thực hiện thao tác. Vui lòng thử lại.", "error");
         break;
     }
   } catch (error) {
-    activity(
-      `View needs resynchronization: ${error instanceof Error ? error.message : String(error)}`,
-      "error",
-    );
+    activity("Đang đồng bộ lại bản đồ…", "error");
     for (const id of world.visibleChunkIds(selected?.chunk))
       room?.sendBytes("m2", encodeResync(id));
   }
@@ -795,7 +807,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   window.clearTimeout(reconnectTimer);
   if (player.token !== nextPlayer.token) {
     ui.activity.replaceChildren();
-    ui.action.textContent = "Switching synthetic explorer…";
+    ui.action.textContent = "Đang chuyển tài khoản…";
     pending.clear();
     world.setPending(undefined);
     updatePending();
@@ -808,7 +820,6 @@ async function connect(nextPlayer: Player): Promise<void> {
   privateObjects = [];
   world.setPrivateObjects([]);
   miniMap.setObjects(publicWorld);
-  rewards.select(player.token, player.label);
   gameplay.select(player);
   ui.balance.textContent = "—";
   ui.player.textContent = player.label;
@@ -832,7 +843,7 @@ async function connect(nextPlayer: Player): Promise<void> {
     session === LEGACY_DEV_SESSION ? 275 : 72,
   );
   updateTile();
-  status("Connecting…", false);
+  status("Đang kết nối…", false);
   void refreshProfile();
   try {
     const joined = await sdk.joinOrCreate("m2", { token: player.token });
@@ -848,19 +859,19 @@ async function connect(nextPlayer: Player): Promise<void> {
       if (attempt !== generation) return;
       room = undefined;
       subscribed = "";
-      status("Disconnected · reconnecting", false);
+      status("Đang kết nối lại…", false);
       reconnectTimer = window.setTimeout(() => void connect(player), 1200);
     });
-    status("Connected · protocol v1", true);
-    activity(`Entered ${player.schoolName} world`, "success");
+    status("Trực tuyến", true);
+    activity(`Sẵn sàng khám phá cùng ${player.schoolName}.`, "success");
     subscribeNow();
     for (const action of pending.values()) {
       if (action.token === player.token) joined.sendBytes("m2", action.frame);
     }
   } catch {
     if (attempt !== generation) return;
-    status("Server unavailable", false);
-    activity("Could not enter world · use Reconnect", "error");
+    status("Chưa thể kết nối", false);
+    activity("Chưa thể vào bản đồ. Bấm Kết nối lại để thử.", "error");
   }
 }
 
@@ -876,9 +887,6 @@ ui.select.addEventListener("change", () => {
 ui.explore.addEventListener("click", explore);
 ui.retry.addEventListener("click", () => void connect(player));
 
-get("home-button").addEventListener("click", () =>
-  world.animateFocus(player.home.x, player.home.z, 200),
-);
 get("landmark-button").addEventListener("click", () => {
   const first = homeLandmark();
   world.animateFocus(first.x, first.z, 200);
@@ -886,12 +894,34 @@ get("landmark-button").addEventListener("click", () => {
 overviewButton.addEventListener("click", () =>
   world.animateFocus(500, 500, 1000),
 );
-get("zoom-in").addEventListener("click", () => world.zoom(0.72));
-get("zoom-out").addEventListener("click", () => world.zoom(1.38));
+get("camera-button").addEventListener("click", () => {
+  world.toggleCameraMode();
+  announceCameraMode(false);
+});
+get("tile-close").addEventListener("click", () => {
+  selected = undefined;
+  world.setSelectedObject(undefined);
+  updateTile();
+});
 
 window.addEventListener("keydown", (event) => {
   if (
-    rewards.open ||
+    event.ctrlKey &&
+    event.altKey &&
+    ["d", "a"].includes(event.key.toLowerCase())
+  ) {
+    event.preventDefault();
+    const url = new URL(location.href);
+    url.searchParams.delete("mode");
+    url.searchParams.delete("admin");
+    if (uiMode === "player") {
+      if (event.key.toLowerCase() === "d") url.searchParams.set("mode", "dev");
+      else url.searchParams.set("admin", "1");
+    }
+    location.assign(url.toString());
+    return;
+  }
+  if (
     gameplay.open ||
     event.target instanceof HTMLButtonElement ||
     event.target instanceof HTMLSelectElement ||

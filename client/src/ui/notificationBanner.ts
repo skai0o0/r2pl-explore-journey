@@ -194,7 +194,7 @@ export class NotificationBanner {
         </div>
         <div class="banner-body-content">
           <div class="banner-meta-header">
-            <span class="banner-app-tag">PREDATOR CAMPUS</span>
+            <span class="banner-app-tag">R2PL 2027</span>
             <span class="banner-cat-badge">${catMeta.label}</span>
           </div>
           <div class="banner-title">${NotificationBanner.escapeHtml(options.title)}</div>

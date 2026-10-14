@@ -115,6 +115,7 @@ export class M35FixtureAuthority {
     schoolSlot: number,
     key: Uint8Array,
     tileIndex: number,
+    intent?: "explore" | "study",
   ): Promise<ApplyOutcome> {
     const command: M3TestCommand = {
       campaignId: this.#campaignId,
@@ -123,6 +124,7 @@ export class M35FixtureAuthority {
       key,
       tileIndex,
       cost: this.#cost,
+      ...(intent ? { intent } : {}),
     };
     const outcome = await this.#mutations.apply(command, this.#faultHooks);
     if (outcome.outboxId) {

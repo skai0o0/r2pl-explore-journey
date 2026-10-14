@@ -33,6 +33,11 @@ import {
 } from "./assetRegistry.ts";
 import { LandscapeEffects } from "./landscape.ts";
 import { createProceduralBuilding } from "./proceduralBuildings.ts";
+import {
+  footprintDiscovered,
+  layoutMapLabels,
+  objectDisplayName,
+} from "./ui/playerPresentation.ts";
 
 export interface PickedTile {
   readonly x: number;
@@ -236,6 +241,7 @@ export interface WorldMarker {
   readonly kind: string;
   readonly id?: string;
   readonly color?: string;
+  readonly schoolSlot?: number | undefined;
 }
 const markers: readonly WorldMarker[] = [
   {
@@ -386,7 +392,13 @@ export class WorldView {
     { pixels: Uint8Array; texture: THREE.DataTexture; mesh: THREE.Mesh }
   >();
   readonly #markerElements: HTMLElement[] = [];
-  readonly #markers: readonly WorldMarker[];
+  readonly #markers: WorldMarker[];
+  readonly #catalog: readonly WorldObject[];
+  readonly #solvedLandmarks = new Set<string>();
+  readonly #isDev: boolean;
+  #selectedObject: string | undefined;
+  #hoveredObject: string | undefined;
+  #privateDigest = "";
   readonly #assetMounts: AssetMount[] = [];
   readonly #assetRoots: THREE.Group[] = [];
   readonly #privateObjects = new THREE.Group();
@@ -442,7 +454,9 @@ export class WorldView {
     this.#onPick = onPick;
     this.#onViewChange = onViewChange;
     this.#onHover = onHover;
-    this.#markers = layout.markers ?? markers;
+    this.#markers = [...(layout.markers ?? markers)];
+    this.#catalog = layout.objects ?? [];
+    this.#isDev = document.body.dataset.debug === "true";
 
     this.#renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -639,13 +653,22 @@ export class WorldView {
       if (marker.color) element.style.color = marker.color;
       const glyph = document.createElement("span");
       glyph.className = "marker-glyph";
-      glyph.textContent = marker.kind === "landmark" ? "â—†" : "âŒ‚";
+      glyph.textContent =
+        marker.kind === "landmark"
+          ? "◆"
+          : marker.kind === "unistop"
+            ? "◉"
+            : marker.kind === "chest"
+              ? "▣"
+              : "⌂";
       const copy = document.createElement("span");
       copy.className = "marker-copy";
       const title = document.createElement("b");
       title.textContent = marker.title;
       const detail = document.createElement("small");
-      detail.textContent = marker.detail;
+      detail.textContent = this.#isDev ? marker.detail : "";
+      detail.hidden = !this.#isDev;
+      element.dataset.markerId = marker.id ?? marker.title;
       copy.append(title, detail);
       element.append(glyph, copy);
       host.append(element);
@@ -665,7 +688,7 @@ export class WorldView {
     this.#pendingElement = document.createElement("div");
     this.#pendingElement.className = "tile-pending";
     this.#pendingElement.innerHTML =
-      '<span class="pending-radar"></span><span class="pending-tag">COMMITTING</span>';
+      '<span class="pending-radar"></span><span class="pending-tag">ĐANG XỬ LÝ</span>';
     this.#pendingElement.hidden = true;
     host.append(this.#pendingElement);
 
@@ -732,25 +755,36 @@ export class WorldView {
   }
 
   setBeacons(
-    beacons: readonly { id: string; holder: number | null; target: number }[],
+    beacons: readonly {
+      id: string;
+      holder: number | null;
+      target: number;
+      solved?: boolean;
+    }[],
   ): void {
     for (const child of [...this.#beacons.children]) {
       this.#beacons.remove(child);
       this.#disposeGroup(child);
     }
+    this.#solvedLandmarks.clear();
     for (const beacon of beacons) {
+      if (beacon.solved) this.#solvedLandmarks.add(beacon.id);
       const index = this.#markers.findIndex((m) => m.id === beacon.id),
         marker = this.#markers[index];
       if (!marker) continue;
+      const title = this.#markerElements[index]?.querySelector("b");
+      const landmark = this.#catalog.find((o) => o.id === beacon.id);
+      if (title && landmark)
+        title.textContent = objectDisplayName(landmark, !!beacon.solved);
       const detail = this.#markerElements[index]?.querySelector("small");
       if (detail)
         detail.textContent =
           (beacon.holder === null
-            ? "ChÆ°a sÃ¡ng"
-            : SCHOOLS[beacon.holder]!.shortName + " Beacon") +
-          " Â· " +
+            ? "Chưa thắp Đèn Hiệu"
+            : SCHOOLS[beacon.holder]!.shortName + " giữ Đèn Hiệu") +
+          " · " +
           beacon.target +
-          " Crystal";
+          " Tinh Thể";
       if (beacon.holder === null) continue;
       const color = new THREE.Color(SCHOOLS[beacon.holder]!.color);
       const beam = new THREE.Group();
@@ -875,28 +909,70 @@ export class WorldView {
     }
     this.#render();
   }
+  isObjectDiscovered(object: WorldObject): boolean {
+    return footprintDiscovered(object, this.#replica);
+  }
+  setSelectedObject(id: string | undefined): void {
+    this.#selectedObject = id;
+    this.#render();
+  }
+  setHoveredObject(id: string | undefined): void {
+    if (this.#hoveredObject === id) return;
+    this.#hoveredObject = id;
+    this.#render();
+  }
   setPrivateObjects(objects: readonly WorldObject[]): void {
+    const digest = JSON.stringify(objects);
+    if (digest === this.#privateDigest) return;
+    this.#privateDigest = digest;
     for (const child of [...this.#privateObjects.children]) {
       this.#privateObjects.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        (child.material as THREE.Material).dispose();
-      }
+      this.#disposeGroup(child);
     }
+    for (let i = this.#markers.length - 1; i >= 0; i--)
+      if (this.#markers[i]!.kind === "chest") {
+        this.#chestMeshes.delete(this.#markers[i]!.id!);
+        this.#markerElements[i]!.remove();
+        this.#markerElements.splice(i, 1);
+        this.#markers.splice(i, 1);
+      }
     for (const o of objects) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(o.width, o.height, 2),
-        new THREE.MeshBasicMaterial({
-          color:
-            o.tier === "aspire"
-              ? 0x72d8ca
-              : o.tier === "nitro"
-                ? 0xef7253
-                : 0xa084ff,
-        }),
+      const mesh = createProceduralBuilding(
+        "chest",
+        o.tier === "nitro"
+          ? 0xef5934
+          : o.tier === "predator"
+            ? 0x00c6d7
+            : 0xc8d0d8,
+        o,
+        o.tier,
       );
-      mesh.position.set(o.x - 500, 500 - o.z, 1);
+      mesh.position.set(o.x - 500, 500 - o.z, 0.12);
       this.#privateObjects.add(mesh);
+      this.#chestMeshes.set(o.id, mesh);
+      const marker: WorldMarker = {
+        id: o.id,
+        kind: "chest",
+        x: o.x,
+        z: o.z,
+        title: objectDisplayName(o),
+        detail: "",
+      };
+      this.#markers.push(marker);
+      const element = document.createElement("div");
+      element.className = "map-marker chest";
+      element.dataset.markerId = o.id;
+      const glyph = document.createElement("span");
+      glyph.className = "marker-glyph";
+      glyph.textContent = "▣";
+      const copy = document.createElement("span");
+      copy.className = "marker-copy";
+      const title = document.createElement("b");
+      title.textContent = marker.title;
+      copy.append(title);
+      element.append(glyph, copy);
+      this.#host.append(element);
+      this.#markerElements.push(element);
     }
     this.#render();
   }
@@ -906,6 +982,10 @@ export class WorldView {
 
   setSchool(slot: number): void {
     this.#schoolSlot = slot;
+    this.#selectedObject = undefined;
+    this.#hoveredObject = undefined;
+    this.#solvedLandmarks.clear();
+    this.#replica = undefined;
     this.#selected = undefined;
     this.#hovered = undefined;
     this.#pendingTile = undefined;
@@ -1436,13 +1516,52 @@ export class WorldView {
     this.#renderer.setSize(width, height, false);
     this.#syncCamera(width, height);
     this.#updateReticles();
-    this.#renderer.render(this.#scene, this.#camera);
 
-    this.#markers.forEach((marker, index) => {
-      const el = this.#markerElements[index];
-      if (el) {
-        Object.assign(el.style, this.#position(marker.x, marker.z));
-      }
+    const candidates = this.#markers.map((marker, index) => {
+      const element = this.#markerElements[index]!;
+      const object = this.#catalog.find((o) => o.id === marker.id);
+      const position = this.#position(
+        marker.x,
+        marker.z + (object?.height ?? 2) / 2,
+      );
+      Object.assign(element.style, position);
+      const copy = element.querySelector<HTMLElement>(".marker-copy");
+      const nameWidth =
+        Math.min(
+          210,
+          (copy?.querySelector("b")?.textContent?.length ?? 12) * 7 + 18,
+        ) + 30;
+      return {
+        id: marker.id ?? marker.title,
+        kind: marker.kind,
+        ownHq: marker.kind === "hq" && marker.schoolSlot === this.#schoolSlot,
+        discovered:
+          marker.kind === "chest" ||
+          (!!object && this.isObjectDiscovered(object)),
+        selected: marker.id === this.#selectedObject,
+        hovered: marker.id === this.#hoveredObject,
+        x: (parseFloat(position.left) * width) / 100,
+        y: (parseFloat(position.top) * height) / 100,
+        width: nameWidth,
+        height: 32,
+      };
     });
+    const labels = layoutMapLabels(candidates, this.#span, { width, height });
+    this.#markers.forEach((marker, index) => {
+      const element = this.#markerElements[index]!;
+      const visibility = labels.get(marker.id ?? marker.title) ?? "hidden";
+      element.hidden = visibility === "hidden";
+      element.classList.toggle("icon-only", visibility !== "name");
+      element.classList.toggle(
+        "is-emphasized",
+        marker.id === this.#selectedObject || marker.id === this.#hoveredObject,
+      );
+    });
+    for (const [id, mesh] of this.#unistopMeshes) {
+      const object = this.#catalog.find((o) => o.id === id);
+      mesh.visible =
+        this.#isDev || (!!object && this.isObjectDiscovered(object));
+    }
+    this.#renderer.render(this.#scene, this.#camera);
   };
 }

@@ -1,62 +1,37 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1a20" />
-    <title>R2PL — Explore the World</title>
+    <title>R2PL 2027 — Hành trình Khám phá</title>
   </head>
-  <body data-school="dawn">
+  <body data-school="dawn" data-debug="false">
     <main class="game-shell">
-      <div id="world-view" role="application" aria-label="Interactive thousand by thousand tile world"></div>
+      <div id="world-view" role="application" aria-label="Bản đồ Hành trình Khám phá"></div>
       <header class="top-bar glass">
-        <div class="brand"><div class="brand-mark">R<span>2</span></div><div><strong>R2PL</strong><small>WORLD EXPLORER <em>V2</em></small></div></div>
-        <div class="world-pill"><i></i> SYNTHETIC WORLD <span>1000 × 1000</span></div>
-        <div class="connection"><span id="connection-status" data-online="false">Connecting…</span><button id="retry-button" type="button" hidden>Reconnect</button></div>
+        <div class="brand"><div class="brand-mark">R<span>2</span></div><div><strong>R2PL 2027</strong><small>HÀNH TRÌNH KHÁM PHÁ</small></div></div>
+        <div class="connection"><span id="connection-status" data-online="false" role="status">Đang kết nối…</span><button id="retry-button" type="button" hidden>Kết nối lại</button></div>
       </header>
-      <aside class="identity glass">
-        <p class="eyebrow">UNIVERSITY EXPEDITION</p>
-        <h1 id="school-name">Dawn University</h1>
-        <label for="player-select">Playing as</label>
-        <select id="player-select" aria-label="Choose synthetic explorer"></select>
-        <button id="inventory-button" type="button" hidden>Kho & phần thưởng</button>
-        <p class="identity-note">Two synthetic universities · four local test explorers</p>
-      </aside>
-      <section class="resources glass" aria-label="Test resources">
-        <div class="resource-icon">✦</div><div><p class="eyebrow">POINTS · STAGING</p><strong id="balance">—</strong><small id="player-name">Synthetic explorer</small></div>
-        <div class="resource-cost">−<span id="explore-cost">1</span><small>per new tile</small></div>
+      <section class="tile-panel glass" aria-label="Ô tri thức đang chọn" hidden>
+        <div class="tile-panel-header"><p class="eyebrow">Ô TRI THỨC</p><button id="tile-close" class="context-close" aria-label="Đóng thông tin ô">×</button></div>
+        <h2 id="tile-coordinates">Ô tri thức</h2><span id="tile-badge" class="badge-tag"></span>
+        <p id="tile-knowledge"></p>
+        <button id="explore-button" type="button" disabled>Khám phá</button>
+        <p id="action-status" role="status" data-kind="normal"></p>
       </section>
-      <nav class="map-tools glass" aria-label="Map navigation">
-        <button id="home-button" type="button" title="My headquarters (H)">⌂ <span>My HQ</span></button>
-        <button id="landmark-button" type="button" title="Landmarks (L)">◆ <span>Landmark</span></button>
-        <button id="overview-button" type="button" title="World overview (O)">▦ <span>Overview</span></button>
-        <span class="tool-divider"></span>
-        <button id="zoom-in" type="button" title="Zoom in (+)">＋</button>
-        <button id="zoom-out" type="button" title="Zoom out (-)">−</button>
-      </nav>
-      <section class="tile-panel glass" aria-label="Selected tile and exploration">
-        <div class="tile-panel-header">
-          <p class="eyebrow">SELECTED TILE <span class="tile-crosshair">⌖</span></p>
-          <span id="tile-badge" class="badge-tag">FOGGED</span>
-        </div>
-        <h2 id="tile-coordinates">— / —</h2>
-        <p id="tile-knowledge">Select a tile on the map</p>
-        <button id="explore-button" type="button" disabled><span>✦</span> Explore tile <small>1 test credit</small></button>
-        <p id="action-status" data-kind="normal">Click or tap a tile to explore</p>
-      </section>
-      <section class="activity-panel glass" aria-label="Recent actions"><p class="eyebrow">EXPEDITION LOG <span><b id="pending-count">0</b> pending</span></p><ul id="activity-list"></ul></section>
-      <footer class="status-strip glass"><span class="strip-hint">DRAG TO PAN · SCROLL TO ZOOM · CLICK TO EXPLORE</span><span id="strip-hover" class="strip-hover">CURSOR: — / —</span><span><b id="viewport-count">0</b> local chunks · server-authoritative fog</span></footer>
-      <div class="fixture-banner">DEVELOPMENT FIXTURE · ruleVersion 1 · Points / Crystal / Keys · Server authority · Local staging · official 8-school layout</div>
     </main>
-    <dialog id="rewards-dialog" aria-labelledby="reward-title" lang="vi">
-        <header class="reward-header"><div><p class="eyebrow">SYNTHETIC EXPEDITION</p><h2 id="reward-title">Kho & phần thưởng</h2></div><button id="rewards-close" type="button" aria-label="Đóng kho">×</button></header>
-        <p id="reward-player"></p>
-        <div class="inventory-grid"><div><strong id="inventory-credits">—</strong><span>Test credits</span></div><div><strong id="inventory-crystals">—</strong><span>Crystals</span></div><div><strong id="inventory-maps">—</strong><span>Treasure Maps</span></div><div><strong id="inventory-keys">—</strong><span>Keys</span></div></div>
-        <p class="reward-note">Điểm thử nghiệm đã mở sẵn cho trường. Aspire và Chest dùng luật dev; Gift chưa được kích hoạt.</p>
-        <div id="reward-targets"></div>
-        <section class="reward-feedback" aria-live="polite"><p id="reward-status"></p><p id="reward-receipt"></p><small id="reward-command"></small></section>
-        <div class="reward-footer"><button id="rewards-refresh" type="button">Đồng bộ</button><button id="rewards-retry" type="button" hidden>Thử lại lệnh cũ</button></div>
-      </dialog>
-      <script type="module" src="/src/main.ts"></script>
+    <nav class="map-tools" aria-label="Điều hướng bản đồ">
+      <button id="landmark-button" type="button" title="Đến công trình (L)" aria-label="Đến công trình">◆</button>
+      <button id="overview-button" type="button" title="Toàn bản đồ (O)" aria-label="Toàn bản đồ">▦</button>
+      <button id="camera-button" type="button" title="Đổi góc nhìn (I)" aria-label="Đổi góc nhìn">◇</button>
+    </nav>
+    <template id="dev-tools-template">
+      <aside class="identity glass"><p class="eyebrow">CÔNG CỤ THỬ NGHIỆM</p><h1 id="school-name"></h1><label for="player-select">Tài khoản thử nghiệm</label><select id="player-select" aria-label="Chọn tài khoản thử nghiệm"></select></aside>
+      <section class="resources glass"><div><p class="eyebrow">SỐ DƯ THỬ NGHIỆM</p><strong id="balance">—</strong><small id="player-name"></small></div><span id="explore-cost"></span></section>
+      <section class="activity-panel glass"><p class="eyebrow">NHẬT KÝ <b id="pending-count">0</b></p><ul id="activity-list"></ul></section>
+      <footer class="status-strip glass"><span id="strip-hover"></span><span><b id="viewport-count">0</b> vùng đang theo dõi</span></footer>
+    </template>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

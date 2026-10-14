@@ -46,7 +46,7 @@ export const ACTION_MODES: Record<DockMode, ModeConfig> = {
     costType: "points",
     icon: Icons.book,
     description:
-      "Giao lưu ô tri thức tiếp giáp: tối đa hai trường; ô đã có tri thức trường mình không mất Point",
+      "Giao lưu ô tri thức tiếp giáp: tối đa hai trường; ô của trường mình không mất Điểm",
   },
   beacon: {
     id: "beacon",
@@ -138,13 +138,6 @@ export class StudentActionDock {
   public setPoints(points: number): void {
     if (this.points === points) return;
     this.points = points;
-    const ptEl = this.container.querySelector("#dock-res-points-val");
-    if (ptEl) {
-      ptEl.textContent = points.toLocaleString();
-    } else {
-      this.render();
-      this.bindEvents();
-    }
   }
 
   /**
@@ -153,13 +146,6 @@ export class StudentActionDock {
   public setCrystals(crystals: number): void {
     if (this.crystals === crystals) return;
     this.crystals = crystals;
-    const cryEl = this.container.querySelector("#dock-res-crystals-val");
-    if (cryEl) {
-      cryEl.textContent = crystals.toLocaleString();
-    } else {
-      this.render();
-      this.bindEvents();
-    }
   }
 
   /**
@@ -179,8 +165,6 @@ export class StudentActionDock {
         predator: predator || 0,
       };
     }
-    this.render();
-    this.bindEvents();
   }
 
   public updateResources(points: number, crystals: number, keys?: any): void {
@@ -200,47 +184,17 @@ export class StudentActionDock {
       ACTION_MODES.study,
       ACTION_MODES.beacon,
     ];
-    const totalKeys = this.keys.aspire + this.keys.nitro + this.keys.predator;
 
     this.container.innerHTML = `
       <div class="mode-dock-bar">
-        <!-- 1. Resource Bar: Điểm Tri Thức, Tinh Thể, Chìa Khóa -->
-        <div class="dock-resource-bar" title="Tài nguyên sinh viên: Điểm Tri Thức, Tinh Thể và Chìa Khóa Rương">
-          <!-- Điểm Tri Thức (Points) -->
-          <div class="dock-res-pill points" title="Điểm Tri Thức tích luỹ từ giải chạy để Khám phá & Ôn bài">
-            <span class="dock-res-icon point-glow">${Icons.point(13)}</span>
-            <span class="dock-res-label">Điểm Tri Thức:</span>
-            <span class="dock-res-val point-number" id="dock-res-points-val">${this.points.toLocaleString()}</span>
-          </div>
-
-          <!-- Tinh Thể (Crystals) -->
-          <div class="dock-res-pill crystals" title="Tinh Thể thu thập từ UniStop/Rương để Thắp Đèn Hiệu">
-            <span class="dock-res-icon crystal-glow">${Icons.crystal(13)}</span>
-            <span class="dock-res-label">Tinh Thể:</span>
-            <span class="dock-res-val crystal-number" id="dock-res-crystals-val">${this.crystals.toLocaleString()}</span>
-          </div>
-
-          <!-- Chìa Khóa (Keys) -->
-          <div class="dock-res-pill keys" title="Chìa khóa mở Rương (Aspire: ${this.keys.aspire} | Nitro: ${this.keys.nitro} | Predator: ${this.keys.predator})">
-            <span class="dock-res-icon key-glow">${Icons.key(13)}</span>
-            <span class="dock-res-label">Chìa Khóa:</span>
-            <span class="dock-res-val key-number" id="dock-res-keys-val">${totalKeys}</span>
-            <div class="dock-keys-mini-tags">
-              <span class="key-tag-mini aspire" title="Chìa Aspire: ${this.keys.aspire}">${this.keys.aspire}A</span>
-              <span class="key-tag-mini nitro" title="Chìa Nitro: ${this.keys.nitro}">${this.keys.nitro}N</span>
-              <span class="key-tag-mini predator" title="Chìa Predator: ${this.keys.predator}">${this.keys.predator}P</span>
-            </div>
-          </div>
-        </div>
-
         <!-- 2. Header Bar: Smart Mode Switcher -->
         <div class="dock-header-bar">
-          <button class="smart-toggle-pill ${this.smartMode ? "active" : ""}" id="btn-smart-toggle" aria-pressed="${this.smartMode}" title="Chuyển chế độ Tự Động (Smart Context) hoặc Thủ Công (Manual)">
+          <button class="smart-toggle-pill ${this.smartMode ? "active" : ""}" id="btn-smart-toggle" aria-pressed="${this.smartMode}" title="Chọn Tự Động hoặc tự chọn thao tác">
             <span class="smart-indicator"></span>
             <span class="smart-icon">${Icons.lightning(13)}</span>
             <span class="smart-text">${this.smartMode ? "Tự Động" : "Thủ Công"}</span>
           </button>
-          <span class="dock-label-hint">${this.smartMode ? "Tự đổi Khám phá / Ôn bài khi chạm ô đất" : "Chọn thao tác tương tác:"}</span>
+          <span class="dock-label-hint">${this.smartMode ? "Tự chọn thao tác khi chạm ô" : "Chọn thao tác tương tác:"}</span>
         </div>
 
         <!-- 3. Action Buttons Group: Khám Phá | Ôn Bài | Thắp Đèn Hiệu -->

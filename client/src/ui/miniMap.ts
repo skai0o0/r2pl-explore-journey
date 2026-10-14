@@ -4,8 +4,9 @@ import {
 } from "../../../shared/gameplay/gameConfig.ts";
 import type { ProjectionReplica } from "../../../shared/protocol/replica.ts";
 import { chunkCoordinatesForId } from "../../../shared/world/coordinates.ts";
-// client/src/ui/miniMap.ts
 import { Icons } from "./icons.ts";
+// client/src/ui/miniMap.ts
+import { footprintDiscovered } from "./playerPresentation.ts";
 
 export class MiniMap {
   public element: HTMLElement;
@@ -16,16 +17,19 @@ export class MiniMap {
   private isDrawPending = false;
   private objects: readonly WorldObject[] = [];
   private schoolSlot = 0;
+  private replica: ProjectionReplica | undefined;
   private projections = new Map<
     number,
     { fog: Uint8Array; owned: Uint8Array }
   >();
   public setSchool(slot: number): void {
     this.schoolSlot = slot;
+    this.replica = undefined;
     this.projections.clear();
     this.requestRedraw();
   }
   public paintProjection(id: number, replica: ProjectionReplica): void {
+    this.replica = replica;
     const fog = new Uint8Array(512),
       owned = new Uint8Array(512);
     for (let local = 0; local < 4096; local++) {
@@ -80,7 +84,7 @@ export class MiniMap {
     controls.innerHTML = `
       <button class="btn-mini-control" id="mbtn-zoom-in" title="Phóng to">${Icons.zoomIn("sm")}</button>
       <button class="btn-mini-control" id="mbtn-zoom-out" title="Thu nhỏ">${Icons.zoomOut("sm")}</button>
-      <button class="btn-mini-control" id="mbtn-recenter" title="Căn giữa Trụ sở HQ">${Icons.compass("sm")}</button>
+      <button class="btn-mini-control" id="mbtn-recenter" title="Về trụ sở">${Icons.compass("sm")}</button>
     `;
 
     const expand = document.createElement("button");
@@ -317,6 +321,8 @@ export class MiniMap {
       }
     }
     for (const o of this.objects) {
+      if (o.kind === "unistop" && !footprintDiscovered(o, this.replica))
+        continue;
       ctx.fillStyle =
         o.kind === "hq"
           ? (SCHOOLS.find((s) => s.slot === o.schoolSlot)?.color ?? "#fff")

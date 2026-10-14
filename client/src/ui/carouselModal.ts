@@ -46,7 +46,7 @@ export class CarouselModal {
           <div class="carousel-header-left">
             <div class="carousel-brand-tag">
               <span class="brand-predator-text">[PREDATOR]</span>
-              <span class="brand-r2pl-badge">CYBER LOOT</span>
+              <span class="brand-r2pl-badge">TIẾP TẾ</span>
             </div>
             <div class="carousel-title-col">
               <h2 class="carousel-title">VÒNG QUAY TIẾP TẾ</h2>
@@ -71,10 +71,10 @@ export class CarouselModal {
         <!-- Status / Hint Bar -->
         <div class="carousel-footer-bar">
           <div class="rarity-legend">
-            <span class="rarity-tag common"><span class="dot"></span> Common</span>
-            <span class="rarity-tag rare"><span class="dot"></span> Rare</span>
-            <span class="rarity-tag epic"><span class="dot"></span> Epic</span>
-            <span class="rarity-tag legendary"><span class="dot"></span> Legendary</span>
+            <span class="rarity-tag common"><span class="dot"></span> Thường</span>
+            <span class="rarity-tag rare"><span class="dot"></span> Hiếm</span>
+            <span class="rarity-tag epic"><span class="dot"></span> Sử thi</span>
+            <span class="rarity-tag legendary"><span class="dot"></span> Huyền thoại</span>
           </div>
           <div class="carousel-spin-status">Đang mở khóa phần thưởng...</div>
         </div>
@@ -86,7 +86,7 @@ export class CarouselModal {
             <div class="result-badge-rarity" id="cmodal-result-rarity"></div>
             <div class="result-icon-box" id="cmodal-result-icon"></div>
             <h3 class="result-item-name" id="cmodal-result-name">Đang quay…</h3>
-            <p class="result-item-desc" id="cmodal-result-desc">Kết quả đã được server xác nhận</p>
+            <p class="result-item-desc" id="cmodal-result-desc">Phần thưởng dành cho bạn</p>
             <button class="btn-claim-reward" id="cmodal-claim-btn">
               ${Icons.sparkles(18)}
               <span>NHẬN THƯỞNG</span>
@@ -263,9 +263,9 @@ export class CarouselModal {
       subtitleEl.textContent =
         options.subtitle ||
         (options.sourceType === "chest"
-          ? "CYBER CHEST UNBOXING // PREDATOR"
-          : "UNISTOP SUPPLY CRATE");
-    if (statusEl) statusEl.textContent = "Đang quay thưởng CS:GO style...";
+          ? "MỞ RƯƠNG KHO BÁU"
+          : "PHẦN THƯỞNG TRẠM TIẾP TẾ");
+    if (statusEl) statusEl.textContent = "Đang quay thưởng…";
 
     // 2. Hide Result & Clear Confetti
     this.resultOverlay.classList.remove("show");
@@ -295,9 +295,15 @@ export class CarouselModal {
       const isWinner = index === options.winningIndex;
 
       // Special badge for Real Gifts or Crystals
-      let badgeLabel = item.rarity.toUpperCase();
+      let badgeLabel =
+        {
+          common: "THƯỜNG",
+          rare: "HIẾM",
+          epic: "SỬ THI",
+          legendary: "HUYỀN THOẠI",
+        }[item.rarity] ?? "PHẦN THƯỞNG";
       if (isRealGift) {
-        badgeLabel = "PREDATOR GEAR";
+        badgeLabel = "QUÀ HIỆN VẬT";
       } else if (isCrystal && item.amount) {
         badgeLabel = `+${item.amount} TINH THỂ`;
       }
@@ -443,13 +449,19 @@ export class CarouselModal {
 
       if (rarityEl) {
         if (isRealGift) {
-          rarityEl.textContent = `[PREDATOR GAMING REWARD]`;
+          rarityEl.textContent = `QUÀ HIỆN VẬT PREDATOR`;
           rarityEl.className = `result-badge-rarity rarity-legendary`;
         } else if (isCrystal) {
           rarityEl.textContent = `+${winningItem.amount || 1} TINH THỂ TRI THỨC`;
           rarityEl.className = `result-badge-rarity rarity-rare`;
         } else {
-          rarityEl.textContent = `${winningItem.rarity.toUpperCase()} REWARD`;
+          rarityEl.textContent =
+            {
+              common: "THƯỜNG",
+              rare: "HIẾM",
+              epic: "SỬ THI",
+              legendary: "HUYỀN THOẠI",
+            }[winningItem.rarity] ?? "PHẦN THƯỞNG";
           rarityEl.className = `result-badge-rarity rarity-${winningItem.rarity}`;
         }
       }
@@ -469,7 +481,7 @@ export class CarouselModal {
         } else if (isRealGift) {
           descEl.textContent =
             winningItem.description ||
-            "Hiện vật Predator Gaming chính hãng dành cho Runner xuất sắc!";
+            "Hiện vật Predator Gaming chính hãng dành cho người chạy xuất sắc!";
         } else {
           descEl.textContent =
             winningItem.description ||

@@ -150,3 +150,10 @@ Bộ test đầy đủ hiện tại: **142/142 PASS, 0 fail, 0 skip** với cả
 - [Mobile guidance](artifacts/g-v1/mobile-guidance.jpg), [Mobile Landmark](artifacts/g-v1/mobile-landmark.jpg)
 
 `npm run play:local` vẫn là launcher legacy M4/v0 ở 4173/2567 với roster Dawn/Dusk. Dùng **`npm run play:schools`** ở **4176/2568** để chạy G-V1 đầy đủ. Các launcher này dùng identities giả lập và listen loopback cho local/dev.
+
+### Player UI Polish
+
+- Giao diện mặc định dùng một HUD: Điểm Tri Thức, Tinh Thể, Hành trang và xếp hạng. Bấm Hành trang để xem chìa khóa, bản đồ kho báu, mã quà và lịch sử.
+- Dock hỗ trợ Tự Động hoặc Thủ Công. Thủ Công: chọn Khám Phá/Giao Lưu, chạm ô rồi xác nhận trong thẻ thông tin; máy chủ kiểm tra đúng loại thao tác trước khi trừ Điểm.
+- Nhãn công trình nằm cạnh chân đế, tự thu gọn khi xem toàn bản đồ và tránh chồng lấp. Trạm tiếp tế chỉ hiện sau khi mở sương mù; tên địa danh bí ẩn được mở sau khi giải đố.
+- Công cụ thử nghiệm: `?mode=dev` hoặc Ctrl+Alt+D. Công cụ quản trị: `?admin=1` hoặc Ctrl+Alt+A. Bỏ query để trở lại giao diện người chơi; API quản trị vẫn yêu cầu `ADMIN_KEY`.

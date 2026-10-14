@@ -375,6 +375,7 @@ export class DurableRealtimeCore {
             session.identity.schoolSlot,
             command.key,
             command.tileIndex,
+            command.intent,
           );
         },
         "command",
@@ -409,7 +410,11 @@ export class DurableRealtimeCore {
           key: command.key,
           status,
           reason:
-            result.reason === "none" ? REASON.NONE : REASON.INVALID_COMMAND,
+            result.reason === "none"
+              ? REASON.NONE
+              : result.reason === "wrong_action"
+                ? REASON.WRONG_ACTION
+                : REASON.INVALID_COMMAND,
           chunkId: id,
           viewRevision,
         }),

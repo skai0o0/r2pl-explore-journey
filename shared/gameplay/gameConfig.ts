@@ -305,6 +305,7 @@ export const LANDMARKS = [
 export const GAME_CONFIG = {
   ruleVersion: 1,
   world: { width: 1000, height: 1000, schoolSlots: 16, fogRevealRadius: 2 },
+  presentation: { labelNameSpan: 160, labelGap: 8, markerIconSize: 22 },
   footprints: {
     hq: { width: 20, height: 20 },
     landmark: { width: 40, height: 40 },

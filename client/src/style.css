@@ -1980,3 +1980,424 @@ body:has(.gameplay-menu[open]) .operator-menu:not([open]) {
     display: none;
   }
 }
+
+/* Player UI: one HUD, contextual actions and labels anchored at the near edge of the base. */
+[hidden] {
+  display: none !important;
+}
+.top-bar {
+  height: 64px;
+  top: 16px;
+  padding: 12px 18px;
+}
+.brand small {
+  letter-spacing: 0.14em;
+}
+.connection {
+  font-size: 11px;
+}
+.stats-top-hud {
+  top: 96px;
+  left: 20px;
+  width: 260px;
+  max-width: 260px;
+  border-color: #42655f;
+  z-index: 10;
+  padding: 12px;
+}
+.hud-home-icon {
+  color: #9edec9;
+  font-size: 20px;
+}
+.hud-identity {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #eef8f0;
+}
+.hud-resources {
+  gap: 18px;
+}
+.hud-inventory {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  min-height: 34px;
+}
+.hud-progress-strip {
+  justify-content: space-between;
+}
+.hud-resource .stat-label {
+  display: inline;
+  font-size: 10px;
+  color: #a9c3b8;
+}
+.hud-resource .stat-content {
+  display: grid;
+  gap: 2px;
+}
+.hud-menu-toggle {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+}
+.hud-secondary-menu,
+.school-ranking-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 55vh;
+  overflow: auto;
+  border: 1px solid #42655f;
+  border-radius: 10px;
+}
+.student-mode-dock {
+  bottom: 20px;
+  width: auto;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border-color: #42655f;
+}
+.dock-header-bar {
+  margin-bottom: 8px;
+}
+.tile-panel {
+  bottom: 115px;
+  right: 20px;
+  width: 260px;
+  padding: 14px;
+}
+.tile-panel h2 {
+  font-size: 22px;
+  margin: 10px 0;
+}
+.context-close {
+  border: 0;
+  color: #b9cec5;
+  background: transparent;
+  font-size: 22px;
+}
+.tile-panel-header {
+  align-items: center;
+}
+.tile-panel #action-status {
+  min-height: 0;
+}
+.minimap-wrapper {
+  left: 20px;
+  bottom: 20px;
+  padding: 8px;
+  width: auto;
+}
+.minimap-canvas {
+  width: 130px;
+  height: 130px;
+}
+.minimap-controls {
+  justify-content: center;
+}
+.minimap-wrapper .map-tools {
+  position: static;
+  width: auto;
+  padding: 4px 0 0;
+  margin-top: 4px;
+  border-top: 1px solid #35544b;
+  justify-content: center;
+  background: transparent;
+}
+.map-tools button {
+  min-height: 30px;
+  font-size: 16px;
+}
+.compass-card {
+  top: 96px;
+  width: 400px;
+  min-width: 0;
+  padding: 10px 14px;
+}
+.compass-card .eyebrow {
+  margin: 0 0 4px;
+}
+.compass-card .compass-edge {
+  display: none;
+}
+.compass-row {
+  grid-template-columns: 24px 1fr auto;
+  padding: 2px 0;
+}
+.gameplay-menu {
+  top: 96px;
+  right: 20px;
+  width: 240px;
+  border-color: #42655f;
+}
+.gameplay-menu[open] {
+  max-height: calc(100dvh - 220px);
+  overflow: auto;
+}
+.gameplay-content {
+  max-height: none;
+}
+.gameplay-content > details {
+  margin-top: 12px;
+}
+.gameplay-content > details > summary {
+  color: #cee4d8;
+  padding: 8px 0;
+}
+.operator-menu {
+  top: 320px;
+  left: 20px;
+}
+body[data-mode="dev"] .identity {
+  top: 320px;
+}
+body[data-mode="dev"] .operator-menu {
+  left: 290px;
+}
+body[data-mode="dev"] .resources {
+  top: 540px;
+}
+body[data-mode="dev"] .stats-top-hud {
+  left: 20px;
+}
+body[data-mode="dev"] .activity-panel,
+body[data-mode="dev"] .status-strip {
+  z-index: 40;
+}
+.map-marker {
+  transform: translate(-50%, 0);
+  gap: 5px;
+  filter: drop-shadow(0 2px 5px #07181988);
+}
+.map-marker[hidden] {
+  display: none;
+}
+.map-marker .marker-glyph {
+  width: 22px;
+  height: 22px;
+  border-width: 1px;
+  font-size: 13px;
+  background: #173d36d9;
+  color: #b3e8d5;
+}
+.map-marker.landmark .marker-glyph {
+  background: #352c49dc;
+  color: #d8c5f0;
+}
+.map-marker.chest .marker-glyph {
+  background: #493c24e0;
+  color: #f3d283;
+}
+.map-marker .marker-copy {
+  background: #0c1e25cc;
+  padding: 4px 7px;
+  border-color: #76958744;
+  max-width: 210px;
+}
+.map-marker .marker-copy b {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.map-marker.icon-only .marker-copy {
+  display: none;
+}
+.map-marker:not(.icon-only) .marker-copy {
+  display: block;
+}
+.map-marker.is-emphasized .marker-copy {
+  border-color: #afead2;
+}
+.welcome-toast {
+  bottom: 115px;
+}
+.notification-banner-container {
+  top: 90px;
+  right: 20px;
+  z-index: 100;
+}
+@media (max-width: 1100px) {
+  .compass-card {
+    left: 300px;
+    right: 280px;
+    transform: none;
+    width: auto;
+  }
+  .compass-copy small {
+    font-size: 10px;
+  }
+}
+@media (max-width: 768px) {
+  .top-bar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    height: 52px;
+    padding: 8px 12px;
+  }
+  .brand strong {
+    font-size: 18px;
+  }
+  .brand small {
+    font-size: 8px;
+  }
+  .connection {
+    font-size: 10px;
+  }
+  .stats-top-hud {
+    top: 72px;
+    left: 8px;
+    right: auto;
+    width: 185px;
+    max-width: 185px;
+    padding: 8px;
+    font-size: 11px;
+  }
+  .hud-identity,
+  .hud-resources,
+  .hud-menu-toggle {
+    display: flex;
+  }
+  .hud-resources {
+    gap: 12px;
+  }
+  .hud-resource .stat-label {
+    font-size: 8px;
+  }
+  .hud-inventory span {
+    display: none;
+  }
+  .hud-progress-strip {
+    font-size: 10px;
+  }
+  .hud-secondary-menu,
+  .school-ranking-popover {
+    position: fixed;
+    top: 210px;
+    left: 8px;
+    width: min(300px, calc(100vw - 16px));
+  }
+  .gameplay-menu {
+    top: 72px;
+    right: 8px;
+    left: auto;
+    bottom: auto;
+    width: 155px;
+  }
+  .gameplay-menu[open] {
+    position: fixed;
+    top: 240px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100dvh - 350px);
+  }
+  .compass-card {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 110px;
+    width: auto;
+  }
+  .compass-copy small {
+    display: none;
+  }
+  .minimap-wrapper {
+    left: 8px;
+    bottom: 180px;
+  }
+  .minimap-canvas {
+    width: 80px;
+    height: 80px;
+  }
+  .minimap-wrapper .map-tools {
+    padding: 2px 0;
+  }
+  .map-tools button {
+    min-width: 24px;
+  }
+  .tile-panel {
+    left: 108px;
+    right: 8px;
+    bottom: 180px;
+    width: auto;
+    max-width: 260px;
+    padding: 10px;
+  }
+  .tile-panel h2 {
+    font-size: 17px;
+  }
+  .tile-panel p {
+    font-size: 11px;
+  }
+  .student-mode-dock {
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+    padding: 8px;
+  }
+  .student-mode-dock .mode-btn {
+    padding: 7px 5px;
+    font-size: 11px;
+  }
+  .dock-label-hint {
+    display: none;
+  }
+  .operator-menu {
+    top: 265px;
+    left: 8px;
+    bottom: auto;
+  }
+  body[data-mode="dev"] .identity {
+    top: 260px;
+  }
+  .notification-banner-container {
+    top: 72px;
+    left: 8px;
+    right: 8px;
+  }
+  .welcome-toast {
+    bottom: 120px;
+    max-width: calc(100vw - 16px);
+    font-size: 12px;
+  }
+}
+
+.hud-identity {
+  justify-content: flex-start;
+  gap: 10px;
+  padding-right: 40px !important;
+  min-height: 30px;
+}
+.hud-identity .school-pill {
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .minimap-wrapper {
+    right: auto;
+    width: 100px;
+  }
+  .minimap-wrapper.is-expanded {
+    width: auto;
+  }
+  .student-mode-dock .dock-header-bar {
+    display: flex;
+  }
+  .student-mode-dock .smart-toggle-pill {
+    min-height: 28px;
+  }
+  .compass-card {
+    bottom: 125px;
+  }
+  .minimap-wrapper,
+  .tile-panel {
+    bottom: 200px;
+  }
+}

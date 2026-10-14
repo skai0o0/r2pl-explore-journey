@@ -168,7 +168,7 @@ export class UniStopModal {
     this.details.textContent = !d.profileReady
       ? "Đang kiểm tra điều kiện điểm chạy trong tuần…"
       : d.hasWeeklyRunningPoints
-        ? "Bạn có điểm chạy trong tuần. Quà thật vẫn tùy thuộc tier và kết quả quay."
+        ? "Bạn có điểm chạy trong tuần. Quà thật vẫn tùy thuộc cấp trạm và kết quả quay."
         : "Chưa có điểm chạy trong tuần: vẫn nhận vật phẩm trong game, chưa đủ điều kiện nhận quà thật.";
     this.claim.disabled = !state.canClaim || this.pending;
     this.claim.textContent = this.pending ? "Đang xử lý…" : "Nhận lượt tiếp tế";

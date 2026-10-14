@@ -55,7 +55,7 @@ export const UNISTOP_CONFIGS = Object.fromEntries(
   (["aspire", "nitro", "predator"] as const).map((tier) => [
     tier,
     {
-      name: `UniStop ${tier}`,
+      name: `Trạm ${tier === "nitro" ? "Nitro" : tier === "predator" ? "Predator" : "Aspire"}`,
       cooldownMs: GAME_CONFIG.rewards.unistopCooldownMs[tier],
     },
   ]),

@@ -53,7 +53,7 @@ function tint(
   geometry: THREE.BufferGeometry,
   hex: number,
 ): THREE.BufferGeometry {
-  const g = geometry.toNonIndexed();
+  const g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   g.deleteAttribute("uv");
   const c = new THREE.Color(hex);
   const colors = new Float32Array(g.attributes.position!.count * 3);
@@ -113,6 +113,7 @@ function flagGeometry(): THREE.BufferGeometry {
       3,
     ),
   );
+  cloth.computeVertexNormals();
   const colors = new Float32Array(18).fill(1);
   cloth.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   return merge([

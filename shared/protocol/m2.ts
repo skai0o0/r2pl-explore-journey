@@ -35,6 +35,7 @@ export const REASON = {
   NOT_SUBSCRIBED: 6,
   PRODUCTION_DISABLED: 7,
   INTERNAL: 8,
+  WRONG_ACTION: 9,
 } as const;
 
 export type M2Kind = (typeof M2_KIND)[keyof typeof M2_KIND];
@@ -48,6 +49,7 @@ export interface ExploreCommand {
   readonly key: Uint8Array;
   readonly tileIndex: number;
   readonly ruleVersion: number;
+  readonly intent?: "explore" | "study";
 }
 export interface Ack {
   readonly key: Uint8Array;
@@ -147,20 +149,37 @@ export function encodeExplore(command: ExploreCommand): Uint8Array {
     (command.ruleVersion !== 0 && command.ruleVersion !== 1)
   )
     throw new RangeError("Invalid synthetic explore command");
-  const payload = new Uint8Array(22);
+  if (
+    command.intent !== undefined &&
+    (command.ruleVersion !== 1 ||
+      !["explore", "study"].includes(command.intent))
+  )
+    throw new RangeError("Invalid exploration intent");
+  const payload = new Uint8Array(command.intent ? 23 : 22);
   payload.set(command.key);
   view(payload).setUint32(16, command.tileIndex, true);
   view(payload).setUint16(20, command.ruleVersion, true);
+  if (command.intent) payload[22] = command.intent === "study" ? 2 : 1;
   return encodeFrame(M2_KIND.EXPLORE, payload);
 }
 export function decodeExplore(payload: Uint8Array): ExploreCommand {
-  if (payload.byteLength !== 22)
+  if (payload.byteLength !== 22 && payload.byteLength !== 23)
     throw new Error("Invalid explore payload length");
   const tileIndex = view(payload).getUint32(16, true);
   const ruleVersion = view(payload).getUint16(20, true);
   if (tileIndex >= WORLD_TILE_COUNT || (ruleVersion !== 0 && ruleVersion !== 1))
     throw new Error("Invalid synthetic explore parameters");
+  if (
+    payload.byteLength === 23 &&
+    (ruleVersion !== 1 || (payload[22] !== 1 && payload[22] !== 2))
+  )
+    throw new Error("Invalid exploration intent");
   return {
+    ...(payload.byteLength === 23
+      ? {
+          intent: payload[22] === 2 ? ("study" as const) : ("explore" as const),
+        }
+      : {}),
     key: Uint8Array.from(payload.subarray(0, 16)),
     tileIndex,
     ruleVersion,

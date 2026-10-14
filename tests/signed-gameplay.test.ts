@@ -983,3 +983,86 @@ test("signed 5x5 fog relay converges across four chunks without exposing rival m
     await pool.end();
   }
 });
+
+test("manual Dock intent is validated before debit and protected by stable-key replay", {
+  skip: !url,
+}, async () => {
+  const { decodeFrame, decodeAck, encodeExplore, M2_KIND, ACK_STATUS, REASON } =
+    await import("../shared/protocol/m2.ts");
+  const pool = new Pool({ connectionString: url }),
+    campaign = randomUUID();
+  let play: Awaited<ReturnType<typeof createSchoolPlayServer>> | undefined;
+  try {
+    play = await createSchoolPlayServer(
+      pool,
+      { web: 0, websocket: 0 },
+      campaign,
+    );
+    await path(pool, campaign, 0, 61, 63);
+    await path(pool, campaign, 1, 63, 63);
+    const actor = play.fixture.actors.find(
+        (a) => a.schoolSlot === 0 && a.role === "human",
+      )!,
+      acks: ReturnType<typeof decodeAck>[] = [];
+    play.realtime.core.addSession("manual-dock", actor, {
+      send(bytes) {
+        const frame = decodeFrame(bytes);
+        if (frame.kind === M2_KIND.ACK) acks.push(decodeAck(frame.payload));
+      },
+      close() {},
+    });
+    const send = async (
+      tile: number,
+      intent: "study" | "explore",
+      key = Uint8Array.from(
+        Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
+      ),
+    ) => {
+      await play!.realtime.core.handle(
+        "manual-dock",
+        encodeExplore({ key, tileIndex: tile, ruleVersion: 1, intent }),
+      );
+      return { ack: acks.at(-1)!, key };
+    };
+    const initial = (
+      await pool.query(
+        "SELECT balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+        [campaign, actor.actorId],
+      )
+    ).rows[0].balance;
+    assert.equal((await send(63062, "study")).ack.reason, REASON.WRONG_ACTION);
+    assert.equal(
+      (await send(63062, "explore")).ack.status,
+      ACK_STATUS.TEST_APPLIED,
+    );
+    assert.equal(
+      (await send(63063, "explore")).ack.reason,
+      REASON.WRONG_ACTION,
+    );
+    const shared = await send(63063, "study");
+    assert.equal(shared.ack.status, ACK_STATUS.TEST_APPLIED);
+    assert.equal(
+      (await send(63063, "study", shared.key)).ack.status,
+      ACK_STATUS.TEST_APPLIED,
+    );
+    assert.equal(
+      (await send(63063, "explore", shared.key)).ack.reason,
+      REASON.IDEMPOTENCY_CONFLICT,
+    );
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+          [campaign, actor.actorId],
+        )
+      ).rows[0].balance,
+      String(BigInt(initial) - 3n),
+    );
+    play.realtime.core.removeSession("manual-dock");
+  } finally {
+    await play?.close();
+    await cleanupSchoolRewards(pool, campaign);
+    await cleanupBotFixture(pool, campaign);
+    await pool.end();
+  }
+});

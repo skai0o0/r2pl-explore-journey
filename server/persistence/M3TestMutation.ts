@@ -42,6 +42,7 @@ export interface M3TestCommand {
   readonly schoolSlot: number; // trusted fixture identity, never client supplied
   readonly key: Uint8Array;
   readonly tileIndex: number;
+  readonly intent?: "explore" | "study";
   readonly cost: bigint; // explicit fixture amount, never a gameplay default
 }
 export interface M3TestResult {
@@ -51,7 +52,8 @@ export interface M3TestResult {
     | "insufficient_fixture_credit"
     | "not_adjacent"
     | "protected_hq"
-    | "shared_full";
+    | "shared_full"
+    | "wrong_action";
   readonly chunkId: number;
   readonly revision: string;
   readonly balance: string;
@@ -92,6 +94,10 @@ function payloadHash(command: M3TestCommand): Buffer {
   bytes.write("M3T1", 0, "ascii");
   bytes.writeUInt32LE(command.tileIndex, 8);
   bytes.writeUInt8(command.schoolSlot, 12);
+  bytes.writeUInt8(
+    command.intent === "study" ? 2 : command.intent === "explore" ? 1 : 0,
+    13,
+  );
   bytes.writeBigUInt64LE(command.cost, 16);
   return createHash("sha256").update(bytes).digest();
 }
@@ -223,7 +229,9 @@ export class M3TestMutationService {
     if (
       command.key.length !== 16 ||
       command.cost < 0n ||
-      command.cost > 0x7fffffffffffffffn
+      command.cost > 0x7fffffffffffffffn ||
+      (command.intent !== undefined &&
+        !["explore", "study"].includes(command.intent))
     )
       throw new RangeError("Invalid M3 fixture command");
     const { x, z } = tileCoordinates(command.tileIndex);
@@ -428,20 +436,25 @@ export class M3TestMutationService {
             c.tiles.some((t) => t.tile === command.tileIndex),
         );
       const spatialRejection =
-        pendingConsolidation ||
-        (this.#boundary?.ruleVersion === 1 &&
-          !knownBySchool &&
-          holders.length >= GAME_CONFIG.knowledge.maxSchools)
-          ? "shared_full"
-          : this.#boundary && !alreadyExplored
-            ? await checkExploreBoundary(
-                client,
-                command.campaignId,
-                command.schoolSlot,
-                command.tileIndex,
-                this.#boundary,
-              )
-            : undefined;
+        this.#boundary?.ruleVersion === 1 &&
+        !knownBySchool &&
+        ((command.intent === "explore" && holders.length > 0) ||
+          (command.intent === "study" && holders.length === 0))
+          ? "wrong_action"
+          : pendingConsolidation ||
+              (this.#boundary?.ruleVersion === 1 &&
+                !knownBySchool &&
+                holders.length >= GAME_CONFIG.knowledge.maxSchools)
+            ? "shared_full"
+            : this.#boundary && !alreadyExplored
+              ? await checkExploreBoundary(
+                  client,
+                  command.campaignId,
+                  command.schoolSlot,
+                  command.tileIndex,
+                  this.#boundary,
+                )
+              : undefined;
       let result: M3TestResult;
       if (alreadyExplored) {
         const wallet = await client.query<{ balance: string }>(
