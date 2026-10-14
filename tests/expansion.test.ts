@@ -13,7 +13,7 @@ import {
   isExpansionEdge,
 } from "../shared/gameplay/expansion.ts";
 import { ACK_STATUS } from "../shared/protocol/m2.ts";
-import { tileIndex } from "../shared/world/coordinates.ts";
+import { chunkId, tileIndex } from "../shared/world/coordinates.ts";
 
 test("expansion neighbors never wrap rows, admit diagonals or exceed the map", () => {
   assert.deepEqual(edgeNeighbors(0), [1, 1000]);
@@ -69,7 +69,14 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
         number,
         Awaited<ReturnType<typeof initial.realtime.authority.snapshot>>
       >();
-      for (const id of [119, 120, 135, 136])
+      for (const id of new Set(
+        tiles.map((tile) =>
+          chunkId(
+            Math.floor((tile % 1000) / 64),
+            Math.floor(Math.floor(tile / 1000) / 64),
+          ),
+        ),
+      ))
         masks.set(
           id,
           await initial.realtime.authority.snapshot(school.slot, id),
@@ -91,15 +98,15 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
       "test_no_change",
     );
     assert.equal(
-      (await apply(tileIndex(482, 482))).result.reason,
+      (await apply(tileIndex(210, 210))).result.reason,
       "not_adjacent",
     );
     assert.equal(
-      (await apply(tileIndex(502, 482))).result.reason,
+      (await apply(tileIndex(490, 170))).result.reason,
       "not_adjacent",
     ); // rival knowledge alone cannot anchor growth
     assert.equal(
-      (await apply(tileIndex(502, 472))).result.reason,
+      (await apply(tileIndex(490, 160))).result.reason,
       "protected_hq",
     );
     assert.equal((await apply(tileIndex(0, 0))).result.reason, "not_adjacent");
@@ -110,32 +117,32 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
     const rejectedKey = Uint8Array.from(
       Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
     );
-    const rejection = await apply(tileIndex(484, 472), rejectedKey);
+    const rejection = await apply(tileIndex(212, 200), rejectedKey);
     assert.equal(rejection.result.reason, "not_adjacent");
     assert.equal(
-      (await apply(tileIndex(482, 472))).result.status,
+      (await apply(tileIndex(210, 200))).result.status,
       "test_applied",
     );
     assert.equal(
-      (await apply(tileIndex(483, 472))).result.status,
+      (await apply(tileIndex(211, 200))).result.status,
       "test_applied",
     );
     assert.deepEqual(
-      (await apply(tileIndex(484, 472), rejectedKey)).result,
+      (await apply(tileIndex(212, 200), rejectedKey)).result,
       rejection.result,
     );
     assert.equal(
-      (await apply(tileIndex(484, 472))).result.status,
+      (await apply(tileIndex(212, 200))).result.status,
       "test_applied",
     );
-    for (let x = 461; x >= 447; x--)
+    for (let x = 189; x >= 175; x--)
       assert.equal(
-        (await apply(tileIndex(x, 472))).result.status,
+        (await apply(tileIndex(x, 200))).result.status,
         "test_applied",
       );
     const race = await Promise.all([
-      apply(tileIndex(446, 472)),
-      apply(tileIndex(446, 472), undefined, second.actorId),
+      apply(tileIndex(174, 200)),
+      apply(tileIndex(174, 200), undefined, second.actorId),
     ]);
     assert.deepEqual(race.map((result) => result.result.status).sort(), [
       "test_applied",
@@ -186,7 +193,7 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
           actor.actorId,
           0,
           rejectedKey,
-          tileIndex(484, 472),
+          tileIndex(212, 200),
         )
       ).result,
       rejection.result,
@@ -195,7 +202,7 @@ test("HQ baseline, authoritative frontier, protected schools, cross-chunk races 
       actor.actorId,
       0,
       Uint8Array.from(Buffer.from(randomUUID().replaceAll("-", ""), "hex")),
-      tileIndex(445, 472),
+      tileIndex(173, 200),
     );
     assert.equal(resumed.result.status, "test_applied");
   } finally {

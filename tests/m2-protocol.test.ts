@@ -44,7 +44,7 @@ test("M2 binary command golden bytes and malformed-frame rejection", () => {
   assert.throws(() =>
     encodeExplore({ key, tileIndex: 1_000_000, ruleVersion: 0 }),
   );
-  assert.throws(() => encodeExplore({ key, tileIndex: 0, ruleVersion: 1 }));
+  assert.throws(() => encodeExplore({ key, tileIndex: 0, ruleVersion: 2 }));
 });
 
 test("M2 subscribe, resync, ack and delta wire fixtures stay byte stable", () => {

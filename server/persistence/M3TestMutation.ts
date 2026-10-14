@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Pool, PoolClient } from "pg";
 import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
   decodeFogChunk,
@@ -21,6 +22,12 @@ import {
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
 import { schoolBit } from "../../shared/world/registry.ts";
+import { adjustKnowledgeScore } from "../integration/KnowledgeScore.ts";
+import {
+  clusters,
+  joinShared,
+  settleShared,
+} from "../integration/SharedKnowledge.ts";
 
 import {
   checkExploreBoundary,
@@ -43,7 +50,8 @@ export interface M3TestResult {
     | "none"
     | "insufficient_fixture_credit"
     | "not_adjacent"
-    | "protected_hq";
+    | "protected_hq"
+    | "shared_full";
   readonly chunkId: number;
   readonly revision: string;
   readonly balance: string;
@@ -296,6 +304,11 @@ export class M3TestMutationService {
         [command.campaignId, command.schoolSlot],
       );
       if (school.rowCount !== 1) throw new Error("School slot not registered");
+      if (this.#boundary?.ruleVersion === 1)
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+          [`signed-game:${command.campaignId}`],
+        );
       if (this.#boundary) {
         if (campaign.rows[0].write_strategy !== "full_chunk")
           throw new Error("Expansion requires full-chunk persistence");
@@ -303,8 +316,18 @@ export class M3TestMutationService {
           client,
           command.campaignId,
           command.tileIndex,
+          this.#boundary.ruleVersion === 1
+            ? GAME_CONFIG.world.fogRevealRadius
+            : 0,
         );
       }
+      if (this.#boundary?.ruleVersion === 1)
+        await settleShared(
+          client,
+          command.campaignId,
+          command.actorId,
+          Date.now(),
+        );
       const createdHead = await client.query(
         "INSERT INTO world_chunk_heads(campaign_id,chunk_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING chunk_id",
         [command.campaignId, id],
@@ -348,7 +371,21 @@ export class M3TestMutationService {
       const knownBySchool =
         (maskAt(chunk.mask, local) & schoolBit(command.schoolSlot)) !== 0;
       const discoveredBySchool = revealed(chunk.fog, local);
-      const alreadyExplored = knownBySchool && discoveredBySchool;
+      const alreadyExplored =
+        knownBySchool &&
+        (this.#boundary?.ruleVersion === 1 || discoveredBySchool);
+      const originalMask = maskAt(chunk.mask, local);
+      const holders = Array.from({ length: 16 }, (_, slot) => slot).filter(
+        (slot) => originalMask & (1 << slot),
+      );
+      const effectiveCost =
+        this.#boundary?.ruleVersion === 1
+          ? BigInt(
+              holders.length
+                ? GAME_CONFIG.knowledge.sharedPoints
+                : GAME_CONFIG.knowledge.explorePoints,
+            )
+          : command.cost;
       let devDecision: ReturnType<EvaluateDevExplore> | undefined;
       if (this.#devExplore) {
         const lockedWallet = await client.query<{ balance: string }>(
@@ -382,16 +419,29 @@ export class M3TestMutationService {
             "Development rule disagrees with durable fixture contract",
           );
       }
+      const pendingConsolidation =
+        this.#boundary?.ruleVersion === 1 &&
+        !knownBySchool &&
+        (await clusters(client, command.campaignId)).some(
+          (c) =>
+            c.status === "consolidating" &&
+            c.tiles.some((t) => t.tile === command.tileIndex),
+        );
       const spatialRejection =
-        this.#boundary && !alreadyExplored
-          ? await checkExploreBoundary(
-              client,
-              command.campaignId,
-              command.schoolSlot,
-              command.tileIndex,
-              this.#boundary,
-            )
-          : undefined;
+        pendingConsolidation ||
+        (this.#boundary?.ruleVersion === 1 &&
+          !knownBySchool &&
+          holders.length >= GAME_CONFIG.knowledge.maxSchools)
+          ? "shared_full"
+          : this.#boundary && !alreadyExplored
+            ? await checkExploreBoundary(
+                client,
+                command.campaignId,
+                command.schoolSlot,
+                command.tileIndex,
+                this.#boundary,
+              )
+            : undefined;
       let result: M3TestResult;
       if (alreadyExplored) {
         const wallet = await client.query<{ balance: string }>(
@@ -414,7 +464,7 @@ export class M3TestMutationService {
             ? { rows: [] as { balance: string }[] }
             : await client.query<{ balance: string }>(
                 "UPDATE wallet_accounts SET balance=balance-$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' AND balance >= $3 RETURNING balance",
-                [command.campaignId, command.actorId, command.cost.toString()],
+                [command.campaignId, command.actorId, effectiveCost.toString()],
               );
         if (!wallet.rows[0]) {
           const current = await client.query<{ balance: string }>(
@@ -432,6 +482,22 @@ export class M3TestMutationService {
               : {}),
           };
         } else {
+          if (this.#boundary?.ruleVersion === 1 && holders.length === 1)
+            await joinShared(
+              client,
+              command.campaignId,
+              command.tileIndex,
+              holders[0]!,
+              command.schoolSlot,
+              Date.now(),
+            );
+          if (this.#boundary?.ruleVersion === 1)
+            await adjustKnowledgeScore(
+              client,
+              command.campaignId,
+              command.schoolSlot,
+              1,
+            );
           const writeStart = performance.now();
           if (chunk.revision === 0x7fffffffffffffffn)
             throw new RangeError("World revision exhausted");
@@ -483,6 +549,64 @@ export class M3TestMutationService {
               ],
             );
           }
+          if (this.#boundary?.ruleVersion === 1) {
+            const fogs = new Map<number, { fog: Buffer; revision: string }>();
+            for (
+              let dz = -GAME_CONFIG.world.fogRevealRadius;
+              dz <= GAME_CONFIG.world.fogRevealRadius;
+              dz++
+            )
+              for (
+                let dx = -GAME_CONFIG.world.fogRevealRadius;
+                dx <= GAME_CONFIG.world.fogRevealRadius;
+                dx++
+              ) {
+                const nx = x + dx,
+                  nz = z + dz;
+                if (nx < 0 || nz < 0 || nx >= 1000 || nz >= 1000) continue;
+                const fid = chunkId(Math.floor(nx / 64), Math.floor(nz / 64));
+                let state = fogs.get(fid);
+                if (!state) {
+                  const head = (
+                    await client.query<{ revision: string }>(
+                      "SELECT revision FROM world_chunk_heads WHERE campaign_id=$1 AND chunk_id=$2",
+                      [command.campaignId, fid],
+                    )
+                  ).rows[0]!;
+                  const row = (
+                    await client.query<{ fog: Buffer }>(
+                      "SELECT fog FROM school_fog_chunks WHERE campaign_id=$1 AND chunk_id=$2 AND school_slot=$3",
+                      [command.campaignId, fid, command.schoolSlot],
+                    )
+                  ).rows[0];
+                  state = {
+                    fog: Buffer.from(row?.fog ?? ZERO_FOG),
+                    revision: head.revision,
+                  };
+                  fogs.set(fid, state);
+                }
+                const flocal = localIndex(nx, nz);
+                state.fog[flocal >> 3]! |= 1 << (flocal & 7);
+              }
+            for (const [fid, state] of fogs) {
+              await client.query(
+                "INSERT INTO school_fog_chunks(campaign_id,chunk_id,school_slot,revision,fog,fog_crc) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(campaign_id,chunk_id,school_slot) DO UPDATE SET revision=EXCLUDED.revision,fog=EXCLUDED.fog,fog_crc=EXCLUDED.fog_crc",
+                [
+                  command.campaignId,
+                  fid,
+                  command.schoolSlot,
+                  state.revision,
+                  state.fog,
+                  crc32(state.fog),
+                ],
+              );
+              if (fid !== id)
+                await client.query(
+                  "INSERT INTO school_chunk_views(campaign_id,chunk_id,school_slot,view_revision) VALUES($1,$2,$3,1) ON CONFLICT(campaign_id,chunk_id,school_slot) DO UPDATE SET view_revision=school_chunk_views.view_revision+1",
+                  [command.campaignId, fid, command.schoolSlot],
+                );
+            }
+          }
           worldWriteMs = performance.now() - writeStart;
           if (this.#realtimeViews) {
             viewRevision++;
@@ -496,14 +620,14 @@ export class M3TestMutationService {
               ],
             );
           }
-          if (command.cost > 0n)
+          if (effectiveCost > 0n)
             await client.query(
               "INSERT INTO ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',$4)",
               [
                 command.campaignId,
                 command.actorId,
                 Buffer.from(command.key),
-                (-command.cost).toString(),
+                (-effectiveCost).toString(),
               ],
             );
           const outbox = await client.query<{ id: string }>(

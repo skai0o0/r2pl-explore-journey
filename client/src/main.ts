@@ -5,6 +5,13 @@ import {
   isExpansionEdge,
 } from "../../shared/gameplay/expansion.ts";
 import {
+  GAME_CONFIG,
+  LANDMARKS,
+  objectAt,
+  SCHOOLS,
+  type WorldObject,
+} from "../../shared/gameplay/gameConfig.ts";
+import {
   ACK_STATUS,
   decodeAck,
   decodeDelta,
@@ -24,6 +31,12 @@ import {
   localIndex,
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
+import { GameplayUI } from "./gameplayUI.ts";
+import { OperatorUI } from "./operatorUI.ts";
+import { MiniMap } from "./ui/miniMap.ts";
+import { StatsOverlay } from "./ui/statsOverlay.ts";
+import { StudentActionDock } from "./ui/studentActionDock.ts";
+import { TileTooltip } from "./ui/tileTooltip.ts";
 import {
   deriveDevCreditState,
   type PickedTile,
@@ -48,6 +61,29 @@ const session =
     : parseDevSession(await bootstrapResponse.json());
 if (bootstrapResponse.status !== 404 && !bootstrapResponse.ok)
   throw new Error("Synthetic session unavailable");
+const publicWorld =
+  session === LEGACY_DEV_SESSION
+    ? []
+    : (
+        (await (await fetch("/api/fixture/world")).json()) as {
+          objects: WorldObject[];
+        }
+      ).objects;
+const miniMap = new MiniMap();
+miniMap.setObjects(publicWorld);
+const dock = new StudentActionDock();
+const tooltip = new TileTooltip();
+document.body.dataset.debug = "false";
+const devToggle = document.createElement("button");
+devToggle.className = "dev-toggle";
+devToggle.textContent = "Dev tools";
+devToggle.setAttribute("aria-pressed", "false");
+devToggle.onclick = () => {
+  const on = document.body.dataset.debug !== "true";
+  document.body.dataset.debug = String(on);
+  devToggle.setAttribute("aria-pressed", String(on));
+};
+document.body.append(devToggle);
 const players = session.players;
 type Player = DevPlayer;
 
@@ -58,6 +94,7 @@ interface Profile {
   balance: string;
   cost: string;
   fixtureOnly: true;
+  inventory?: { crystals: string; keys: string };
 }
 
 interface PendingAction {
@@ -99,6 +136,7 @@ let player: Player =
   players.find(
     (item) => item.token === sessionStorage.getItem("r2pl-fixture-player"),
   ) ?? players[0]!;
+let privateObjects: readonly WorldObject[] = [];
 let replica = new ProjectionReplica(player.slot);
 let room: Room | undefined;
 let selected: PickedTile | undefined;
@@ -119,7 +157,7 @@ function lacksTestCredits(): boolean {
 function showInsufficientCredits(): void {
   ui.explore.disabled = true;
   ui.explore.innerHTML =
-    "<span>✦</span> Not enough test credits <small>Explore unavailable</small>";
+    "<span>✦</span> Not enough Points <small>Explore unavailable</small>";
 }
 
 function activity(message: string, kind = "normal"): void {
@@ -156,7 +194,7 @@ function updatePending(): void {
     if (isThisPending) {
       ui.explore.disabled = true;
       ui.explore.innerHTML =
-        '<span class="spin">✦</span> Committing… <small>1 test credit</small>';
+        '<span class="spin">✦</span> Committing… <small>1 / 2 Points</small>';
       ui.badge.textContent = "COMMITTING";
       ui.badge.className = "badge-tag committing";
       return;
@@ -192,7 +230,7 @@ function updateTile(): void {
     ui.badge.className = "badge-tag";
     ui.explore.disabled = true;
     ui.explore.innerHTML =
-      "<span>✦</span> Explore tile <small>1 test credit</small>";
+      "<span>✦</span> Explore tile <small>1 / 2 Points</small>";
     return;
   }
 
@@ -207,7 +245,7 @@ function updateTile(): void {
     ui.badge.className = "badge-tag committing";
     ui.explore.disabled = true;
     ui.explore.innerHTML =
-      '<span class="spin">✦</span> Committing… <small>1 test credit</small>';
+      '<span class="spin">✦</span> Committing… <small>1 / 2 Points</small>';
     return;
   }
 
@@ -266,7 +304,7 @@ function updateTile(): void {
       ui.badge.className = "badge-tag owned";
       ui.explore.disabled = true;
       ui.explore.innerHTML =
-        "<span>✓</span> Already Explored <small>0 credits</small>";
+        "<span>✓</span> Already Explored <small>0 Points</small>";
       return;
     }
 
@@ -280,7 +318,7 @@ function updateTile(): void {
       } else {
         ui.explore.disabled = !room;
         ui.explore.innerHTML =
-          "<span>✦</span> Establish Knowledge <small>1 test credit</small>";
+          "<span>✦</span> Establish Knowledge <small>1 / 2 Points</small>";
       }
       return;
     }
@@ -295,7 +333,7 @@ function updateTile(): void {
   } else {
     ui.explore.disabled = !room;
     ui.explore.innerHTML =
-      "<span>✦</span> Explore tile <small>1 test credit</small>";
+      "<span>✦</span> Explore tile <small>1 / 2 Points</small>";
   }
 }
 
@@ -332,6 +370,18 @@ async function refreshProfile(token = player.token): Promise<void> {
     ui.cost.textContent = profile.cost;
     profileBalance = profile.balance;
     profileCost = profile.cost;
+    dock.setPoints(Number(profile.balance));
+    stats.updateStats({
+      studentName: profile.name,
+      displayName: profile.name,
+      schoolId: SCHOOLS[player.slot]?.id ?? "hcmut",
+      schoolName: profile.schoolName,
+      schoolColor: SCHOOLS[player.slot]?.color ?? "#fff",
+      points: Number(profile.balance),
+    });
+    if (profile.inventory) {
+      dock.setCrystals(Number(profile.inventory.crystals));
+    }
     rewards.refresh();
     updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
@@ -347,7 +397,7 @@ function refreshBalanceSoon(): void {
 }
 
 const rewards = new RewardsPanel(
-  session !== LEGACY_DEV_SESSION,
+  false,
   (token) => {
     if (token === player.token) void refreshProfile(token);
   },
@@ -357,54 +407,163 @@ const rewards = new RewardsPanel(
 const world = new WorldView(
   get("world-view"),
   (tile) => {
+    if (operator.relocating) {
+      operator.relocate(tile.x, tile.z);
+      return;
+    }
     selected = tile;
     updateTile();
-    explore();
+    const object = objectAt(tile.x, tile.z, [
+      ...publicWorld,
+      ...privateObjects,
+    ]);
+    if (object && object.kind !== "hq") gameplay.pick(object);
+    else explore();
   },
-  () => scheduleSubscribe(),
+  () => {
+    scheduleSubscribe();
+    const camera = world.viewState;
+    miniMap.updateCamera(camera.x, camera.z, camera.span);
+  },
   (hovered) => {
     updateHover(hovered);
+    if (hovered)
+      tooltip.show({
+        x: hovered.x,
+        z: hovered.z,
+        owned: !!(
+          replica.maskAt(hovered.chunk, hovered.local) &
+          (1 << player.slot)
+        ),
+        discovered: replica.isDiscovered(hovered.chunk, hovered.local),
+        adjacent: !expansionBlocked(hovered),
+        object: objectAt(hovered.x, hovered.z, [
+          ...publicWorld,
+          ...privateObjects,
+        ]),
+      });
+    else tooltip.hide();
   },
   session.headquarters
     ? {
-        markers: [
-          ...session.headquarters.map((area) => ({
-            x: area.x + area.size / 2,
-            z: area.z + area.size / 2,
-            title: `${players.find((p) => p.slot === area.schoolSlot)!.schoolName} HQ`,
-            detail: `${area.size}×${area.size} · protected dev HQ`,
-            kind: area.schoolSlot === 0 ? "dawn" : "dusk",
-          })),
-          {
-            x: 510,
-            z: 485,
-            title: "LANDMARK",
-            detail: "Visual placeholder · no rewards",
-            kind: "landmark",
-          },
-        ],
-        placements: [
-          ...session.headquarters.map((area) => ({
-            id: `school-${area.schoolSlot}-hq`,
-            asset: "hq" as const,
-            worldX: area.x + area.size / 2,
-            worldZ: area.z + area.size / 2,
-            scale: 12,
+        markers: publicWorld.map((o) => ({
+          id: o.id,
+          color:
+            o.schoolSlot === undefined
+              ? "#eecb72"
+              : SCHOOLS[o.schoolSlot]!.color,
+          x: o.x,
+          z: o.z,
+          title: o.name,
+          detail: `${o.width}×${o.height}`,
+          kind: o.kind,
+        })),
+        placements: publicWorld
+          .filter((o) => o.kind === "hq" || o.kind === "landmark")
+          .map((o) => ({
+            id: o.id,
+            asset: o.kind as "hq" | "landmark",
+            worldX: o.x,
+            worldZ: o.z,
+            scale: o.kind === "hq" ? 12 : 20,
             rotationZ: 0,
           })),
-          {
-            id: "landmark",
-            asset: "landmark" as const,
-            worldX: 510,
-            worldZ: 485,
-            scale: 15,
-            rotationZ: 0,
-          },
-        ],
+        objects: publicWorld,
       }
     : {},
 );
 
+const operator = new OperatorUI(
+  (x, z) => world.animateFocus(x, z, 100),
+  (objects) => world.setEditorPreview(objects),
+);
+const stats = new StatsOverlay();
+stats.onFlyToHQRequested = () =>
+  world.animateFocus(player.home.x, player.home.z, 100);
+function refreshRanking(): void {
+  void fetch("/api/game/ranking")
+    .then((r) => r.json())
+    .then((page: { rankings: { schoolId: string; points: number }[] }) =>
+      stats.updateSchoolRankings(page.rankings),
+    )
+    .catch(() => {});
+}
+refreshRanking();
+window.setInterval(refreshRanking, 5000);
+const layoutDigest = JSON.stringify(publicWorld);
+window.setInterval(() => {
+  void fetch("/api/fixture/world", { cache: "no-store" })
+    .then((r) => r.json())
+    .then((v: { objects: WorldObject[] }) => {
+      if (
+        JSON.stringify(v.objects) !== layoutDigest &&
+        !document.querySelector(".layout-update")
+      ) {
+        const update = document.createElement("button");
+        update.className = "layout-update";
+        update.textContent = "Bản đồ đã cập nhật · Tải layout mới";
+        update.onclick = () => location.reload();
+        document.body.append(update);
+      }
+    })
+    .catch(() => {});
+}, 5000);
+const gameplay = new GameplayUI(
+  publicWorld,
+  (x, z) => world.focus(x, z, 100),
+  (view) => {
+    world.setBeacons(view.landmarks);
+    stats.updateExploration(
+      view.revealedTiles,
+      (view.revealedTiles /
+        (GAME_CONFIG.world.width * GAME_CONFIG.world.height)) *
+        100,
+    );
+    dock.setCrystals(Number(view.crystals));
+    stats.updateStats({
+      crystals: Number(view.crystals),
+      aspireKeys: Number(view.keys.aspire),
+      nitroKeys: Number(view.keys.nitro),
+      predatorKeys: Number(view.keys.predator),
+      litLandmarksCount: view.landmarks.filter((l) => l.holder === player.slot)
+        .length,
+      buffs: view.landmarks
+        .filter((l) => l.holder === player.slot)
+        .flatMap((v) => {
+          const l = LANDMARKS.find((l) => l.id === v.id);
+          return l ? [{ name: l.name, description: l.buffDescription }] : [];
+        }),
+    });
+    dock.setKeys(
+      Number(view.keys.aspire),
+      Number(view.keys.nitro),
+      Number(view.keys.predator),
+    );
+    privateObjects = view.chests;
+    world.setPrivateObjects(view.chests);
+    miniMap.setObjects([...publicWorld, ...view.chests]);
+  },
+  () => void refreshProfile(),
+  session.campaignId ?? "",
+);
+miniMap.onPanRequested = (x, z) => world.animateFocus(x, z, 100);
+miniMap.onPanLive = (x, z) => world.focus(x, z, 100);
+miniMap.onZoomIn = () => world.zoom(0.72);
+miniMap.onZoomOut = () => world.zoom(1.38);
+miniMap.onRecenter = () =>
+  world.animateFocus(player.home.x, player.home.z, 100);
+dock.onModeChange(() => {
+  if (selected) updateTile();
+});
+dock.onBeaconAction = () => {
+  const l = objectAt(selected?.x ?? 500, selected?.z ?? 550, publicWorld);
+  if (l?.kind === "landmark") gameplay.pick(l);
+  else {
+    world.animateFocus(500, 550, 200);
+    const o = publicWorld.find((o) => o.id === "cairang");
+    if (o) gameplay.pick(o);
+  }
+};
 const overviewButton = get<HTMLButtonElement>("overview-button");
 const worldHost = get<HTMLElement>("world-view");
 
@@ -464,13 +623,17 @@ function explore(): void {
   }
   if (lacksTestCredits()) {
     showInsufficientCredits();
-    activity("Not enough test credits to explore", "normal");
+    activity("Not enough Points to explore", "normal");
     return;
   }
   const key = crypto.getRandomValues(new Uint8Array(16));
   const action: PendingAction = {
     key: keyHex(key),
-    frame: encodeExplore({ key, tileIndex: selected.index, ruleVersion: 0 }),
+    frame: encodeExplore({
+      key,
+      tileIndex: selected.index,
+      ruleVersion: session === LEGACY_DEV_SESSION ? 0 : GAME_CONFIG.ruleVersion,
+    }),
     tile: selected,
     token: player.token,
   };
@@ -500,6 +663,27 @@ function handleFrame(raw: Uint8Array): void {
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
           activity(`Explored ${place} · committed`, "success");
           world.playReveal(action.tile.x, action.tile.z, player.slot);
+          if (session !== LEGACY_DEV_SESSION) {
+            const fogChunks = new Set<number>();
+            for (
+              let dz = -GAME_CONFIG.world.fogRevealRadius;
+              dz <= GAME_CONFIG.world.fogRevealRadius;
+              dz++
+            )
+              for (
+                let dx = -GAME_CONFIG.world.fogRevealRadius;
+                dx <= GAME_CONFIG.world.fogRevealRadius;
+                dx++
+              ) {
+                const x = action.tile.x + dx,
+                  z = action.tile.z + dz;
+                if (x >= 0 && z >= 0 && x < 1000 && z < 1000)
+                  fogChunks.add(
+                    chunkId(Math.floor(x / 64), Math.floor(z / 64)),
+                  );
+              }
+            for (const id of fogChunks) room?.sendBytes("m2", encodeResync(id));
+          }
         } else if (ack.status === ACK_STATUS.TEST_NO_CHANGE) {
           activity(`${place} already explored · no credit spent`, "normal");
         } else {
@@ -518,6 +702,7 @@ function handleFrame(raw: Uint8Array): void {
         const snapshot = decodeSnapshot(frame.payload);
         replica.applySnapshot(snapshot);
         world.paintChunk(snapshot.chunkId, replica);
+        miniMap.paintProjection(snapshot.chunkId, replica);
         updateTile();
         break;
       }
@@ -528,6 +713,7 @@ function handleFrame(raw: Uint8Array): void {
           room?.sendBytes("m2", encodeResync(delta.chunkId));
         } else if (result === "applied") {
           world.paintTile(delta.chunkId, delta.localIndex, replica);
+          miniMap.paintProjection(delta.chunkId, replica);
           updateTile();
           refreshBalanceSoon();
         }
@@ -565,7 +751,11 @@ async function connect(nextPlayer: Player): Promise<void> {
   subscribed = "";
   if (previous) void previous.leave();
   player = nextPlayer;
+  privateObjects = [];
+  world.setPrivateObjects([]);
+  miniMap.setObjects(publicWorld);
   rewards.select(player.token, player.label);
+  gameplay.select(player);
   ui.balance.textContent = "—";
   ui.player.textContent = player.label;
   ui.school.textContent = player.schoolName;
@@ -575,6 +765,12 @@ async function connect(nextPlayer: Player): Promise<void> {
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
   world.setSchool(player.slot);
+  miniMap.setSchool(player.slot);
+  miniMap.setPlayerHQ(
+    SCHOOLS[player.slot]?.id ?? "",
+    player.home.x,
+    player.home.z,
+  );
   world.focus(
     player.home.x,
     player.home.z,
@@ -640,6 +836,7 @@ get("zoom-out").addEventListener("click", () => world.zoom(1.38));
 window.addEventListener("keydown", (event) => {
   if (
     rewards.open ||
+    gameplay.open ||
     event.target instanceof HTMLButtonElement ||
     event.target instanceof HTMLSelectElement ||
     event.target instanceof HTMLInputElement

@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 export interface DevIdentity {
   readonly token: string;
   readonly actorId: string;
@@ -45,7 +46,7 @@ export class DevAccountService {
         opening_balance: string;
         ledger_net: string;
       }>(
-        "SELECT w.resource,w.balance::text,w.opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.ledger_entries l WHERE l.campaign_id=w.campaign_id AND l.actor_id=w.actor_id AND l.resource=w.resource),0)::text AS ledger_net FROM r2pl_v2.wallet_accounts w JOIN r2pl_v2.campaign_schools s ON s.campaign_id=w.campaign_id AND s.slot=$3 WHERE w.campaign_id=$1 AND w.actor_id=$2 AND w.resource IN ('fixture-credit','fixture-crystals','fixture-treasure-map','fixture-key')",
+        "SELECT w.resource,w.balance::text,w.opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.ledger_entries l WHERE l.campaign_id=w.campaign_id AND l.actor_id=w.actor_id AND l.resource=w.resource),0)::text AS ledger_net FROM r2pl_v2.wallet_accounts w JOIN r2pl_v2.campaign_schools s ON s.campaign_id=w.campaign_id AND s.slot=$3 WHERE w.campaign_id=$1 AND w.actor_id=$2 AND w.resource IN ('fixture-credit','fixture-crystals','fixture-treasure-map','fixture-key','key-aspire','key-nitro','key-predator')",
         [this.#campaignId, actor.actorId, actor.schoolSlot],
       )
     ).rows;
@@ -58,7 +59,7 @@ export class DevAccountService {
       schoolName: actor.schoolName,
       schoolSlot: actor.schoolSlot,
       balance: row.balance,
-      cost: "1",
+      cost: String(GAME_CONFIG.knowledge.explorePoints),
       fixtureOnly: true,
       resource: "fixture-credit",
       openingBalance: row.opening_balance,

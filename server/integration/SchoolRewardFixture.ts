@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Pool } from "pg";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import { REWARD_PREPARATION_VERSION } from "../../shared/rewards/commands.ts";
 import type { CampaignBinding } from "./CampaignProvider.ts";
 import type { SchoolPlayFixture } from "./SchoolPlayFixture.ts";
@@ -28,6 +29,9 @@ export async function provisionSchoolRewards(
   const db = await pool.connect();
   try {
     await db.query("BEGIN");
+    await db.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('signed-game-schema',0))",
+    );
     for (const file of [
       "001_running_sync_dev.sql",
       "002_reward_transactions_dev.sql",
@@ -130,7 +134,7 @@ export async function provisionSchoolRewards(
       )
         throw new Error("Conflicting fixture reward binding");
       for (const [resource, opening] of [
-        ["fixture-crystals", 0],
+        ["fixture-crystals", GAME_CONFIG.staging.initialCrystals],
         ["fixture-treasure-map", 0],
         ["fixture-key", 1],
       ] as const)

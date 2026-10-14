@@ -1138,3 +1138,719 @@ body[data-school="dusk"] .tile-panel button small {
     padding: 8px 4px;
   }
 }
+
+/* Adapted V1 minimap, tactical tooltip and resource/action dock. */
+.minimap-wrapper {
+  position: fixed;
+  right: 22px;
+  bottom: 80px;
+  z-index: 30;
+  background: #11262e;
+  border: 1px solid #6ce2dc;
+  border-radius: 12px;
+  padding: 8px;
+}
+.minimap-canvas {
+  display: block;
+  width: 160px;
+  height: 160px;
+  touch-action: none;
+}
+.minimap-wrapper.is-expanded .minimap-canvas {
+  width: 300px;
+  height: 300px;
+}
+.minimap-controls {
+  display: flex;
+  gap: 8px;
+}
+.minimap-expand {
+  float: right;
+}
+.btn-mini-control svg {
+  width: 16px;
+  height: 16px;
+}
+.tile-tactical-tooltip {
+  position: fixed;
+  left: 20px;
+  bottom: 130px;
+  max-width: 300px;
+  background: #122633ee;
+  border: 1px solid #6ce2dc;
+  border-radius: 12px;
+  padding: 12px;
+  z-index: 30;
+  pointer-events: none;
+}
+.student-mode-dock {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  background: #122633ee;
+  border: 1px solid #6ce2dc;
+  border-radius: 12px;
+  padding: 8px;
+}
+.dock-resource-bar,
+.mode-buttons-group,
+.dock-header-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.dock-res-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.student-mode-dock svg {
+  width: 16px;
+  height: 16px;
+}
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+.mode-btn.is-active {
+  border-color: #6ce2dc;
+}
+.dock-header-bar {
+  font-size: 11px;
+  margin: 6px;
+}
+.dock-keys-mini-tags,
+.dock-res-label {
+  font-size: 10px;
+}
+.map-marker.unistop {
+  color: #6ce2dc;
+}
+.map-marker.landmark {
+  color: #eecb72;
+}
+@media (max-width: 700px) {
+  .minimap-wrapper {
+    right: 8px;
+    bottom: 145px;
+  }
+  .minimap-canvas {
+    width: 110px;
+    height: 110px;
+  }
+  .student-mode-dock {
+    width: 95%;
+  }
+  .dock-res-label,
+  .dock-label-hint,
+  .dock-keys-mini-tags {
+    display: none;
+  }
+  .tile-tactical-tooltip {
+    bottom: 150px;
+    max-width: 180px;
+    font-size: 11px;
+  }
+}
+
+.gameplay-menu {
+  position: fixed;
+  right: 20px;
+  top: 95px;
+  z-index: 40;
+  background: #122633ee;
+  border: 1px solid #6ce2dc;
+  border-radius: 12px;
+  padding: 10px;
+  max-width: 280px;
+}
+.gameplay-content {
+  max-height: 55vh;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+.gameplay-content > div {
+  display: flex;
+  gap: 5px;
+}
+.chest-dialog {
+  background: #122633;
+  color: white;
+  border: 1px solid #6ce2dc;
+  padding: 24px;
+  border-radius: 12px;
+}
+.notification-banner-container {
+  position: fixed;
+  right: 20px;
+  top: 150px;
+  z-index: 10000;
+}
+.gameplay-menu summary {
+  cursor: pointer;
+}
+.gameplay-menu button {
+  padding: 6px;
+}
+@media (max-width: 700px) {
+  .gameplay-menu {
+    top: 75px;
+    right: 8px;
+    font-size: 11px;
+    max-width: 210px;
+  }
+}
+
+.operator-menu {
+  position: fixed;
+  left: 20px;
+  top: 270px;
+  background: #122633ee;
+  border: 1px solid #6ce2dc;
+  border-radius: 12px;
+  padding: 8px;
+  z-index: 50;
+  width: 220px;
+}
+.operator-menu[open] {
+  display: grid;
+  gap: 5px;
+}
+.stats-top-hud {
+  position: fixed;
+  right: 20px;
+  top: 12px;
+  z-index: 50;
+  background: #122633ee;
+  border: 1px solid #6ce2dc;
+  border-radius: 12px;
+  padding: 8px;
+  max-width: 400px;
+}
+.stats-top-hud svg {
+  width: 18px;
+  height: 18px;
+}
+.stats-top-hud .hud-primary-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.stats-top-hud .hud-secondary-menu,
+.school-ranking-popover {
+  background: #122633;
+  padding: 10px;
+}
+.stats-top-hud .school-ranking-row {
+  display: flex;
+  gap: 10px;
+}
+.stats-top-hud[hidden] {
+  display: none;
+}
+.stats-top-hud button {
+  padding: 6px;
+}
+.operator-menu input,
+.operator-menu select {
+  max-width: 200px;
+}
+@media (max-width: 700px) {
+  .stats-top-hud {
+    display: none;
+  }
+  .operator-menu {
+    top: 230px;
+    left: 8px;
+    width: 170px;
+    font-size: 11px;
+  }
+}
+
+.student-mode-dock button,
+.minimap-wrapper button,
+.stats-top-hud button,
+.gameplay-menu button,
+.operator-menu button {
+  background: #193943;
+  color: #e2f2ee;
+  border: 1px solid #35616a;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.student-mode-dock button:hover,
+.gameplay-menu button:hover {
+  background: #28535b;
+}
+.student-mode-dock .mode-btn.is-active {
+  background: #205b54;
+  border-color: #6ce2dc;
+}
+.map-editor-panel.hidden {
+  display: none;
+}
+.stats-top-hud {
+  left: 290px;
+  right: auto;
+  top: 110px;
+  width: 290px;
+  max-width: 290px;
+  font-size: 12px;
+  display: grid;
+  gap: 8px;
+}
+.hud-identity,
+.hud-resources,
+.hud-resource,
+.hud-progress-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hud-identity {
+  justify-content: space-between;
+}
+.hud-brand-tag {
+  display: flex;
+  gap: 4px;
+  font-size: 10px;
+}
+.hud-resource .stat-label {
+  display: none;
+}
+.hud-progress-strip {
+  flex-wrap: wrap;
+}
+.stat-exploration {
+  display: none;
+}
+.school-pill {
+  border-left: 3px solid var(--school-color);
+  padding-left: 8px;
+}
+.hud-menu-toggle {
+  width: 30px;
+}
+.gameplay-menu {
+  top: 305px;
+}
+.operator-menu {
+  top: 350px;
+}
+.operator-menu input,
+.operator-menu select {
+  background: #112e38;
+  color: #d9eeed;
+  border: 1px solid #45656b;
+  padding: 6px;
+  border-radius: 5px;
+}
+.map-marker.unistop .marker-glyph {
+  color: #6ce2dc;
+}
+.notification-banner-container {
+  top: 95px;
+  right: 350px;
+}
+@media (max-width: 700px) {
+  .stats-top-hud {
+    display: grid;
+    left: auto;
+    right: 8px;
+    top: 55px;
+    width: 170px;
+    max-width: 170px;
+    font-size: 10px;
+  }
+  .hud-identity,
+  .hud-resources,
+  .hud-menu-toggle {
+    display: none;
+  }
+  .gameplay-menu {
+    top: 190px;
+  }
+  .operator-menu {
+    top: 240px;
+  }
+  .notification-banner-container {
+    top: 90px;
+    right: 8px;
+  }
+  .student-mode-dock button {
+    font-size: 10px;
+  }
+  .student-mode-dock .mode-btn {
+    gap: 4px;
+    padding: 7px;
+  }
+  .dock-header-bar {
+    display: none;
+  }
+}
+
+.landmark-puzzle-image {
+  position: relative;
+  margin-bottom: 16px;
+  border: 1px solid #365d69;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 180px;
+}
+.landmark-puzzle-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.landmark-puzzle-image.masked img {
+  filter: blur(7px);
+  opacity: 0.5;
+}
+.landmark-puzzle-image span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #e7f5ef;
+  font-weight: 700;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 60px,
+    #19394499 60px,
+    #19394499 62px
+  );
+}
+.landmark-puzzle-image.solved span {
+  display: none;
+}
+
+.lm-crystal-btn,
+.chest-dialog button {
+  background: #193943;
+  color: #e2f2ee;
+  border: 1px solid #35616a;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.lm-crystal-btn:hover {
+  background: #28535b;
+}
+.lm-crystal-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.lm-crystal-btn svg {
+  color: #6ce2dc;
+}
+.lm-btn-cost {
+  font-size: 11px;
+  color: #a5dbce;
+}
+.gameplay-navigation {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0;
+}
+.gameplay-navigation input {
+  width: 65px;
+  background: #112e38;
+  color: #d9eeed;
+  border: 1px solid #45656b;
+  border-radius: 5px;
+  padding: 5px;
+}
+.chest-dialog button {
+  display: inline-flex;
+  margin: 5px;
+}
+.chest-dialog::backdrop {
+  background: #071519ab;
+}
+.gameplay-content > div:has(p) {
+  display: block;
+  border: 1px solid #35616a;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.gameplay-menu[open] ~ .minimap-wrapper {
+  visibility: hidden;
+}
+.school-ranking-popover {
+  max-width: 100%;
+  overflow: hidden;
+}
+.hud-exploration-val {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .resources {
+    display: none;
+  }
+  .stats-top-hud {
+    top: 72px;
+    right: 8px;
+    width: 174px;
+    max-width: 174px;
+    max-height: 70vh;
+    overflow: auto;
+  }
+  .hud-progress-strip {
+    font-size: 10px;
+  }
+  .school-ranking-popover {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: 218px;
+    width: auto;
+    max-width: calc(100vw - 16px);
+    border: 1px solid #6ce2dc;
+    border-radius: 10px;
+    z-index: 80;
+  }
+  .school-ranking-row {
+    justify-content: space-between;
+  }
+  .map-tools {
+    top: 160px;
+  }
+  .gameplay-menu {
+    top: 215px;
+    right: 8px;
+    max-width: calc(100vw - 16px);
+    font-size: 12px;
+  }
+  .gameplay-menu[open] {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    z-index: 85;
+  }
+  .gameplay-content {
+    max-height: calc(100dvh - 370px);
+  }
+  .operator-menu {
+    top: 215px;
+    left: 8px;
+    width: auto;
+    max-width: calc(100vw - 16px);
+  }
+  .operator-menu[open] {
+    left: 8px;
+    right: 8px;
+    z-index: 90;
+    max-height: calc(100dvh - 345px);
+    overflow: auto;
+  }
+  .operator-menu input,
+  .operator-menu select {
+    max-width: 100%;
+    width: 100%;
+  }
+  .tile-panel {
+    bottom: 138px;
+    padding: 10px;
+  }
+  .tile-panel h2 {
+    font-size: 20px;
+  }
+  .tile-panel .eyebrow {
+    margin-bottom: 5px;
+  }
+  .tile-panel #tile-knowledge {
+    font-size: 11px;
+    margin: 6px 0;
+  }
+  .tile-panel #action-status {
+    display: none;
+  }
+  .student-mode-dock {
+    bottom: 20px;
+    max-width: calc(100vw - 16px);
+    padding: 6px;
+  }
+  .mode-buttons-group {
+    gap: 4px;
+  }
+  .student-mode-dock .mode-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 3px;
+    font-size: 10px;
+  }
+  .student-mode-dock .mode-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+  .student-mode-dock .dock-res-pill {
+    font-size: 11px;
+  }
+  .minimap-wrapper {
+    bottom: 300px;
+    right: 8px;
+  }
+  .minimap-canvas {
+    width: 90px;
+    height: 90px;
+  }
+  .minimap-wrapper.is-expanded .minimap-canvas {
+    width: min(300px, calc(100vw - 50px));
+    height: min(300px, calc(100vw - 50px));
+  }
+  .lm-modal-overlay {
+    padding: 8px;
+  }
+  .lm-modal-dialog {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+  .lm-contrib-buttons {
+    flex-wrap: wrap;
+  }
+  .notification-banner-container {
+    left: 8px;
+    right: 8px;
+    top: 65px;
+    max-width: calc(100vw - 16px);
+  }
+  .map-editor-panel {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px);
+    left: 8px !important;
+    right: 8px !important;
+    top: 65px !important;
+    max-height: calc(100dvh - 180px) !important;
+  }
+  .gameplay-menu[open] ~ * {
+    max-width: 100vw;
+  }
+}
+
+.layout-update {
+  position: fixed;
+  top: 95px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: #205b54;
+  color: #e2f2ee;
+  border: 1px solid #6ce2dc;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+body[data-debug="false"] .activity-panel,
+body[data-debug="false"] .status-strip,
+body[data-debug="false"] .fixture-banner,
+body[data-debug="false"] .resources,
+body[data-debug="false"] .identity-note {
+  display: none;
+}
+.dev-toggle {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 35;
+  padding: 6px 10px;
+  background: #122633;
+  color: #bdd9d2;
+  border: 1px solid #35616a;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.gameplay-guide {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.gameplay-guide[open] {
+  max-height: 35vh;
+  overflow: auto;
+}
+.gameplay-guide p {
+  margin: 8px 0;
+  color: #bcd8d4;
+}
+.gameplay-menu[open] {
+  z-index: 45;
+}
+.minimap-wrapper {
+  bottom: 145px;
+}
+.dev-toggle[aria-pressed="true"] {
+  background: #205b54;
+}
+@media (max-width: 700px) {
+  .dev-toggle {
+    bottom: 110px;
+    left: 8px;
+  }
+  .minimap-wrapper {
+    bottom: 300px;
+  }
+}
+
+@media (min-width: 701px) {
+  .minimap-wrapper {
+    left: 20px;
+    right: auto;
+    bottom: 80px;
+  }
+  body[data-debug="true"] .minimap-wrapper {
+    left: 335px;
+  }
+  .tile-tactical-tooltip {
+    left: 220px;
+    bottom: 130px;
+  }
+}
+
+body:has(.gameplay-menu[open]) .operator-menu:not([open]) {
+  visibility: hidden;
+}
+@media (max-width: 700px) {
+  .gameplay-menu[open] {
+    max-height: calc(100dvh - 350px);
+    overflow: auto;
+    z-index: 85;
+  }
+  .gameplay-menu > summary {
+    position: sticky;
+    top: -10px;
+    background: #122633;
+    padding: 5px 0;
+    z-index: 2;
+  }
+  .gameplay-guide[open] {
+    max-height: 30vh;
+  }
+  .gameplay-content {
+    max-height: calc(100dvh - 400px);
+  }
+  .gameplay-menu:has(.gameplay-guide[open]) .gameplay-content {
+    max-height: 180px;
+  }
+}
+
+.landmark-puzzle-image {
+  flex: 0 0 180px;
+  min-height: 180px;
+}
+.lm-modal-body {
+  min-height: 0;
+}
+.lm-modal-dialog {
+  max-height: 90dvh;
+}

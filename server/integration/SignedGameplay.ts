@@ -1,0 +1,657 @@
+import { createHash, randomInt } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
+import {
+  type GameCommand,
+  type GameReceipt,
+  type GameView,
+  type LandmarkView,
+  parseGameCommand,
+} from "../../shared/gameplay/commands.ts";
+import {
+  GAME_CONFIG,
+  LANDMARKS,
+  type RewardOutcome,
+  type WorldObject,
+} from "../../shared/gameplay/gameConfig.ts";
+import {
+  campaignWeekStart,
+  parseRunningSnapshot,
+} from "../../shared/integration/running.ts";
+import { chunkId, localIndex } from "../../shared/world/coordinates.ts";
+import type {
+  SchoolPlayActor,
+  SchoolPlayFixture,
+} from "./SchoolPlayFixture.ts";
+import { clusters, payShared, settleShared } from "./SharedKnowledge.ts";
+import { SyntheticCampaignProvider } from "./SyntheticCampaignProvider.ts";
+
+interface Beacon {
+  holder: number | null;
+  takeovers: number;
+  pots: Record<string, number>;
+  solved: number[];
+  cooldowns: Record<string, number>;
+}
+const actionNames: Record<GameCommand["action"], string> = {
+  running: "Đồng bộ Running",
+  upkeep: "Duy trì Shared Knowledge",
+  consolidate: "Đóng góp consolidation",
+  guess: "Giải đố địa danh",
+  contribute: "Đóng góp Crystal",
+  spin: "Quay UniStop",
+  open: "Mở Chest",
+};
+const rejectionMessages: Record<string, string> = {
+  INSUFFICIENT_BALANCE: "Ví chưa đủ tài nguyên",
+  COOLDOWN: "Lượt tại trạm này đang hồi",
+  CHEST_COLLECTED: "Chest đã được thu thập",
+  CHEST_NOT_DISCOVERED: "Bạn chưa tìm thấy Chest này",
+  KNOWLEDGE_PATH_REQUIRED: "Knowledge của trường cần chạm địa danh",
+  GUESS_COOLDOWN: "Chưa hết thời gian chờ đoán lại",
+  UNKNOWN_OBJECT: "Đối tượng đã thay đổi; tải bản đồ mới",
+  "Upkeep not due": "Cluster đang trong 24 giờ miễn upkeep",
+  "Not your consolidation": "Trường bạn không phải guest nhận consolidation",
+  "Unknown school cluster": "Cluster đã kết thúc hoặc không thuộc trường bạn",
+};
+const initialBeacon = (): Beacon => ({
+  holder: null,
+  takeovers: 0,
+  pots: {},
+  solved: [],
+  cooldowns: {},
+});
+const target = (b: Beacon) =>
+  GAME_CONFIG.landmark.baseCrystals +
+  Math.round(
+    (GAME_CONFIG.landmark.baseCrystals *
+      GAME_CONFIG.landmark.takeoverStepPercent *
+      (b.takeovers + (b.holder === null ? 0 : 1))) /
+      100,
+  );
+const normalize = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replaceAll("đ", "d")
+    .replace(/[^a-z0-9]/g, "");
+export class SignedGameplay {
+  private pool: Pool;
+  private fixture: SchoolPlayFixture;
+  private draw: () => number;
+  constructor(
+    pool: Pool,
+    fixture: SchoolPlayFixture,
+    draw: () => number = () => randomInt(GAME_CONFIG.rewards.weightTotal),
+  ) {
+    this.pool = pool;
+    this.fixture = fixture;
+    this.draw = draw;
+  }
+  async settle(): Promise<void> {
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+        `signed-game:${this.fixture.campaignId}`,
+      ]);
+      await settleShared(
+        db,
+        this.fixture.campaignId,
+        this.fixture.actors[0]!.actorId,
+        Date.now(),
+      );
+      await db.query("COMMIT");
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
+  }
+  actor(token: string | undefined): SchoolPlayActor | undefined {
+    return this.fixture.actors.find(
+      (a) => a.token === token && a.role === "human",
+    );
+  }
+  private async state<T>(
+    db: PoolClient,
+    scope: string,
+    id: string,
+    fallback: T,
+  ): Promise<T> {
+    return (
+      (
+        await db.query<{ data: T }>(
+          "SELECT data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope=$2 AND id=$3",
+          [this.fixture.campaignId, scope, id],
+        )
+      ).rows[0]?.data ?? fallback
+    );
+  }
+  private async save(
+    db: PoolClient,
+    scope: string,
+    id: string,
+    data: unknown,
+  ): Promise<void> {
+    await db.query(
+      "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,$2,$3,$4) ON CONFLICT(campaign_id,scope,id) DO UPDATE SET data=EXCLUDED.data",
+      [this.fixture.campaignId, scope, id, JSON.stringify(data)],
+    );
+  }
+  private async object(
+    db: PoolClient,
+    id: string,
+  ): Promise<WorldObject | undefined> {
+    return (
+      await db.query<{ data: WorldObject }>(
+        "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND id=$2",
+        [this.fixture.campaignId, id],
+      )
+    ).rows[0]?.data;
+  }
+  private async path(
+    db: PoolClient,
+    o: WorldObject,
+    slot: number,
+  ): Promise<boolean> {
+    const left = Math.max(0, o.x - o.width / 2 - 1),
+      right = Math.min(GAME_CONFIG.world.width - 1, o.x + o.width / 2),
+      top = Math.max(0, o.z - o.height / 2 - 1),
+      bottom = Math.min(GAME_CONFIG.world.height - 1, o.z + o.height / 2);
+    const ids: number[] = [];
+    for (let z = Math.floor(top / 64); z <= Math.floor(bottom / 64); z++)
+      for (let x = Math.floor(left / 64); x <= Math.floor(right / 64); x++)
+        ids.push(chunkId(x, z));
+    const rows = (
+      await db.query<{ chunk_id: number; mask: Buffer }>(
+        "SELECT chunk_id,mask FROM r2pl_v2.world_chunks WHERE campaign_id=$1 AND chunk_id=ANY($2::smallint[]) ORDER BY chunk_id",
+        [this.fixture.campaignId, ids],
+      )
+    ).rows;
+    const masks = new Map(rows.map((r) => [r.chunk_id, r.mask]));
+    for (let z = top; z <= bottom; z++)
+      for (let x = left; x <= right; x++) {
+        if (x < 0 || z < 0 || x >= 1000 || z >= 1000) continue;
+        if (
+          (masks
+            .get(chunkId(Math.floor(x / 64), Math.floor(z / 64)))
+            ?.readUInt16LE(localIndex(x, z) * 2) ?? 0) &
+          (1 << slot)
+        )
+          return true;
+      }
+    return false;
+  }
+  async initialize(): Promise<void> {
+    for (const actor of this.fixture.actors.filter((a) => a.role === "human"))
+      for (const tier of ["aspire", "nitro", "predator"])
+        await this.pool.query(
+          "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,opening_balance,balance) VALUES($1,$2,$3,$4,$4) ON CONFLICT DO NOTHING",
+          [
+            this.fixture.campaignId,
+            actor.actorId,
+            `key-${tier}`,
+            GAME_CONFIG.staging.initialKeysPerTier,
+          ],
+        );
+  }
+  async view(actor: SchoolPlayActor): Promise<GameView> {
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const wallets = (
+        await db.query<{ resource: string; balance: string }>(
+          "SELECT resource,balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2",
+          [this.fixture.campaignId, actor.actorId],
+        )
+      ).rows;
+      const balance = (r: string) =>
+        wallets.find((w) => w.resource === r)?.balance ?? "0";
+      const landmarks: LandmarkView[] = [];
+      for (const l of LANDMARKS) {
+        const b = await this.state(db, "beacon", l.id, initialBeacon());
+        const o = await this.object(db, l.id);
+        landmarks.push({
+          id: l.id,
+          holder: b.holder,
+          target: target(b),
+          pot: b.pots[String(actor.schoolSlot)] ?? 0,
+          solved: b.solved.includes(actor.schoolSlot),
+          cooldownUntil: b.cooldowns[String(actor.schoolSlot)] ?? 0,
+          hasPath: !!o && (await this.path(db, o, actor.schoolSlot)),
+        });
+      }
+      const chests = (
+        await db.query<{ data: WorldObject }>(
+          `SELECT o.data FROM r2pl_v2.game_world_objects o JOIN r2pl_v2.game_chest_discoveries d ON o.campaign_id=d.campaign_id AND o.id=d.object_id WHERE o.campaign_id=$1 AND d.actor_id=$2 AND NOT EXISTS(SELECT 1 FROM r2pl_v2.game_state s WHERE s.campaign_id=o.campaign_id AND s.scope='chest-claim' AND s.id=o.id) ORDER BY o.id`,
+          [this.fixture.campaignId, actor.actorId],
+        )
+      ).rows.map((r) => r.data);
+      let revealedTiles = 0;
+      for (const row of (
+        await db.query<{ fog: Buffer }>(
+          "SELECT fog FROM r2pl_v2.school_fog_chunks WHERE campaign_id=$1 AND school_slot=$2",
+          [this.fixture.campaignId, actor.schoolSlot],
+        )
+      ).rows)
+        for (const byte of row.fog) {
+          let bits = byte;
+          while (bits) {
+            bits &= bits - 1;
+            revealedTiles++;
+          }
+        }
+      const gifts = (
+        await db.query<{ id: string; data: { tier: string } }>(
+          "SELECT id,data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND data->>'actorId'=$2",
+          [this.fixture.campaignId, actor.actorId],
+        )
+      ).rows.map((r) => ({ id: r.id, tier: r.data.tier }));
+      const cooldowns = await this.state<Record<string, number>>(
+        db,
+        "cooldowns",
+        actor.actorId,
+        {},
+      );
+      const running = await this.state<{
+        week?: number;
+        weeklyMeters?: number;
+      }>(db, "running", actor.actorId, {});
+      const shared = (await clusters(db, this.fixture.campaignId))
+        .filter((c) => c.pair.includes(actor.schoolSlot))
+        .map((c) => ({
+          id: c.id,
+          pair: c.pair,
+          tiles: c.tiles.length,
+          due: c.due[String(actor.schoolSlot)] ?? 0,
+          freeUntil: c.createdAt + GAME_CONFIG.knowledge.freeUpkeepMs,
+          guest: c.guest ?? null,
+          status: c.status,
+          required: c.required ?? 0,
+          contributed: Object.values(c.escrow).reduce((a, b) => a + b, 0),
+          hardUntil: c.hardUntil ?? 0,
+          rollingUntil: c.rollingUntil ?? 0,
+        }));
+      const events = (
+        await db.query<{ id: string; title: string; body: string }>(
+          "SELECT id::text,title,body FROM r2pl_v2.game_events WHERE campaign_id=$1 AND (actor_id IS NULL OR actor_id=$2) AND (school_slot IS NULL OR school_slot=$3) ORDER BY id DESC LIMIT 30",
+          [this.fixture.campaignId, actor.actorId, actor.schoolSlot],
+        )
+      ).rows;
+      await db.query("COMMIT");
+      return {
+        ruleVersion: 1,
+        crystals: balance("fixture-crystals"),
+        treasureMaps: balance("fixture-treasure-map"),
+        revealedTiles,
+        gifts,
+        keys: {
+          aspire: balance("key-aspire"),
+          nitro: balance("key-nitro"),
+          predator: balance("key-predator"),
+        },
+        landmarks,
+        chests,
+        cooldowns,
+        weeklyKm:
+          running.week === campaignWeekStart(Date.now())
+            ? (running.weeklyMeters ?? 0) / 1000
+            : 0,
+        events,
+        shared,
+      };
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
+  }
+  async command(actor: SchoolPlayActor, input: unknown): Promise<GameReceipt> {
+    const c = parseGameCommand(input),
+      key = Buffer.from(c.key.replaceAll("-", ""), "hex"),
+      hash = createHash("sha256").update(JSON.stringify(c)).digest();
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SET LOCAL lock_timeout='5s'");
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+        `signed-game:${this.fixture.campaignId}`,
+      ]);
+      const binding = await db.query(
+        "SELECT 1 FROM r2pl_prep.running_bindings b JOIN r2pl_v2.campaign_schools s ON s.campaign_id=b.campaign_id AND s.slot=b.school_slot AND s.school_id=b.external_school_id WHERE b.campaign_id=$1 AND b.actor_id=$2 AND b.school_slot=$3 FOR SHARE",
+        [this.fixture.campaignId, actor.actorId, actor.schoolSlot],
+      );
+      if (binding.rowCount !== 1) throw new TypeError("Unbound actor");
+      const inserted = await db.query(
+        "INSERT INTO r2pl_v2.command_results(campaign_id,actor_id,command_key,payload_hash,status) VALUES($1,$2,$3,$4,'processing') ON CONFLICT DO NOTHING RETURNING 1",
+        [this.fixture.campaignId, actor.actorId, key, hash],
+      );
+      if (!inserted.rowCount) {
+        const old = (
+          await db.query<{ payload_hash: Buffer; result: GameReceipt }>(
+            "SELECT payload_hash,result FROM r2pl_v2.command_results WHERE campaign_id=$1 AND actor_id=$2 AND command_key=$3",
+            [this.fixture.campaignId, actor.actorId, key],
+          )
+        ).rows[0]!;
+        if (!old.payload_hash.equals(hash))
+          throw new Error("Command key conflict");
+        await db.query("COMMIT");
+        return old.result;
+      }
+      await settleShared(
+        db,
+        this.fixture.campaignId,
+        actor.actorId,
+        Date.now(),
+      );
+      await db.query("SAVEPOINT gameplay");
+      let receipt: GameReceipt;
+      try {
+        receipt = await this.apply(db, actor, c, key);
+      } catch (e) {
+        if (!(e instanceof RuleRejection)) throw e;
+        await db.query("ROLLBACK TO SAVEPOINT gameplay");
+        receipt = {
+          status: "rejected",
+          reason: e.message,
+          message: rejectionMessages[e.message] ?? e.message,
+        };
+      }
+      await db.query(
+        "UPDATE r2pl_v2.command_results SET status=$4,result=$5 WHERE campaign_id=$1 AND actor_id=$2 AND command_key=$3",
+        [
+          this.fixture.campaignId,
+          actor.actorId,
+          key,
+          receipt.status === "applied" ? "test_applied" : "rejected",
+          JSON.stringify(receipt),
+        ],
+      );
+      await db.query(
+        "INSERT INTO r2pl_v2.game_events(campaign_id,actor_id,title,body) VALUES($1,$2,$3,$4)",
+        [
+          this.fixture.campaignId,
+          actor.actorId,
+          actionNames[c.action],
+          receipt.message,
+        ],
+      );
+      await db.query("COMMIT");
+      return receipt;
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
+  }
+  private async change(
+    db: PoolClient,
+    a: SchoolPlayActor,
+    key: Buffer,
+    resource: string,
+    amount: number,
+  ): Promise<void> {
+    if (amount === 0) return;
+    await db.query(
+      "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,balance) VALUES($1,$2,$3,0) ON CONFLICT DO NOTHING",
+      [this.fixture.campaignId, a.actorId, resource],
+    );
+    const updated = await db.query(
+      "UPDATE r2pl_v2.wallet_accounts SET balance=balance+$4 WHERE campaign_id=$1 AND actor_id=$2 AND resource=$3 AND balance+$4>=0 RETURNING 1",
+      [this.fixture.campaignId, a.actorId, resource, amount],
+    );
+    if (!updated.rowCount) throw new RuleRejection("INSUFFICIENT_BALANCE");
+    await db.query(
+      "INSERT INTO r2pl_v2.ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,$4,$5) ON CONFLICT(campaign_id,actor_id,command_key,resource) DO UPDATE SET amount=ledger_entries.amount+EXCLUDED.amount",
+      [this.fixture.campaignId, a.actorId, key, resource, amount],
+    );
+  }
+  private async apply(
+    db: PoolClient,
+    a: SchoolPlayActor,
+    c: GameCommand,
+    key: Buffer,
+  ): Promise<GameReceipt> {
+    const now = Date.now();
+    if (c.action === "running") {
+      if (!c.amount) throw new RuleRejection("METERS_REQUIRED");
+      const provider = new SyntheticCampaignProvider(
+        db,
+        this.fixture.campaignId,
+        a,
+      );
+      await provider.verifySession(a.token);
+      const before = parseRunningSnapshot(
+        await provider.fetchRunningSnapshot(a.actorId),
+      );
+      await provider.addMeters(c.amount);
+      const after = parseRunningSnapshot(
+        await provider.fetchRunningSnapshot(a.actorId),
+      );
+      const delta = Number(
+        (after.cumulativeMeters * BigInt(GAME_CONFIG.running.kmToPointsRate)) /
+          1000n -
+          (before.cumulativeMeters *
+            BigInt(GAME_CONFIG.running.kmToPointsRate)) /
+            1000n,
+      );
+      await this.change(db, a, key, "fixture-credit", delta);
+      return {
+        status: "applied",
+        reason: null,
+        message: `Running: +${delta} Points`,
+      };
+    }
+    if (c.action === "upkeep" || c.action === "consolidate") {
+      if (!c.target || !c.amount) throw new RuleRejection("AMOUNT_REQUIRED");
+      try {
+        await payShared(
+          db,
+          this.fixture.campaignId,
+          a.actorId,
+          a.schoolSlot,
+          c.target,
+          c.amount,
+          c.action,
+          (amount) => this.change(db, a, key, "fixture-credit", -amount),
+          now,
+        );
+      } catch (e) {
+        if (e instanceof RangeError) throw new RuleRejection(e.message);
+        throw e;
+      }
+      return {
+        status: "applied",
+        reason: null,
+        message: "Đã đóng góp Points cho cluster",
+      };
+    }
+    const o = c.target ? await this.object(db, c.target) : undefined;
+    if (!o) throw new RuleRejection("UNKNOWN_OBJECT");
+    if (c.action === "contribute" || c.action === "guess") {
+      if (o.kind !== "landmark" || !(await this.path(db, o, a.schoolSlot)))
+        throw new RuleRejection("KNOWLEDGE_PATH_REQUIRED");
+      const b = await this.state(db, "beacon", o.id, initialBeacon()),
+        slot = String(a.schoolSlot);
+      const currentTarget = target(b);
+      if (c.action === "guess") {
+        if (!GAME_CONFIG.landmark.puzzleEnabled)
+          throw new RuleRejection("PUZZLE_DISABLED");
+        if (b.solved.includes(a.schoolSlot))
+          return {
+            status: "applied",
+            reason: null,
+            message: "Đã giải đố · 0 Crystal",
+          };
+        if ((b.cooldowns[slot] ?? 0) > now)
+          throw new RuleRejection("GUESS_COOLDOWN");
+        const l = LANDMARKS.find((l) => l.id === o.id)!;
+        if (normalize(c.guess ?? "") !== normalize(l.name)) {
+          b.cooldowns[slot] = now + GAME_CONFIG.landmark.wrongGuessCooldownMs;
+          await this.save(db, "beacon", o.id, b);
+          return {
+            status: "applied",
+            reason: null,
+            message: "Sai đáp án · chờ 10 phút",
+            nextAvailableAtMs: b.cooldowns[slot],
+          };
+        }
+        b.solved.push(a.schoolSlot);
+        b.pots[slot] =
+          (b.pots[slot] ?? 0) +
+          Math.floor(
+            (currentTarget * GAME_CONFIG.landmark.puzzleBonusPercent) / 100,
+          );
+      } else {
+        if (!c.amount) throw new RuleRejection("AMOUNT_REQUIRED");
+        await this.change(db, a, key, "fixture-crystals", -c.amount);
+        b.pots[slot] = (b.pots[slot] ?? 0) + c.amount;
+      }
+      let lit = false;
+      if (b.holder !== a.schoolSlot && (b.pots[slot] ?? 0) >= currentTarget) {
+        if (b.holder !== null) b.takeovers++;
+        b.holder = a.schoolSlot;
+        lit = true;
+        await db.query(
+          "INSERT INTO r2pl_v2.game_events(campaign_id,title,body) VALUES($1,$2,$3)",
+          [
+            this.fixture.campaignId,
+            `Đèn hiệu ${o.name}`,
+            `${a.schoolName} đã thắp sáng Beacon`,
+          ],
+        );
+      }
+      await this.save(db, "beacon", o.id, b);
+      return {
+        status: "applied",
+        reason: null,
+        message: lit
+          ? "Beacon đã sáng · Buff hoạt động"
+          : "Đã cập nhật Crystal pot",
+      };
+    }
+    if (c.action !== "spin" && c.action !== "open")
+      throw new RuleRejection("INVALID_ACTION");
+    const kind = c.action === "spin" ? "unistop" : "chest";
+    if (o.kind !== kind || !o.tier) throw new RuleRejection("INVALID_OBJECT");
+    const cooldowns = await this.state<Record<string, number>>(
+      db,
+      "cooldowns",
+      a.actorId,
+      {},
+    );
+    if (kind === "unistop") {
+      if (
+        !GAME_CONFIG.staging.stationsUnlocked &&
+        !(await this.path(db, o, a.schoolSlot))
+      )
+        throw new RuleRejection("KNOWLEDGE_PATH_REQUIRED");
+      if ((cooldowns[o.id] ?? 0) > now) throw new RuleRejection("COOLDOWN");
+    } else {
+      const known = await db.query(
+        "SELECT 1 FROM r2pl_v2.game_chest_discoveries WHERE campaign_id=$1 AND actor_id=$2 AND object_id=$3",
+        [this.fixture.campaignId, a.actorId, o.id],
+      );
+      if (!known.rowCount) throw new RuleRejection("CHEST_NOT_DISCOVERED");
+      if (await this.state(db, "chest-claim", o.id, false))
+        throw new RuleRejection("CHEST_COLLECTED");
+      await this.change(
+        db,
+        a,
+        key,
+        `key-${o.tier}`,
+        -GAME_CONFIG.rewards.chestKeyCost,
+      );
+      await this.save(db, "chest-claim", o.id, { actorId: a.actorId });
+    }
+    const table = GAME_CONFIG.rewards[kind][o.tier];
+    let roll = this.draw();
+    if (
+      !Number.isInteger(roll) ||
+      roll < 0 ||
+      roll >= GAME_CONFIG.rewards.weightTotal
+    )
+      throw new Error("Invalid RNG");
+    let reward: RewardOutcome | undefined;
+    for (const r of table.outcomes) {
+      if (roll < r.weight) {
+        reward = r;
+        break;
+      }
+      roll -= r.weight;
+    }
+    if (!reward) throw new Error("Empty reward");
+    const running = await this.state<{ week?: number; weeklyMeters?: number }>(
+      db,
+      "running",
+      a.actorId,
+      {},
+    );
+    if (reward.kind === "gift") {
+      const stock = await this.state<{ remaining: number }>(
+        db,
+        "gift-stock",
+        o.tier,
+        { remaining: GAME_CONFIG.staging.initialGiftStock },
+      );
+      if (
+        running.week !== campaignWeekStart(now) ||
+        (running.weeklyMeters ?? 0) <= 0 ||
+        stock.remaining <= 0
+      )
+        reward = {
+          kind: "crystals",
+          quantity: GAME_CONFIG.rewards.giftFallback[kind],
+          weight: reward.weight,
+        };
+      else {
+        stock.remaining--;
+        await this.save(db, "gift-stock", o.tier, stock);
+        await this.save(db, "gift-entitlement", c.key, {
+          actorId: a.actorId,
+          tier: o.tier,
+        });
+      }
+    }
+    let discovery: WorldObject | undefined;
+    if (reward.kind === "points")
+      await this.change(db, a, key, "fixture-credit", reward.quantity);
+    else if (reward.kind === "crystals")
+      await this.change(db, a, key, "fixture-crystals", reward.quantity);
+    else if (reward.kind === "key")
+      await this.change(db, a, key, `key-${o.tier}`, reward.quantity);
+    else if (reward.kind === "treasure_map") {
+      await this.change(db, a, key, "fixture-treasure-map", reward.quantity);
+      discovery = (
+        await db.query<{ data: WorldObject }>(
+          `SELECT o.data FROM r2pl_v2.game_world_objects o WHERE campaign_id=$1 AND data->>'kind'='chest' AND NOT EXISTS(SELECT 1 FROM r2pl_v2.game_state s WHERE s.campaign_id=o.campaign_id AND s.scope='chest-claim' AND s.id=o.id) AND NOT EXISTS(SELECT 1 FROM r2pl_v2.game_chest_discoveries d WHERE d.campaign_id=o.campaign_id AND d.actor_id=$2 AND d.object_id=o.id) ORDER BY id LIMIT 1`,
+          [this.fixture.campaignId, a.actorId],
+        )
+      ).rows[0]?.data;
+      if (discovery)
+        await db.query(
+          "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+          [this.fixture.campaignId, a.actorId, discovery.id],
+        );
+    }
+    let nextAvailableAtMs: number | undefined;
+    if (kind === "unistop") {
+      nextAvailableAtMs = now + GAME_CONFIG.rewards.unistopCooldownMs[o.tier];
+      cooldowns[o.id] = nextAvailableAtMs;
+      await this.save(db, "cooldowns", a.actorId, cooldowns);
+    }
+    return {
+      status: "applied",
+      reason: null,
+      reward,
+      ...(discovery ? { discovery } : {}),
+      ...(nextAvailableAtMs ? { nextAvailableAtMs } : {}),
+      message: `${reward.kind} ×${reward.quantity}`,
+    };
+  }
+}
+class RuleRejection extends Error {}

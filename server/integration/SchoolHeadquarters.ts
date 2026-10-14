@@ -1,12 +1,15 @@
+import { readFile } from "node:fs/promises";
 import type { PoolClient } from "pg";
 import {
   type HeadquartersArea,
   headquartersTiles,
 } from "../../shared/gameplay/expansion.ts";
 import {
-  type BotSchool,
-  botSchools,
-} from "../../shared/simulation/schoolBots.ts";
+  GAME_CONFIG,
+  SCHOOLS,
+  STAGING_OBJECTS,
+} from "../../shared/gameplay/gameConfig.ts";
+import type { BotSchool } from "../../shared/simulation/schoolBots.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
   CHUNK_FOG_BYTES,
@@ -20,38 +23,62 @@ import {
   tileIndex,
 } from "../../shared/world/coordinates.ts";
 import { schoolBit } from "../../shared/world/registry.ts";
-/** Versioned development placement; not official school coordinates. */
+import { initializeKnowledgeScores } from "./KnowledgeScore.ts";
+/** Signed staging placement shared by PostgreSQL, public objects and browser. */
 export function schoolPlayLayout(): {
   schools: readonly BotSchool[];
   headquarters: readonly HeadquartersArea[];
 } {
-  const centers = [
-    [472, 472],
-    [512, 472],
-    [552, 472],
-    [472, 512],
-    [552, 512],
-    [472, 552],
-    [512, 552],
-    [552, 552],
-  ] as const;
-  const schools = botSchools("gather").map((school, index) => ({
-    ...school,
-    home: tileIndex(centers[index]![0], centers[index]![1]),
+  const size = GAME_CONFIG.footprints.hq.width;
+  const headquarters = SCHOOLS.map((s) => ({
+    schoolSlot: s.slot,
+    x: s.hq.x - size / 2,
+    z: s.hq.z - size / 2,
+    size,
   }));
-  const headquarters = centers.map(([x, z], schoolSlot) => ({
-    schoolSlot,
-    x: x - 10,
-    z: z - 10,
-    size: 20,
+  const schools = SCHOOLS.map((s) => ({
+    slot: s.slot,
+    fixtureId: s.id,
+    label: s.shortName,
+    color: s.color,
+    region: { x: s.hq.x - 128, z: s.hq.z - 128, size: 256 },
+    home: tileIndex(s.hq.x, s.hq.z),
+    meeting: tileIndex(s.hq.x + 60, s.hq.z),
+    protectedHeadquarters: headquarters,
   }));
-  return {
-    schools: schools.map((school) => ({
-      ...school,
-      protectedHeadquarters: headquarters,
-    })),
-    headquarters,
-  };
+  return { schools, headquarters };
+}
+export async function seedWorldObjects(
+  db: PoolClient,
+  campaign: string,
+): Promise<void> {
+  await db.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended('signed-game-schema',0))",
+  );
+  await db.query(
+    await readFile(
+      new URL(
+        "../../database/migrations/003_signed_world.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await initializeKnowledgeScores(db, campaign);
+  if (
+    (
+      await db.query(
+        "SELECT 1 FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 LIMIT 1",
+        [campaign],
+      )
+    ).rowCount
+  )
+    return;
+  for (const object of STAGING_OBJECTS)
+    await db.query(
+      "INSERT INTO r2pl_v2.game_world_objects(campaign_id,id,data) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+      [campaign, object.id, JSON.stringify(object)],
+    );
 }
 /** Initial state only: atomic with campaign creation, revision zero and no resource spend. */
 export async function seedHeadquarters(

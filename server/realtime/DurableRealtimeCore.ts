@@ -144,6 +144,10 @@ export class DurableRealtimeCore {
     );
   }
 
+  async resyncViews(): Promise<void> {
+    await this.#resyncAll();
+  }
+
   async #resyncAll(): Promise<void> {
     this.metrics.count("outbox_quarantined_projection");
     for (const session of this.#sessions.values()) {

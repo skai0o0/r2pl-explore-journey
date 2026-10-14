@@ -6,19 +6,23 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
-import { evaluateDevExplore } from "../../shared/gameplay/devRules.ts";
+import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import { DevAccountService } from "./DevAccountService.ts";
+import { knowledgeRanking } from "./KnowledgeScore.ts";
 import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
 import { provisionSchoolRewards } from "./SchoolRewardFixture.ts";
 import { SchoolRewardHttp } from "./SchoolRewardHttp.ts";
+import { SignedGameplay } from "./SignedGameplay.ts";
+import { SignedOperator } from "./SignedOperator.ts";
 
 /** One local dev writer per persistent campaign. Not distributed lease/fencing. */
 export async function createSchoolPlayServer(
   pool: Pool,
   ports: { web: number; websocket: number },
   campaignId = SCHOOL_PLAY_CAMPAIGN,
+  options: { readonly rewardDraw?: () => number } = {},
 ): Promise<Awaited<ReturnType<typeof startSchoolPlayServer>>> {
   const writer = await pool.connect();
   const key = `school-play:${campaignId}`;
@@ -32,7 +36,7 @@ export async function createSchoolPlayServer(
     ).rows[0]!.locked;
     if (!acquired)
       throw new Error("Synthetic campaign already has a local writer");
-    const play = await startSchoolPlayServer(pool, ports, campaignId);
+    const play = await startSchoolPlayServer(pool, ports, campaignId, options);
     let closed = false;
     const lost = () => {
       void close().catch(() => {});
@@ -74,10 +78,13 @@ async function startSchoolPlayServer(
   pool: Pool,
   ports: { web: number; websocket: number },
   campaignId?: string,
+  options: { readonly rewardDraw?: () => number } = {},
 ) {
   const fixture = await seedSchoolPlay(pool, campaignId);
   await provisionSchoolRewards(pool, fixture);
   const rewardHttp = new SchoolRewardHttp(pool, fixture);
+  const gameplay = new SignedGameplay(pool, fixture, options.rewardDraw);
+  await gameplay.initialize();
   const accounts = new DevAccountService(
     pool,
     fixture.campaignId,
@@ -88,16 +95,22 @@ async function startSchoolPlayServer(
     fixture.campaignId,
     fixture.registry,
     fixture.actors,
-    1n,
+    BigInt(GAME_CONFIG.knowledge.explorePoints),
     {},
     undefined,
-    evaluateDevExplore,
-    { headquarters: fixture.headquarters },
+    undefined,
+    { headquarters: fixture.headquarters, ruleVersion: 1 },
   );
   await realtime.server.listen(ports.websocket, "127.0.0.1");
   const address = realtime.transport.server?.address();
   if (!address || typeof address === "string")
     throw new Error("Missing WebSocket address");
+  const operator = new SignedOperator(
+    pool,
+    fixture,
+    process.env.ADMIN_KEY ?? "dev-map-admin",
+    () => realtime.core.resyncViews(),
+  );
   const clientRoot = resolve(
     fileURLToPath(new URL("../../dist/client/", import.meta.url)),
   );
@@ -133,6 +146,120 @@ async function startSchoolPlayServer(
       await rewardHttp.handle(request, response, url, token);
       return;
     }
+    if (path === "/api/admin") {
+      if (
+        !operator.authorized(
+          typeof request.headers["x-admin-key"] === "string"
+            ? request.headers["x-admin-key"]
+            : undefined,
+        )
+      ) {
+        response.writeHead(403).end();
+        return;
+      }
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      try {
+        if (request.method === "GET") {
+          response.end(JSON.stringify({ objects: await operator.layout() }));
+          return;
+        }
+        if (request.method !== "POST") {
+          response.writeHead(405).end();
+          return;
+        }
+        const origin = request.headers.origin;
+        if (origin && origin !== `http://${request.headers.host}`) {
+          response.writeHead(403).end();
+          return;
+        }
+        let size = 0;
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) {
+          const bytes = Buffer.from(chunk);
+          size += bytes.length;
+          if (size > 65536) {
+            response.writeHead(413).end();
+            return;
+          }
+          chunks.push(bytes);
+        }
+        await operator.apply(
+          JSON.parse(Buffer.concat(chunks).toString("utf8")),
+        );
+        response.end(JSON.stringify({ status: "applied" }));
+      } catch (e) {
+        response
+          .writeHead(
+            e instanceof TypeError || e instanceof RangeError ? 400 : 503,
+          )
+          .end(
+            JSON.stringify({
+              error:
+                e instanceof TypeError || e instanceof RangeError
+                  ? e.message
+                  : "TEMPORARILY_UNAVAILABLE",
+            }),
+          );
+      }
+      return;
+    }
+    if (path === "/api/game") {
+      const actor = gameplay.actor(token);
+      if (!actor) {
+        response.writeHead(401).end();
+        return;
+      }
+      try {
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        if (request.method === "GET") {
+          response.end(JSON.stringify(await gameplay.view(actor)));
+          return;
+        }
+        if (request.method !== "POST") {
+          response.writeHead(405).end();
+          return;
+        }
+        const origin = request.headers.origin;
+        if (origin && origin !== `http://${request.headers.host}`) {
+          response.writeHead(403).end();
+          return;
+        }
+        if (!request.headers["content-type"]?.startsWith("application/json")) {
+          response.writeHead(415).end();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of request) {
+          const bytes = Buffer.from(chunk);
+          size += bytes.length;
+          if (size > 4096) {
+            response.writeHead(413).end();
+            return;
+          }
+          chunks.push(bytes);
+        }
+        const result = await gameplay.command(
+          actor,
+          JSON.parse(Buffer.concat(chunks).toString("utf8")),
+        );
+        response.end(JSON.stringify(result));
+      } catch (e) {
+        response
+          .writeHead(
+            e instanceof TypeError || e instanceof RangeError ? 400 : 503,
+          )
+          .end(
+            JSON.stringify({
+              error:
+                e instanceof TypeError || e instanceof RangeError
+                  ? "INVALID_COMMAND"
+                  : "TEMPORARILY_UNAVAILABLE",
+            }),
+          );
+      }
+      return;
+    }
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405).end();
       return;
@@ -144,6 +271,50 @@ async function startSchoolPlayServer(
       );
     };
     try {
+      if (path === "/api/fixture/chests") {
+        const actor = fixture.actors.find(
+          (a) => a.token === token && a.role === "human",
+        );
+        if (!actor) {
+          response.writeHead(401).end();
+          return;
+        }
+        const rows = await pool.query<{ data: unknown }>(
+          "SELECT o.data FROM r2pl_v2.game_world_objects o JOIN r2pl_v2.game_chest_discoveries d ON d.campaign_id=o.campaign_id AND d.object_id=o.id WHERE o.campaign_id=$1 AND d.actor_id=$2 ORDER BY o.id",
+          [fixture.campaignId, actor.actorId],
+        );
+        json({
+          ruleVersion: GAME_CONFIG.ruleVersion,
+          objects: rows.rows.map((r) => r.data),
+        });
+        return;
+      }
+      if (path === "/api/game/ranking") {
+        const db = await pool.connect();
+        try {
+          await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+          const rankings = await knowledgeRanking(db, fixture.campaignId);
+          await db.query("COMMIT");
+          json({ rankings });
+        } catch (e) {
+          await db.query("ROLLBACK");
+          throw e;
+        } finally {
+          db.release();
+        }
+        return;
+      }
+      if (path === "/api/fixture/world") {
+        const rows = await pool.query<{ data: unknown }>(
+          "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind' <> 'chest' ORDER BY id",
+          [fixture.campaignId],
+        );
+        json({
+          ruleVersion: GAME_CONFIG.ruleVersion,
+          objects: rows.rows.map((r) => r.data),
+        });
+        return;
+      }
       if (path === "/api/fixture/bootstrap") {
         json({
           fixtureOnly: true,
@@ -232,6 +403,18 @@ async function startSchoolPlayServer(
     await realtime.server.gracefullyShutdown(false);
     throw error;
   }
+  let settling = false;
+  const lifecycleTimer = setInterval(() => {
+    if (settling) return;
+    settling = true;
+    void gameplay
+      .settle()
+      .catch(() => {})
+      .finally(() => {
+        settling = false;
+      });
+  }, 1000);
+  lifecycleTimer.unref();
   const webAddress = web.address();
   if (!webAddress || typeof webAddress === "string")
     throw new Error("Missing HTTP address");
@@ -298,6 +481,7 @@ async function startSchoolPlayServer(
     return botTask;
   };
   const close = async (): Promise<void> => {
+    clearInterval(lifecycleTimer);
     stopped = true;
     await botTask;
     await new Promise<void>((ready) => {

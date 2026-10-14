@@ -1,12 +1,20 @@
 import type { Pool } from "pg";
 import type { HeadquartersArea } from "../../shared/gameplay/expansion.ts";
+import {
+  GAME_CONFIG,
+  type WorldObject,
+} from "../../shared/gameplay/gameConfig.ts";
 import type { DevPlayer } from "../../shared/integration/devSession.ts";
 import type { BotRole, BotSchool } from "../../shared/simulation/schoolBots.ts";
 import { tileCoordinates } from "../../shared/world/coordinates.ts";
 import { SchoolRegistry } from "../../shared/world/registry.ts";
 import type { DevIdentity } from "./DevAccountService.ts";
-import { schoolPlayLayout, seedHeadquarters } from "./SchoolHeadquarters.ts";
-export const SCHOOL_PLAY_CAMPAIGN = "94000000-0000-4000-8000-000000000000";
+import {
+  schoolPlayLayout,
+  seedHeadquarters,
+  seedWorldObjects,
+} from "./SchoolHeadquarters.ts";
+export const SCHOOL_PLAY_CAMPAIGN = "96000000-0000-4000-8000-000000000000";
 export interface SchoolPlayActor extends DevIdentity {
   readonly role: "human" | BotRole;
   readonly ordinal: number;
@@ -31,7 +39,7 @@ export async function seedSchoolPlay(
     throw new RangeError("Invalid fixture campaign");
   const code =
     campaignId === SCHOOL_PLAY_CAMPAIGN
-      ? "school-play-expansion-v1"
+      ? "school-play-rule1-20261014"
       : `bot-sim-${campaignId}`;
   const { schools, headquarters } = schoolPlayLayout();
   const actors: SchoolPlayActor[] = [];
@@ -99,10 +107,53 @@ export async function seedSchoolPlay(
     for (const actor of actors)
       await db.query(
         "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,opening_balance,balance) VALUES($1,$2,'fixture-credit',$3,$3) ON CONFLICT DO NOTHING",
-        [campaignId, actor.actorId, actor.role === "human" ? 1000 : 5000],
+        [
+          campaignId,
+          actor.actorId,
+          actor.role === "human"
+            ? GAME_CONFIG.staging.initialPoints
+            : GAME_CONFIG.staging.initialBotPoints,
+        ],
       );
     if (created.rowCount === 1)
       await seedHeadquarters(db, campaignId, headquarters);
+    await seedWorldObjects(db, campaignId);
+    for (const actor of actors.filter((a) => a.role === "human")) {
+      const starter = await db.query(
+        "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'starter-discoveries',$2,'{}') ON CONFLICT DO NOTHING RETURNING 1",
+        [campaignId, actor.actorId],
+      );
+      if (!starter.rowCount) continue;
+      for (const tier of ["aspire", "nitro", "predator"])
+        await db.query(
+          "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+          [campaignId, actor.actorId, `chest-${tier}-${actor.schoolSlot}`],
+        );
+    }
+    const savedHQs = (
+      await db.query<{ data: WorldObject }>(
+        "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind'='hq'",
+        [campaignId],
+      )
+    ).rows;
+    for (const { data: h } of savedHQs) {
+      const area = headquarters.find((a) => a.schoolSlot === h.schoolSlot);
+      if (area)
+        Object.assign(area, { x: h.x - h.width / 2, z: h.z - h.height / 2 });
+      for (const player of players.filter((p) => p.slot === h.schoolSlot))
+        Object.assign(player.home, { x: h.x, z: h.z });
+      const school = schools.find((s) => s.slot === h.schoolSlot);
+      if (school)
+        Object.assign(school, {
+          home: h.z * 1000 + h.x,
+          region: {
+            x: Math.max(0, Math.min(744, h.x - 128)),
+            z: Math.max(0, Math.min(744, h.z - 128)),
+            size: 256,
+          },
+          meeting: h.z * 1000 + h.x,
+        });
+    }
     await db.query("COMMIT");
   } catch (error) {
     await db.query("ROLLBACK");

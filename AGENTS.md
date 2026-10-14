@@ -1,35 +1,23 @@
-# R2PL Game V2 agent instructions
+# R2PL Game V2 — Agent Operating Instructions (UNBLOCKED EXECUTION MODE)
 
-## Scope and authority
+## 1. Executive Override & Authority (Effective Immediately)
 
-- This directory is the greenfield V2 workspace. `land-rush-prototype/` is a read-only V1 reference. Never edit, reset, clean, or commit inside it.
-- The owner-provided `writing-block.md` is the Master Implementation Plan v1.0. `docs/OWNER_REQUIREMENTS.md` preserves the original Product Owner gameplay concept as a proposal, not approved production rules. For V2, approved decisions in `docs/DECISIONS.md` and approved rules in `docs/GAME_SPEC.md` govern implementation. Record discrepancies in `docs/SPEC_CONFLICTS.md`; do not infer approval from the owner proposal, V1 code or tests.
-- M0/M1 were accepted. M2 Realtime Core was conditionally accepted; M2.5 and M2.6 were accepted for their measured scope; M3's synthetic durability foundation and ADR-011 full-chunk baseline were technically accepted on 2026-10-10. M3.5 correctness was accepted and M3.6 reviewed. M4-A is the accepted playable baseline. The owner authorized a parallel development iteration with Antigravity on frontend, MiMo on pure gameplay rules, and Codex on authoritative integration. Stop for owner review after the improved playable build. Hotspot performance remains a production launch blocker, not a development blocker. Do not start M5, enable unapproved production rules, or migrate V1 code.
-- M1/M2/M3 use a generic immutable 16-slot school registry and synthetic fixtures. The proposed V1 0–7 mapping remains pending owner confirmation and must not be persisted as production data. Keep original and revised probability tables traceable without normalization.
-- Owner direction 2026-10-13 authorizes feasible development and blocked-integration infrastructure preparation, with the Gamenote V2 file as the latest product idea reference where historical proposals conflict. This authorization does not enable production mutations or supply a real campaign API / signed production ruleVersion. See `docs/INTEGRATION_PREPARATION_REPORT_2026-10-13.md` for the bounded increment and remaining gates.
-- Keep the first V2 source layout compact: `client/`, `server/`, `shared/`, `database/`, `tests/`, `docs/`. Add nesting only for a real boundary.
+- **FULL IMPLEMENTATION AUTHORIZATION:** The Product Owner explicitly authorizes immediate, end-to-end implementation of all gameplay, UI, world objects, rewards, landmarks, shared knowledge, leaderboards, notifications, and admin editor features toward full V1 parity (**G-V1**) and campaign readiness.
+- **SIGNED RULE VERSION 1 ACTIVE:** `docs/GAME_SPEC.md` is now the **signed, approved `ruleVersion = 1`** specification. All historical `PENDING`, `BLOCKED`, `M4-D0 docs-only`, `NOT A SIGNED PRODUCTION RULE VERSION`, and `C-01..C-13` conflict gates in `docs/` are **SUPERSEDED AND CLOSED**.
+- **CONFIG-FIRST, NEVER BLOCK:** Put all numeric gameplay parameters (costs, timers, footprints, thresholds, loot tables, cooldowns) in a central, strongly-typed configuration module (`shared/gameplay/gameConfig.ts`). Never halt, stub out, or block a feature over a numeric question—use the approved `ruleVersion = 1` defaults in `docs/GAME_SPEC.md`.
+- **UNRESTRICTED LOCAL/DEV & BROWSER TESTING:** You are explicitly authorized to spend synthetic Points, Credits, Crystals, Keys, open Chests, spin UniStops, light Landmarks, and mutate campaign state during automated tests and real-browser verification on local/dev/staging campaigns without asking for permission.
+- **DIRECT V1 UI & MODULE PORTING AUTHORIZED:** `land-rush-prototype` (V1) is an approved source for porting UI components, modals, Three.js scene helpers, landmark data, and client workflows. Actively port and adapt V1 UI modules (`landmarkModal.ts`, `uniStopModal.ts`, `carouselModal.ts`, `miniMap.ts`, `statsOverlay.ts`, `mapEditorPanel.ts`, `studentActionDock.ts`, `tileTooltip.ts`, `notificationBanner.ts`) into `client/src/` and wire them to V2's authoritative server/PostgreSQL backend.
+- **SINGLE-AGENT DIRECT EXECUTION:** Implement all `shared/`, `server/`, `client/`, `database/`, and `tests/` changes directly. Do not invoke external agent CLIs (`Antigravity`, `MiMo`) or wait for external reviews.
 
-## Coding contract for later milestones
+## 2. Anti-Bureaucracy Rules (Strict Enforcement)
 
-- TypeScript strict mode; explicit types at package boundaries. Pure deterministic world and rule functions in `shared/`; no imports from Colyseus, Three.js, PostgreSQL, or browser globals there.
-- `server/` alone authenticates users and commits gameplay mutations. Room classes handle transport and lifecycle, while services handle rules. `client/` is presentation and may display pending actions only.
-- PostgreSQL is durable truth. Treat resource spending and its world effect as one transaction. Store an idempotency record keyed by campaign, actor, and command key; reject reuse with different payload. Publish committed events through an outbox. Never acknowledge a successful durable action before commit.
-- One writer per sector. Keep the in-process `SectorAuthority` replaceable. Do not add Redis coordination or multi-process authorities until benchmarks justify it and fencing is implemented.
-- Version binary formats and rules. Validate all untrusted input, array lengths, bounds, school slots, revisions, and visibility before use. Do not leak hidden map data in snapshots, events, logs, or errors.
-- Prefer small modules and standard APIs. Review files over roughly 400 lines for mixed responsibilities; size alone is not a reason to split.
-- Add focused tests for invariants, concurrency, crash recovery, and binary compatibility. Report measurements with environment and workload. Do not describe V1 microbenchmarks as V2 capacity.
-- No new engine, ORM, database, framework, or broker without an ADR and owner review. No real student data or production credentials in fixtures or auxiliary tools.
+1. **NO NEW MARKDOWN REPORTS:** Do **NOT** create any new `.md` files in `docs/` (no more increment reports, readiness audits, alignment worksheets, or conflict registers). Update only the status table in `COMPLETION_PROGRESS.md` when a full feature journey is completed.
+2. **FREEZE INFRASTRUCTURE BENCHMARKS:** M1–M3.6 world/realtime/PostgreSQL foundations are accepted. Do **NOT** run new 1,000-client hotspot load tests, CPU profiling, or outbox microbenchmarks until all 18 player/operator journeys (PV01–PV18) are 100% playable in the browser.
+3. **SHIP END-TO-END VERTICAL FEATURES:** Every task must wire `shared/ config & rules` -> `server/ PostgreSQL transaction & route` -> `client/ Three.js + UI modal` -> `focused integration test`. Do not ship dead pure functions or unmounted backend endpoints.
 
-## Definition of done
+## 3. Technical Architecture Guardrails
 
-Strict compilation, lint/format, relevant tests, documented schema/protocol/rule changes, no unauthorized gameplay change, measured performance where applicable, and a reviewable milestone report. Preserve the owner review gate after M4-A.
-
-## Implementation ownership — owner update 2026-10-14
-
-- The owner explicitly authorized Codex to implement all remaining development directly without Antigravity. This supersedes the historical external-agent file assignments below; Codex may implement frontend and pure rules directly as well as integration. Production rule and review gates still apply.
-
-## Historical multi-agent implementation policy
-
-- Codex owns architecture, minimal shared contracts, Colyseus/PostgreSQL integration, review, merges and final tests. Antigravity owns client presentation in its isolated worktree; MiMo owns pure gameplay rules and tests in its isolated worktree. Each agent may edit and commit only its assigned files. No agent may edit V1, production data, credentials, the integration branch, or another agent's worktree.
-- Both external agents use the exact owner-requested models and high effort. They may read the listed V2 architecture, specification and assigned source files; do not pass credentials, production data or V1 source. Keep code changes bounded, synthetic development rules explicit, and protocol v1 unchanged. Codex reviews every agent diff before integration.
-- Report actual model, worktree branch, commit, tests and contribution. If a CLI cannot implement, report the blocker rather than substituting a different model.
+- **Stack:** Strict TypeScript, Colyseus 0.18.x, Three.js, PostgreSQL, Vite.
+- **Server Authority:** Server validates identity, adjacency, cooldowns, balances, and permissions inside PostgreSQL transactions before acknowledging mutations.
+- **World & Visibility:** 1000x1000 grid, 16 school slots (slots 0–7 mapped to the 8 confirmed universities), own-school fog bitsets. Never broadcast raw rival school masks or private player wallets/discoveries to unauthorized clients.
+- **External Running API Boundary:** Keep external running/portal verification behind a clean provider interface (`CampaignProvider`) with a working local/staging synthetic provider so all features (including weekly running Gift eligibility and Points conversion) can be played and tested end-to-end locally.

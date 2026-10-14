@@ -20,6 +20,7 @@ import {
 import { schoolBit } from "../../shared/world/registry.ts";
 export interface ExploreBoundary {
   readonly headquarters: readonly HeadquartersArea[];
+  readonly ruleVersion?: 1;
 }
 const idFor = (tile: number): number => {
   const { chunkX, chunkZ } = chunkCoordinatesForIndex(tile);
@@ -30,10 +31,18 @@ export async function lockExploreNeighborhood(
   db: PoolClient,
   campaign: string,
   tile: number,
+  revealRadius = 0,
 ): Promise<void> {
-  const ids = [...new Set([tile, ...edgeNeighbors(tile)].map(idFor))].sort(
-    (a, b) => a - b,
-  );
+  const neighborhood = [tile, ...edgeNeighbors(tile)];
+  const center = tileCoordinates(tile);
+  for (let dz = -revealRadius; dz <= revealRadius; dz++)
+    for (let dx = -revealRadius; dx <= revealRadius; dx++) {
+      const x = center.x + dx,
+        z = center.z + dz;
+      if (x >= 0 && z >= 0 && x < 1000 && z < 1000)
+        neighborhood.push(z * 1000 + x);
+    }
+  const ids = [...new Set(neighborhood.map(idFor))].sort((a, b) => a - b);
   const zero = Buffer.alloc(CHUNK_MASK_BYTES);
   for (const id of ids) {
     const created = await db.query(

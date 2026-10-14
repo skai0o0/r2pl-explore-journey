@@ -14,7 +14,7 @@ const pool = new Pool({ connectionString: database, max: 16 });
 const play = await createSchoolPlayServer(pool, { web: 4176, websocket: 2568 });
 console.log("Eight-school playable fixture: http://127.0.0.1:4176");
 console.log(
-  "16 students + 24 WebSocket bots; v0 fixture credits. Persistent isolated campaign; no reset on restart.",
+  "16 students + 24 WebSocket bots; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
 );
 void play.startBots();
 let stopping = false;

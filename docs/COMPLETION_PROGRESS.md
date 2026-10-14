@@ -1,67 +1,67 @@
-# Tiến độ kế hoạch hoàn thiện — checkpoint 2026-10-14
+# Tiến độ G-V1 — ruleVersion = 1 — 2026-10-14
 
-Code baseline: bf67b66. [Audit hiện tại](PROGRESS_AUDIT_2026-10-14.md):124/124 test PASS, strict/lint/build PASS. M4-A accepted không đồng nghĩa full M4 hoặc G-V1 đã hoàn thành.18 hành trình:10 PARTIAL,8 chưa có end-to-end,0 FULL theo composite acceptance; không quy đổi thành % công sức.
+**G-V1 local/dev đã hoàn tất: PV01–PV18 đạt 18/18 FULL.** Bản chạy gồm toàn bộ luồng người chơi và Admin, từ config/rules đến PostgreSQL transaction, Three.js/UI và nghiệm thu trình duyệt desktop/mobile. Bộ test gameplay tập trung đạt **24/24 PASS**; TypeScript strict, lint và build PASS.
 
-Kế hoạch: [V2 completion / G-V1 và G-FULL](V2_COMPLETION_PLAN_2026-10-13.md). Hiện gồm increment03 và HQ/frontier correction; inventory/reward UI đã tích hợp trực tiếp bởi Codex theo owner reassignment. Browser reward mutation acceptance còn chờ explicit approval do auto-review. Đây là trạng thái triển khai, không là signed production ruleVersion. Build này giữ protocol v1 và fixture-credit v0.
+[GAME_SPEC.md](GAME_SPEC.md) là đặc tả đã ký, **ruleVersion = 1**; các xung đột C-01..C-13 và gate PENDING/BLOCKED của tài liệu cũ đã được chốt và superseded theo Owner Directive. Tham số gameplay tập trung tại [gameConfig.ts](../shared/gameplay/gameConfig.ts). Binary transport vẫn dùng protocol v1; gameplay đang chạy ruleVersion 1, với Points/Crystal/Keys/Maps trong cùng account.
+
+Chạy bản đầy đủ theo [README_PLAY.md](../README_PLAY.md), mở **http://127.0.0.1:4176/**. Running và Gift hiện dùng provider giả lập local/staging. Kết quả này xác nhận G-V1; tích hợp danh tính/portal chạy bộ và giao quà thật thuộc G-FULL trong [kế hoạch completion](V2_COMPLETION_PLAN_2026-10-13.md).
+
+Nghiệm thu: [staging world](../artifacts/g-v1/staging-world.jpg), [Beacon takeover](../artifacts/g-v1/beacon-takeover.jpg), [mobile guidance](../artifacts/g-v1/mobile-guidance.jpg), [mobile Landmark](../artifacts/g-v1/mobile-landmark.jpg). M1–M3.6 foundations đã được chấp nhận; không chạy thêm benchmark 1.000-client, CPU profiling hoặc outbox microbenchmark trong đợt G-V1 này.
 
 ## Current implementation baseline
 
-| Boundary | Hiện đang chạy | Quyết định còn chờ / implementation tiếp |
+| Boundary | Hiện đang chạy — ruleVersion 1 | Phạm vi / vận hành tiếp |
 | --- | --- | --- |
-| Roster/session | 8 generic fixture-school slots0–7, 16 human aliases và24 bot, validated bootstrap; campaign synthetic persistent | Real school IDs/mapping/HQ và auth từ campaign |
-| World/authority | 1000×1000,64×64 chunks, own-school mask/fog;400 HQ tiles/trường, frontier4 cạnh enforced server; bot và browser dùng cùng campaign mới | Object layout/protected footprints/visibility party/admin, full gameplay |
-| Wallet/explore | M3 wallet_accounts/ledger_entries/idempotency/outbox; resource fixture-credit, ruleVersion0, cost1; profile/receipt riêng actor | Common dev rewards/inventory đã có; còn promotion running vào ví đang chơi, production account và approved numeric rules |
-| UI | Existing Three.js renderer/HUD/selection; dynamic roster/ws port/home anchor; own bot Knowledge visible | 8 HQ artwork riêng (markers đã có), map editor, landmark/shared modals và reward mutation browser acceptance, branding/device QA |
-| Knowledge lifecycle | HQ seed + orthogonal expansion/no-change/retry; opponent HQ protected | Shared fees/upkeep/consolidation/decay/refund và private party views; legacy candidates stay inactive |
-| Rewards/Running | Aspire/fixed Chest dùng chung dev wallet qua private HTTP; running preparation vẫn riêng | Live feature adapters/account integration; no Gift-bearing draw or external endpoint enabled |
-| Outbox failure | On any batch processing failure, release all remaining own-token leases, keep delivered/newer-owned leases intact | Reproduce original triggering relay error if it returns, large hotspot capacity; DB outage still uses lease expiry |
-
-Source reconciliation for R0: Gamenote remains latest product idea direction; DECISIONS/GAME_SPEC approved decisions govern runtime, and SPEC_CONFLICTS tracks unresolved precedence. Knowledge entry/upkeep/timer/scoring, Landmark threshold/carry-over, footprint and UniStop non-running access contradictions remain explicit. This checkpoint selects no pending production number. In particular8-school-bit overlap in a fixture is not implementation of a max-two-school contest rule.
+| Roster/session | HCMUT, HCMCOU, DTU, DHHP, HSU, HUCE, NTU, HCMIU ở slots 0–7; 16 human aliases và 24 bot; campaign persistent | Slots 8–15 dự phòng; danh tính thật từ portal thuộc G-FULL |
+| World/authority | 1000×1000, chunks 64×64; 8 HQ bảo vệ 20×20, 10 Landmark, 24 UniStop, 24 Chest; own-school Knowledge/fog 5×5 | Public world objects; wallets, discoveries và party views đúng phạm vi riêng tư |
+| Wallet/explore | Common account/ledger/idempotency: fresh 1 Point, rival join 2 Points, own/invalid 0; Running 1 km → 10 Points vào ví chơi | fixture-credit là tên lưu trữ nội bộ của Points dev; không phải gameplay ruleVersion 0 |
+| UI | V1 modals/dock/minimap/tooltip/ranking/banner/editor đã port và mount; Three.js models/markers, masked puzzle images và Beacon beams | Desktop/mobile đã nghiệm thu; normal play tách Dev tools |
+| Knowledge lifecycle | Max 2 trường, merge cluster 4-edge, free upkeep 24h, 1 Point/24h/cluster, consolidation 48h/rolling 2h, expiry/refund | Deadlines/escrow/ownership/score lưu trong PostgreSQL; solo decay OFF |
+| Rewards/Running | Aspire/Nitro/Predator, personal cooldown, Treasure Map/private Chest, matching Key, finite claim/carousel, Gift eligibility/stock/fallback | Synthetic CampaignProvider hoạt động end-to-end; portal và fulfillment thật thuộc G-FULL |
+| Outbox/recovery | Durable commands/receipts, own-school relay, leased batch tail fix; reload/restart và actor-scoped recovery đã kiểm tra | Giữ nền tảng được chấp nhận; kiểm tra thêm khi có lỗi cụ thể, scale benchmark tiếp tục đóng băng |
 
 ## Work package status
 
 | Package | Status | Evidence / next |
 | --- | --- | --- |
-| R0-01 parity checklist | Established18 criteria below | Add browser journey/receipt evidence as each feature ships |
-| R0-02/03 current spec reconciliation | Baseline documented; full rule freeze pending | Resolve four conflict groups with owner examples; production cases stay blocked |
-| R1-01 synthetic8-school binding | Delivered dev scope | Stable actor IDs/tokens, generic registry, profile and same authority |
-| R1-02 unified Points/Crystals/inventory | PARTIAL dev backend delivered | Rewards/explore dùng chung wallet và inventory; running/production currency chưa tích hợp, UI panel có; browser reward mutation acceptance còn chờ |
-| R1-03 persisted exploration command | Existing path retained and verified | No new migration; same-key retry and server reconstruction keep account/world |
-| R1-04 private account/inventory relay | PARTIAL | Private HTTP inventory/catalog/receipt/events delivered; normal UI panel đã mount, actor-private cursor/recovery đã test; binary push chưa có |
-| R1-05 client transport bootstrap | Delivered dev scope | Minimal main.ts adapter, no frontend redesign or new opcode |
-| R2-00 HQ/frontier | Delivered dev scope; owner review gate retained |400 owned/fog tiles/trường, server4-edge check, protected HQ, cross-chunk/race/restart tests + UI refusal; full Knowledge lifecycle riêng |
-| R3-03 bot→player-view | Delivered own-school view |24 bots share playable server; approved combined3D observer pending |
-| R3-01/02/04/05 | PARTIAL/NOT DONE | Real world objects/UX/art/onboarding/mobile QA still required |
-| R9-A leased batch tail | FIXED with regression | Injected publish/recovery failures release3/3 pending events immediately; fenced cleanup test |
-| R9-A original trigger / R9-C scale | OPEN | New reconnect run has no relay errors; not a1000/10000-CCU benchmark |
+| R0-01 parity checklist | COMPLETE — 18/18 FULL G-V1 local/dev | PV01–PV18 bên dưới; focused integration tests và desktop/mobile browser acceptance |
+| R0-02/03 current spec reconciliation | COMPLETE — signed ruleVersion 1 | GAME_SPEC và gameConfig thống nhất; C-01..C-13 closed, không còn gate số liệu gameplay |
+| R1-01 synthetic 8-school binding | COMPLETE — G-V1 local/dev | Official school IDs/slots/HQ; stable actor tokens; server validates campaign binding |
+| R1-02 unified Points/Crystals/inventory | COMPLETE — G-V1 local/dev | Explore/rewards/Running cùng ví; Keys theo tier, Maps, private Gift entitlement; ledger/replay tests PASS |
+| R1-03 persisted exploration command | COMPLETE — G-V1 local/dev | Same-key retry, protected HQ/frontier, cross-chunk/race và server reconstruction giữ account/world |
+| R1-04 private account/inventory relay | COMPLETE — G-V1 local/dev | Private HTTP views/history, polling UI, actor/campaign-scoped recovery; không lẫn ví/discoveries khi đổi actor |
+| R1-05 client transport bootstrap | COMPLETE — G-V1 local/dev | Dynamic roster, school/home và transport bootstrap; binary explore + signed gameplay/Admin HTTP routes mounted |
+| R2-00 HQ/frontier | COMPLETE — G-V1 local/dev | 400 owned/fog tiles/HQ, server 4-edge validation, rival HQ protected; Shared Knowledge/upkeep/consolidation/refund tích hợp |
+| R3-03 bot→player-view | COMPLETE — G-V1 local/dev | 24 bot và người chơi dùng cùng authority/campaign; own-school Knowledge hiển thị trong Three.js/minimap |
+| R3-01/02/04/05 | COMPLETE — G-V1 local/dev | Full object layout, V1 UI ports, guidance, normal/dev separation và desktop/mobile QA; PV02/PV07–PV15/PV18 |
+| R9-A leased batch tail | FIXED — regression retained | Tail leases được giải phóng khi publish/recovery lỗi; delivered/newer-owned leases giữ nguyên |
+| R9-A original trigger / R9-C scale | MONITORING / BENCHMARK FROZEN | Relay error cũ không tái hiện trong đợt kiểm tra; G-V1 không tuyên bố capacity 1.000/10.000 CCU |
 
 ## V1 parity checklist
 
-PARTIAL does not satisfy G-V1. All remaining player/operator journeys are still required.
+18/18 hành trình dưới đây đã đạt FULL cho G-V1 local/dev theo signed ruleVersion 1.
 
-| ID | Status after this build | Remaining acceptance |
+| ID | Status ruleVersion 1 | Evidence G-V1 local/dev |
 | --- | --- | --- |
-| PV01 profile/HUD | PARTIAL | Complete local inventory/history/error journeys; production identity/economy thuộc G-FULL |
-| PV02 world/HQ/fog/navigation | PARTIAL |8 HQ dùng model placeholder đúng tọa độ; full layout/minimap/mobile còn thiếu |
-| PV03 explore/review | PARTIAL; HQ/frontier dev integrated | Server/HQ/cross-chunk/restart acceptance đã test; review semantics còn thiếu |
-| PV04 shared/giao lưu | PARTIAL fixture overlap | Actual shared commands/private party UI |
-| PV05 upkeep/lifecycle | NOT DONE | Durable deadlines/claims/refunds |
-| PV06 resources/conversion | PARTIAL common dev inventory API + panel | Running account, approved conversion và browser reward mutation acceptance |
-| PV07 Landmark puzzle | NOT DONE live | Server command + modal + cooldown/hints |
-| PV08 Landmark contribution/beacon | NOT DONE live | Atomic Crystal pots/takeover/buffs |
-| PV09 UniStop | PARTIAL Aspire private dev API + panel | Browser Aspire mutation acceptance, world access policy, Gift-bearing tiers |
-| PV10 Treasure Map | NOT DONE journey | Discovery/clue/navigation/privacy |
-| PV11 Chest/Key/carousel | PARTIAL fixed Chest/common Key wallet API + panel | World contact/carousel, complete catalog và browser Chest mutation acceptance |
-| PV12 Gift | NOT DONE live | Signed policy, synthetic E2E then real fulfillment |
-| PV13 ranking/guidance | NOT DONE product | Metrics/ties/corrections/onboarding |
-| PV14 notifications/events | NOT DONE product | Durable triggers/inbox/dedup |
-| PV15 editor/admin | NOT DONE | RBAC/draft/validate/publish/audit/rollback |
-| PV16 reconnect/recovery | PARTIAL | Exploration account verified; all feature state still required |
-| PV17 provider/campaign | PARTIAL synthetic | Local provider→playable account integration còn thiếu; real contract/identity thuộc G-FULL |
-| PV18 visual/normal-dev separation | PARTIAL | Existing visual assets only;8-school polish/device QA |
+| PV01 profile/HUD | FULL (G-V1 local/dev · ruleVersion 1) | HUD/ví/private history; đổi actor và reload không lẫn inventory; test signed routes + browser |
+| PV02 world/HQ/fog/navigation | FULL (G-V1 local/dev · ruleVersion 1) | 8 HQ, 10 Landmark, 24 UniStop, 24 Chest; fog riêng 5×5, minimap/navigation; desktop/mobile verified |
+| PV03 explore/review | FULL (G-V1 local/dev · ruleVersion 1) | 4-edge server authority: fresh 1 Point, own 0; protected HQ/cross-chunk/race/restart PASS; browser revisit 0 |
+| PV04 shared/giao lưu | FULL (G-V1 local/dev · ruleVersion 1) | Browser giao lưu 2 Points; cluster ghép 4-edge; max 2 trường và private party view được integration test |
+| PV05 upkeep/lifecycle | FULL (G-V1 local/dev · ruleVersion 1) | Browser upkeep 1 Point, consolidation 0/2 → 1/2 → expiry/refund; successful consolidation; guest/both lapse tests PASS |
+| PV06 resources/conversion | FULL (G-V1 local/dev · ruleVersion 1) | Points/Crystal/Keys/Maps chung account; Running +10 Points vào ví chơi; ledger conservation/retry PASS |
+| PV07 Landmark puzzle | FULL (G-V1 local/dev · ruleVersion 1) | V1 modal/hints, ảnh che mở sau giải; bonus 10% once; browser sai đáp án cooldown 10 phút; mobile image verified |
+| PV08 Landmark contribution/beacon | FULL (G-V1 local/dev · ruleVersion 1) | Browser HCMUT thắp 1000 → HCMCOU takeover 1050 → target 1100; persistent school pots; Beacon beam và buff HUD/ranking |
+| PV09 UniStop | FULL (G-V1 local/dev · ruleVersion 1) | Aspire/Nitro/Predator browser mutations; personal cooldown 12h/24h/24h; non-running spin/fallback hoạt động |
+| PV10 Treasure Map | FULL (G-V1 local/dev · ruleVersion 1) | Browser Aspire nhận Treasure Map; private Chest tọa độ/navigation; actor isolation verified |
+| PV11 Chest/Key/carousel | FULL (G-V1 local/dev · ruleVersion 1) | Browser matching Key → finite Chest → CS:GO carousel; one-winner race/retry tests; claimed Chest biến khỏi inventory |
+| PV12 Gift | FULL (G-V1 local/dev · ruleVersion 1) | FULL synthetic staging: weekly Running + Gift stock → private Gift entitlement; zero eligibility/stock → Crystal fallback; real fulfillment thuộc G-FULL |
+| PV13 ranking/guidance | FULL (G-V1 local/dev · ruleVersion 1) | Leaderboard đủ 8 trường, Knowledge Score/timestamp tie rules; buff metadata; hướng dẫn chơi có trên desktop/mobile |
+| PV14 notifications/events | FULL (G-V1 local/dev · ruleVersion 1) | Durable own/public event history; toast dedup/bounded; browser admin notification, Beacon/lapse/refund events |
+| PV15 editor/admin | FULL (G-V1 local/dev · ruleVersion 1) | Authenticated V1 editor + 3D footprint preview; place/move/validate/publish/audit/rollback; browser đặt UniStop 420,420 và rollback |
+| PV16 reconnect/recovery | FULL (G-V1 local/dev · ruleVersion 1) | PG durable command-key replay; reload/server reconstruction giữ ví, Key, Chest claim, Gift, pots, Beacon, deadlines/history; actor recovery scoped |
+| PV17 provider/campaign | FULL (G-V1 local/dev · ruleVersion 1) | CampaignProvider interface + working synthetic Running provider; official school binding; conversion cùng ví; real portal contract thuộc G-FULL |
+| PV18 visual/normal-dev separation | FULL (G-V1 local/dev · ruleVersion 1) | Normal play/Dev tools tách riêng; V1 modules mounted; desktop/mobile guidance, minimap, modal/carousel QA; ảnh trong artifacts/g-v1 |
 
-Inventory/reward panel đã triển khai theo owner reassignment; xem [Increment03 report](COMPLETION_INCREMENT_03_2026-10-14.md). Bước browser mutation acceptance bị auto-review chặn việc tiêu synthetic Key/credit; cần owner cho phép test này. Các phần độc lập tiếp theo: hoàn thiện world objects/8 HQ và hướng dẫn synthetic play, chuẩn bị Landmark/Knowledge commands trong phạm vi dev đã duyệt. R0 decisions và production gates vẫn riêng.
+## Historical checkpoints
 
-HQ/frontier correction: [report](HQ_FRONTIER_INTEGRATION_2026-10-14.md),124/124 passing tests. Original plan missed this core acceptance condition; R2-00 now precedes dependent gameplay. Default campaign94000000 replaces the active dev session while preserving93000000 data. User clarification governs this core invariant; official production map and other pending rules remain gated.
-
-Audit update: dev server health200/schools8; bounded bot run đã finished. Không có benchmark scale mới hoặc browser reward-spend acceptance mới. [Full audit và next priorities](PROGRESS_AUDIT_2026-10-14.md).
+Các [audit baseline](PROGRESS_AUDIT_2026-10-14.md), [increment03](COMPLETION_INCREMENT_03_2026-10-14.md) và [HQ/frontier correction](HQ_FRONTIER_INTEGRATION_2026-10-14.md) ghi lại trạng thái trước ruleVersion 1. Các dòng PARTIAL, approval pending, roster generic, campaign 94000000 và gameplay v0 trong những checkpoint đó không mô tả bản hiện tại. Campaign mặc định hiện tại là `96000000-0000-4000-8000-000000000000`, code `school-play-rule1-20261014`; restart giữ tiến độ trong cùng database.

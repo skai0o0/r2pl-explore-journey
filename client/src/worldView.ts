@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SCHOOLS, type WorldObject } from "../../shared/gameplay/gameConfig.ts";
 import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
 import {
   CHUNK_SIZE,
@@ -218,6 +219,8 @@ export interface WorldMarker {
   readonly title: string;
   readonly detail: string;
   readonly kind: string;
+  readonly id?: string;
+  readonly color?: string;
 }
 const markers: readonly WorldMarker[] = [
   {
@@ -331,6 +334,9 @@ export class WorldView {
   readonly #assetMounts: AssetMount[] = [];
   readonly #assetRoots: THREE.Group[] = [];
   readonly #modelSupports: THREE.Mesh[] = [];
+  readonly #privateObjects = new THREE.Group();
+  readonly #beacons = new THREE.Group();
+  readonly #editorPreview = new THREE.Group();
   readonly #tileIndicators = new TileIndicatorLayer();
   readonly #selection: HTMLElement;
   readonly #hoverElement: HTMLElement;
@@ -366,6 +372,7 @@ export class WorldView {
     layout: {
       readonly markers?: readonly WorldMarker[];
       readonly placements?: readonly ModelPlacement[];
+      readonly objects?: readonly WorldObject[];
     } = {},
   ) {
     this.#host = host;
@@ -422,6 +429,9 @@ export class WorldView {
       ),
     );
 
+    this.#scene.add(this.#privateObjects);
+    this.#scene.add(this.#beacons);
+    this.#scene.add(this.#editorPreview);
     const assetLoader = new ModelAssetLoader();
     for (const placement of layout.placements ?? MODEL_PLACEMENTS) {
       // The synthetic fixture glTFs are intentionally flat. Keep their loaded
@@ -473,9 +483,28 @@ export class WorldView {
       );
     }
 
+    for (const o of layout.objects ?? []) {
+      if (o.kind !== "unistop" && o.kind !== "chest") continue;
+      const color =
+        o.tier === "aspire"
+          ? 0x72d8ca
+          : o.tier === "nitro"
+            ? 0xef7253
+            : 0xa084ff;
+      const mesh = new THREE.Mesh(
+        o.kind === "chest"
+          ? new THREE.BoxGeometry(o.width, o.height, 2)
+          : new THREE.CylinderGeometry(2, 3, 8, 6),
+        new THREE.MeshBasicMaterial({ color }),
+      );
+      if (o.kind === "unistop") mesh.rotation.x = Math.PI / 2;
+      mesh.position.set(o.x - 500, 500 - o.z, o.kind === "chest" ? 1 : 4);
+      this.#scene.add(mesh);
+    }
     for (const marker of this.#markers) {
       const element = document.createElement("div");
       element.className = `map-marker ${marker.kind}`;
+      if (marker.color) element.style.color = marker.color;
       const glyph = document.createElement("span");
       glyph.className = "marker-glyph";
       glyph.textContent = marker.kind === "landmark" ? "◆" : "⌂";
@@ -571,6 +600,108 @@ export class WorldView {
     this.#render();
     this.#onViewChange();
     return this.#cameraMode;
+  }
+
+  setBeacons(
+    beacons: readonly { id: string; holder: number | null; target: number }[],
+  ): void {
+    for (const child of [...this.#beacons.children]) {
+      this.#beacons.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    for (const beacon of beacons) {
+      const index = this.#markers.findIndex((m) => m.id === beacon.id),
+        marker = this.#markers[index];
+      if (!marker) continue;
+      const detail = this.#markerElements[index]?.querySelector("small");
+      if (detail)
+        detail.textContent =
+          (beacon.holder === null
+            ? "Chưa sáng"
+            : SCHOOLS[beacon.holder]!.shortName + " Beacon") +
+          " · " +
+          beacon.target +
+          " Crystal";
+      if (beacon.holder === null) continue;
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.7, 2, 70, 8),
+        new THREE.MeshBasicMaterial({
+          color: SCHOOLS[beacon.holder]!.color,
+          transparent: true,
+          opacity: 0.65,
+        }),
+      );
+      beam.rotation.x = Math.PI / 2;
+      beam.position.set(marker.x - 500, 500 - marker.z, 35);
+      this.#beacons.add(beam);
+    }
+    this.#render();
+  }
+  setEditorPreview(objects: readonly WorldObject[]): void {
+    for (const child of [...this.#editorPreview.children]) {
+      this.#editorPreview.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    for (const o of objects) {
+      const invalid =
+        o.x - o.width / 2 < 0 ||
+        o.z - o.height / 2 < 0 ||
+        o.x + o.width / 2 > 1000 ||
+        o.z + o.height / 2 > 1000 ||
+        objects.some(
+          (p) =>
+            p.id !== o.id &&
+            Math.abs(p.x - o.x) < (p.width + o.width) / 2 &&
+            Math.abs(p.z - o.z) < (p.height + o.height) / 2,
+        );
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(o.width, o.height, 1),
+        new THREE.MeshBasicMaterial({
+          color: invalid ? 0xff6655 : 0x6ce2dc,
+          wireframe: true,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.9,
+        }),
+      );
+      mesh.position.set(o.x - 500, 500 - o.z, 1.5);
+      this.#editorPreview.add(mesh);
+    }
+    this.#render();
+  }
+  setPrivateObjects(objects: readonly WorldObject[]): void {
+    for (const child of [...this.#privateObjects.children]) {
+      this.#privateObjects.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    for (const o of objects) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(o.width, o.height, 2),
+        new THREE.MeshBasicMaterial({
+          color:
+            o.tier === "aspire"
+              ? 0x72d8ca
+              : o.tier === "nitro"
+                ? 0xef7253
+                : 0xa084ff,
+        }),
+      );
+      mesh.position.set(o.x - 500, 500 - o.z, 1);
+      this.#privateObjects.add(mesh);
+    }
+    this.#render();
+  }
+  get viewState(): { x: number; z: number; span: number } {
+    return { x: this.#centerX, z: this.#centerZ, span: this.#span };
   }
 
   setSchool(slot: number): void {
@@ -783,17 +914,11 @@ export class WorldView {
 
     if (isOwned) {
       // Differentiate authorized discovered school-owned tiles with vibrant school territory styling!
-      if (this.#schoolSlot === 0) {
-        // Dawn University: emerald mint glow
-        pixels[offset] = Math.min(255, Math.round(tr * 0.35 + 85 * 0.65));
-        pixels[offset + 1] = Math.min(255, Math.round(tg * 0.35 + 242 * 0.65));
-        pixels[offset + 2] = Math.min(255, Math.round(tb * 0.35 + 180 * 0.65));
-      } else {
-        // Dusk University: warm sunset coral glow
-        pixels[offset] = Math.min(255, Math.round(tr * 0.35 + 255 * 0.65));
-        pixels[offset + 1] = Math.min(255, Math.round(tg * 0.35 + 168 * 0.65));
-        pixels[offset + 2] = Math.min(255, Math.round(tb * 0.35 + 115 * 0.65));
-      }
+      const hex = SCHOOLS[this.#schoolSlot]?.color ?? "#8bd9b4";
+      const color = parseInt(hex.slice(1), 16);
+      pixels[offset] = Math.round(tr * 0.35 + ((color >> 16) & 255) * 0.65);
+      pixels[offset + 1] = Math.round(tg * 0.35 + ((color >> 8) & 255) * 0.65);
+      pixels[offset + 2] = Math.round(tb * 0.35 + (color & 255) * 0.65);
       pixels[offset + 3] = 255;
     } else {
       // Discovered but not owned by this school (scouted/unclaimed):

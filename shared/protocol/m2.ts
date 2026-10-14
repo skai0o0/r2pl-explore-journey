@@ -144,7 +144,7 @@ export function encodeExplore(command: ExploreCommand): Uint8Array {
     !Number.isInteger(command.tileIndex) ||
     command.tileIndex < 0 ||
     command.tileIndex >= WORLD_TILE_COUNT ||
-    command.ruleVersion !== 0
+    (command.ruleVersion !== 0 && command.ruleVersion !== 1)
   )
     throw new RangeError("Invalid synthetic explore command");
   const payload = new Uint8Array(22);
@@ -158,7 +158,7 @@ export function decodeExplore(payload: Uint8Array): ExploreCommand {
     throw new Error("Invalid explore payload length");
   const tileIndex = view(payload).getUint32(16, true);
   const ruleVersion = view(payload).getUint16(20, true);
-  if (tileIndex >= WORLD_TILE_COUNT || ruleVersion !== 0)
+  if (tileIndex >= WORLD_TILE_COUNT || (ruleVersion !== 0 && ruleVersion !== 1))
     throw new Error("Invalid synthetic explore parameters");
   return {
     key: Uint8Array.from(payload.subarray(0, 16)),
