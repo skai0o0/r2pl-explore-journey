@@ -27,7 +27,9 @@ export async function fetchModelManifest(): Promise<ReadonlySet<string>> {
   }
   if (manifestLoaded) return KNOWN_MODELS;
   try {
-    const res = await fetch("/models/manifest.json");
+    const res = await fetch("/models/manifest.json", {
+      signal: AbortSignal.timeout(5000),
+    });
     if (res.ok) {
       const data = (await res.json()) as { models?: string[] };
       if (Array.isArray(data.models)) {

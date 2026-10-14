@@ -33,6 +33,7 @@ import {
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
 import { GameplayUI } from "./gameplayUI.ts";
+import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
 import { CompassCard } from "./ui/compassCard.ts";
 import { MiniMap } from "./ui/miniMap.ts";
@@ -71,6 +72,8 @@ const publicWorld =
           objects: WorldObject[];
         }
       ).objects;
+// Preload availability before WorldView synchronously chooses GLB or fallback.
+await fetchModelManifest();
 const miniMap = new MiniMap();
 miniMap.setObjects(publicWorld);
 const dock = new StudentActionDock();

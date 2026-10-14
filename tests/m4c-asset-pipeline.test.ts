@@ -507,3 +507,51 @@ test("world-unit procedural fallbacks stay Z-up through missing and rejected GLB
     }
   }
 });
+
+test("awaited manifest lets a newly added GLB replace its procedural fallback on first mount", async () => {
+  const { fetchModelManifest, isModelAvailable } = await import(
+    "../client/src/modelManifest.ts"
+  );
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window"),
+    originalFetch = globalThis.fetch;
+  const url = "/models/hqs/future_hq.glb";
+  Object.defineProperty(globalThis, "window", {
+    value: {},
+    configurable: true,
+  });
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ models: [url] }), { status: 200 });
+  try {
+    assert.equal(isModelAvailable(url), false);
+    await fetchModelManifest();
+    const scene = new THREE.Scene(),
+      fallback = new THREE.Group(),
+      loaded = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 3, 1),
+        new THREE.MeshStandardMaterial(),
+      );
+    const mount = mountModelAsset(
+      scene,
+      {
+        loadInstance: async (requested) => {
+          assert.equal(requested, url);
+          return loaded;
+        },
+      },
+      url,
+      MODEL_PLACEMENTS[0]!,
+      fallback,
+      () => {},
+      { skipIfUnavailable: true },
+    );
+    assert.equal(await mount.ready, "loaded");
+    assert.equal(scene.children.includes(fallback), false);
+    assert.equal(loaded.rotation.x, Math.PI / 2);
+    mount.dispose();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow)
+      Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});

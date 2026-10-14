@@ -753,7 +753,11 @@ test("gift check-in redemption generates giftCode, retrieves by code, and redeem
     // Verify in player view
     const viewRes = await fetch(`${base}/api/game`, { headers });
     const view = (await viewRes.json()) as {
-      gifts: Array<{ giftCode?: string; redeemedAt?: number | null; tier: string }>;
+      gifts: Array<{
+        giftCode?: string;
+        redeemedAt?: number | null;
+        tier: string;
+      }>;
     };
     const playerGift = view.gifts.find((g) => g.giftCode === giftCode);
     assert.ok(playerGift, "player gifts must include the rolled giftCode");
@@ -779,6 +783,69 @@ test("gift check-in redemption generates giftCode, retrieves by code, and redeem
     );
     assert.equal(notFoundRes.status, 404);
 
+    // Database refuses a duplicate code even under a different entitlement ID.
+    await assert.rejects(
+      pool.query(
+        "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) SELECT campaign_id,scope,'duplicate-test',data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND data->>'giftCode'=$2",
+        [campaign, giftCode],
+      ),
+      (error: unknown) => (error as { code?: string }).code === "23505",
+    );
+
+    // A Chest award also creates a distinct code in the same private inventory.
+    const chest = (
+      await pool.query<{ id: string; data: { x: number; z: number } }>(
+        "SELECT id,data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind'='chest' AND data->>'tier'='nitro' LIMIT 1",
+        [campaign],
+      )
+    ).rows[0]!;
+    await pool.query(
+      "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3)",
+      [campaign, actor.actorId, chest.id],
+    );
+    await path(pool, campaign, 0, chest.data.x, chest.data.z);
+    const chestResult = (await (
+      await fetch(`${base}/api/game`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ruleVersion: 1,
+          key: randomUUID(),
+          action: "open",
+          target: chest.id,
+        }),
+      })
+    ).json()) as { status: string; giftCode: string; reward: { kind: string } };
+    assert.equal(chestResult.status, "applied");
+    assert.equal(chestResult.reward.kind, "gift");
+    assert.match(chestResult.giftCode, /^R2PL-GIFT-[A-F0-9]{6}$/);
+    assert.notEqual(chestResult.giftCode, giftCode);
+
+    // Concurrent check-in attempts must produce exactly one winner.
+    const raced = await Promise.all(
+      Array.from({ length: 8 }, async () => {
+        const response = await fetch(`${base}/api/admin/gifts/redeem`, {
+          method: "POST",
+          headers: adminHeaders,
+          body: JSON.stringify({ giftCode }),
+        });
+        assert.equal(response.status, 200);
+        return response.json() as Promise<{
+          success: boolean;
+          alreadyRedeemed?: boolean;
+        }>;
+      }),
+    );
+    assert.equal(raced.filter((r) => r.success).length, 1);
+    assert.equal(raced.filter((r) => r.alreadyRedeemed).length, 7);
+    const durable = (
+      await pool.query<{ redeemed_at: Date }>(
+        "SELECT redeemed_at FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND data->>'giftCode'=$2",
+        [campaign, giftCode],
+      )
+    ).rows[0]!;
+    assert.ok(durable.redeemed_at instanceof Date);
+
     // Admin redeem gift
     const redeemRes = await fetch(`${base}/api/admin/gifts/redeem`, {
       method: "POST",
@@ -790,8 +857,11 @@ test("gift check-in redemption generates giftCode, retrieves by code, and redeem
       success: boolean;
       gift: { redeemedAt: number };
     };
-    assert.equal(redeemData.success, true);
-    assert.ok(redeemData.gift.redeemedAt > 0, "redeemedAt must be a positive timestamp");
+    assert.equal(redeemData.success, false);
+    assert.ok(
+      redeemData.gift.redeemedAt > 0,
+      "redeemedAt must be a positive timestamp",
+    );
 
     // Second redemption attempt must report alreadyRedeemed (idempotency / anti-double claim)
     const secondRedeemRes = await fetch(`${base}/api/admin/gifts/redeem`, {
@@ -813,7 +883,10 @@ test("gift check-in redemption generates giftCode, retrieves by code, and redeem
       gifts: Array<{ giftCode?: string; redeemedAt?: number | null }>;
     };
     const updatedGift = updatedView.gifts.find((g) => g.giftCode === giftCode);
-    assert.ok(updatedGift?.redeemedAt, "player gift view must show redeemedAt timestamp");
+    assert.ok(
+      updatedGift?.redeemedAt,
+      "player gift view must show redeemedAt timestamp",
+    );
   } finally {
     await server?.close();
     await cleanupSchoolRewards(pool, campaign);
@@ -822,3 +895,91 @@ test("gift check-in redemption generates giftCode, retrieves by code, and redeem
   }
 });
 
+test("signed 5x5 fog relay converges across four chunks without exposing rival masks", {
+  skip: !url,
+}, async () => {
+  const { ProjectionReplica } = await import("../shared/protocol/replica.ts");
+  const {
+    M2_KIND,
+    decodeFrame,
+    decodeSnapshot,
+    encodeSubscribe,
+    encodeExplore,
+  } = await import("../shared/protocol/m2.ts");
+  const pool = new Pool({ connectionString: url }),
+    campaign = randomUUID();
+  let server: Awaited<ReturnType<typeof createSchoolPlayServer>> | undefined;
+  try {
+    server = await createSchoolPlayServer(
+      pool,
+      { web: 0, websocket: 0 },
+      campaign,
+    );
+    await path(pool, campaign, 0, 61, 63);
+    const replicas = [new ProjectionReplica(0), new ProjectionReplica(1)],
+      ids = [0, 1, 16, 17];
+    for (let slot = 0; slot < 2; slot++) {
+      const actor = server.fixture.actors.find((a) => a.schoolSlot === slot)!;
+      server.realtime.core.addSession(`fog-test-${slot}`, actor, {
+        send(bytes) {
+          const frame = decodeFrame(bytes);
+          if (frame.kind === M2_KIND.SNAPSHOT)
+            replicas[slot]!.applySnapshot(decodeSnapshot(frame.payload));
+        },
+        close() {},
+      });
+      await server.realtime.core.handle(
+        `fog-test-${slot}`,
+        encodeSubscribe(ids),
+      );
+    }
+    await server.realtime.core.handle(
+      "fog-test-0",
+      encodeExplore({
+        key: Uint8Array.from(
+          Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
+        ),
+        tileIndex: 63 * 1000 + 62,
+        ruleVersion: 1,
+      }),
+    );
+    await server.realtime.core.drainOutbox();
+    for (let slot = 0; slot < 2; slot++)
+      for (const id of ids) {
+        const expected = await server.realtime.authority.snapshot(slot, id),
+          replica = replicas[slot]!;
+        assert.equal(replica.revision(id), expected.viewRevision);
+        const masks = new DataView(
+          expected.mask.buffer,
+          expected.mask.byteOffset,
+          expected.mask.byteLength,
+        );
+        for (let local = 0; local < 4096; local++) {
+          assert.equal(
+            replica.maskAt(id, local),
+            masks.getUint16(local * 2, true),
+          );
+          assert.equal(
+            replica.isDiscovered(id, local),
+            !!(expected.fog[local >> 3]! & (1 << (local & 7))),
+          );
+        }
+      }
+    for (let z = 61; z <= 65; z++)
+      for (let x = 60; x <= 64; x++)
+        assert.equal(
+          replicas[0]!.isDiscovered(
+            chunkId(Math.floor(x / 64), Math.floor(z / 64)),
+            localIndex(x, z),
+          ),
+          true,
+        );
+    server.realtime.core.removeSession("fog-test-0");
+    server.realtime.core.removeSession("fog-test-1");
+  } finally {
+    await server?.close();
+    await cleanupSchoolRewards(pool, campaign);
+    await cleanupBotFixture(pool, campaign);
+    await pool.end();
+  }
+});

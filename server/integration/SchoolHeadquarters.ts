@@ -64,6 +64,21 @@ export async function seedWorldObjects(
       "utf8",
     ),
   );
+  const giftsReady = (
+    await db.query<{ ready: boolean }>(
+      "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='r2pl_v2' AND table_name='game_state' AND column_name='redeemed_at') AND to_regclass('r2pl_v2.gift_code_unique') IS NOT NULL AS ready",
+    )
+  ).rows[0]!.ready;
+  if (!giftsReady)
+    await db.query(
+      await readFile(
+        new URL(
+          "../../database/migrations/004_gift_checkin.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
   await initializeKnowledgeScores(db, campaign);
   if (
     (

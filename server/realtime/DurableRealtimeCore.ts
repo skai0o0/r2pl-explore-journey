@@ -472,6 +472,59 @@ export class DurableRealtimeCore {
       trace.outboxClaimReturnedMs = event.claimReturnedAtMs;
       trace.projectionDecodedMs = event.projectedAtMs;
     }
+    if (this.#authority.fogRevealRadius > 0) {
+      // Signed exploration reveals a square of fog, possibly across chunk boundaries.
+      // A single-tile delta cannot represent it. Read one private snapshot per affected
+      // chunk and share its bytes only with subscribers of the same school.
+      const { chunkX, chunkZ } = chunkCoordinatesForId(event.chunkId);
+      const x = chunkX * CHUNK_SIZE + (event.localIndex % CHUNK_SIZE);
+      const z = chunkZ * CHUNK_SIZE + Math.floor(event.localIndex / CHUNK_SIZE);
+      const radius = this.#authority.fogRevealRadius;
+      for (
+        let cz = Math.floor(Math.max(0, z - radius) / CHUNK_SIZE);
+        cz <= Math.floor(Math.min(999, z + radius) / CHUNK_SIZE);
+        cz++
+      )
+        for (
+          let cx = Math.floor(Math.max(0, x - radius) / CHUNK_SIZE);
+          cx <= Math.floor(Math.min(999, x + radius) / CHUNK_SIZE);
+          cx++
+        ) {
+          const id = chunkId(cx, cz);
+          await this.#queues.enqueue(
+            this.#sectorForChunk(id),
+            async () => {
+              const subscribers = this.#subscribers.get(
+                `${event.schoolSlot}:${id}`,
+              );
+              if (!subscribers?.size) return;
+              const snapshot = await this.#authority.snapshot(
+                event.schoolSlot,
+                id,
+              );
+              const bytes = encodeSnapshot(snapshot);
+              for (const session of subscribers) {
+                const generation = session.subscriptions.get(id);
+                if (
+                  generation === undefined ||
+                  session.outbound.closed ||
+                  (session.revisions.get(id) ?? -1n) >= snapshot.viewRevision
+                )
+                  continue;
+                if (
+                  session.outbound.enqueue(
+                    bytes,
+                    () => session.subscriptions.get(id) === generation,
+                  )
+                )
+                  session.revisions.set(id, snapshot.viewRevision);
+              }
+            },
+            "relay",
+          );
+        }
+      return;
+    }
     await this.#queues.enqueue(
       this.#sectorForChunk(event.chunkId),
       async () => {

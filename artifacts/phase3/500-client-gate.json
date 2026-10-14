@@ -1,0 +1,97 @@
+{
+  "runAt": "2026-10-14T13:29:33.316Z",
+  "gate": "17/10/2026",
+  "clients": 500,
+  "peakConnections": 500,
+  "liveAtCompletion": 500,
+  "serverConnectionsAtCompletion": 500,
+  "schools": [
+    {
+      "school": "hcmut",
+      "clients": 63
+    },
+    {
+      "school": "hcmcou",
+      "clients": 63
+    },
+    {
+      "school": "dtu",
+      "clients": 63
+    },
+    {
+      "school": "dhhp",
+      "clients": 63
+    },
+    {
+      "school": "hsu",
+      "clients": 62
+    },
+    {
+      "school": "huce",
+      "clients": 62
+    },
+    {
+      "school": "ntu",
+      "clients": 62
+    },
+    {
+      "school": "hcmiu",
+      "clients": 62
+    }
+  ],
+  "operations": 1008,
+  "success": 1008,
+  "failed": 0,
+  "successRate": 100,
+  "durationMs": 15271.4264,
+  "throughput": 66.00562210744111,
+  "p50Ms": 2298.8862999999997,
+  "p95Ms": 12629.6077,
+  "cohorts": {
+    "capture": {
+      "count": 8,
+      "p50Ms": 82.05199999999968,
+      "p95Ms": 204.78150000000005
+    },
+    "explore": {
+      "count": 500,
+      "p50Ms": 6336.8388,
+      "p95Ms": 13414.877400000001
+    },
+    "unistop_spin": {
+      "count": 128,
+      "p50Ms": 117.75420000000031,
+      "p95Ms": 235.3658000000005
+    },
+    "landmark_crystal": {
+      "count": 124,
+      "p50Ms": 63.42879999999968,
+      "p95Ms": 170.53160000000025
+    },
+    "shared_upkeep": {
+      "count": 120,
+      "p50Ms": 79.40639999999985,
+      "p95Ms": 170.53440000000046
+    },
+    "shared_join": {
+      "count": 128,
+      "p50Ms": 5506.650299999999,
+      "p95Ms": 12281.7213
+    }
+  },
+  "memory": {
+    "initialRssMB": 88.09765625,
+    "peakRssMB": 312.06640625,
+    "finalRssMB": 291.25390625,
+    "heapUsedMB": 45.29960632324219,
+    "scope": "combined in-process server + 500 clients; not a leak/soak test"
+  },
+  "convergence": {
+    "mismatches": 0,
+    "pendingOutbox": 0,
+    "ledgerMismatches": 0,
+    "ms": 7622.531199999998,
+    "transportErrors": []
+  },
+  "failures": []
+}

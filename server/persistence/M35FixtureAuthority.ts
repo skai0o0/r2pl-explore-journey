@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import type { Snapshot } from "../../shared/protocol/m2.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
@@ -54,6 +55,7 @@ interface RelayTelemetry {
 
 /** PostgreSQL-backed adapter for the explicitly synthetic M3.5 network fixture. */
 export class M35FixtureAuthority {
+  readonly fogRevealRadius: number;
   readonly #pool: Pool;
   readonly #campaignId: string;
   readonly #cost: bigint;
@@ -73,6 +75,8 @@ export class M35FixtureAuthority {
   ) {
     if (explicitFixtureCost < 0n)
       throw new RangeError("Invalid explicit fixture cost");
+    this.fogRevealRadius =
+      boundary?.ruleVersion === 1 ? GAME_CONFIG.world.fogRevealRadius : 0;
     this.#pool = pool;
     this.#campaignId = campaignId;
     this.#cost = explicitFixtureCost;

@@ -9,6 +9,7 @@ import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
+import type { CampaignProvider } from "./CampaignProvider.ts";
 import { DevAccountService } from "./DevAccountService.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
 import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
@@ -24,6 +25,7 @@ export async function createSchoolPlayServer(
   campaignId = SCHOOL_PLAY_CAMPAIGN,
   options: {
     readonly rewardDraw?: () => number;
+    readonly campaignProvider?: CampaignProvider;
     readonly actorsPerSchool?: number;
   } = {},
 ): Promise<Awaited<ReturnType<typeof startSchoolPlayServer>>> {
@@ -83,6 +85,7 @@ async function startSchoolPlayServer(
   campaignId?: string,
   options: {
     readonly rewardDraw?: () => number;
+    readonly campaignProvider?: CampaignProvider;
     readonly actorsPerSchool?: number;
   } = {},
 ) {
@@ -93,7 +96,12 @@ async function startSchoolPlayServer(
   );
   await provisionSchoolRewards(pool, fixture);
   const rewardHttp = new SchoolRewardHttp(pool, fixture);
-  const gameplay = new SignedGameplay(pool, fixture, options.rewardDraw);
+  const gameplay = new SignedGameplay(
+    pool,
+    fixture,
+    options.rewardDraw,
+    options.campaignProvider,
+  );
   await gameplay.initialize();
   const accounts = new DevAccountService(
     pool,
@@ -283,9 +291,9 @@ async function startSchoolPlayServer(
         chunks.push(bytes);
       }
       try {
-        const payload = JSON.parse(
-          Buffer.concat(chunks).toString("utf8"),
-        ) as { giftCode?: string };
+        const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+          giftCode?: string;
+        };
         if (!payload.giftCode) {
           response
             .writeHead(400)
@@ -300,9 +308,7 @@ async function startSchoolPlayServer(
         }
         response.end(JSON.stringify(result));
       } catch (e) {
-        response
-          .writeHead(500)
-          .end(JSON.stringify({ error: String(e) }));
+        response.writeHead(500).end(JSON.stringify({ error: String(e) }));
       }
       return;
     }

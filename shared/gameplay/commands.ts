@@ -32,6 +32,7 @@ export interface GiftEntitlementView {
   readonly schoolName?: string | undefined;
 }
 export interface GameView {
+  readonly runningMode?: "http" | "synthetic";
   readonly ruleVersion: 1;
   readonly crystals: string;
   readonly treasureMaps: string;

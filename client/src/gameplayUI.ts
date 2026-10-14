@@ -425,7 +425,9 @@ export class GameplayUI {
             ${isRedeemed ? `Đã nhận quà tại sự kiện (${new Date(Number(gift.redeemedAt)).toLocaleString("vi-VN")})` : "Đưa mã này cho Ban tổ chức tại sự kiện để nhận quà"}
           </small>
         `;
-        const copyBtn = card.querySelector(".copy-gift-btn") as HTMLButtonElement;
+        const copyBtn = card.querySelector(
+          ".copy-gift-btn",
+        ) as HTMLButtonElement;
         copyBtn?.addEventListener("click", () => {
           if (navigator.clipboard) {
             void navigator.clipboard.writeText(code);
@@ -440,9 +442,15 @@ export class GameplayUI {
       content.append(section);
     }
     const running = document.createElement("button");
-    running.textContent = `Chạy giả lập 1 km · +${GAME_CONFIG.running.kmToPointsRate} Points`;
+    running.textContent =
+      this.view?.runningMode === "http"
+        ? "Đồng bộ Running từ chiến dịch"
+        : `Chạy giả lập 1 km · +${GAME_CONFIG.running.kmToPointsRate} Points`;
     running.onclick = () =>
-      void this.command({ action: "running", amount: 1000 });
+      void this.command({
+        action: "running",
+        ...(this.view?.runningMode === "http" ? {} : { amount: 1000 }),
+      });
     content.append(running);
     const km = document.createElement("p");
     km.textContent = `Tuần này: ${this.view?.weeklyKm ?? 0} km`;

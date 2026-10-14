@@ -5,14 +5,23 @@ import { botDatabase } from "./simulation/config.ts";
 import { migrateBotFixture } from "./simulation/fixture.ts";
 
 const database = botDatabase(
-  process.env.R2PL_BOT_DATABASE_URL,
+  process.env.DATABASE_URL ?? process.env.R2PL_BOT_DATABASE_URL,
   process.env.R2PL_BOT_SIMULATION,
 );
 const workspace = fileURLToPath(new URL("../", import.meta.url));
 migrateBotFixture(database, workspace);
 const pool = new Pool({ connectionString: database, max: 16 });
-const play = await createSchoolPlayServer(pool, { web: 4176, websocket: 2568 });
-console.log("Eight-school playable fixture: http://127.0.0.1:4176");
+const port = Number(process.env.PORT ?? 4176);
+const wsPort = Number(process.env.WS_PORT ?? 2568);
+if (!Number.isInteger(wsPort) || wsPort < 1 || wsPort > 65535)
+  throw new TypeError("Invalid WS_PORT");
+if (!Number.isInteger(port) || port < 1 || port > 65535)
+  throw new TypeError("Invalid PORT");
+const play = await createSchoolPlayServer(pool, {
+  web: port,
+  websocket: wsPort,
+});
+console.log(`Eight-school playable fixture: http://127.0.0.1:${port}`);
 console.log(
   "16 students + 24 WebSocket bots; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
 );

@@ -31,9 +31,8 @@ import {
   MODEL_PLACEMENTS,
   type ModelPlacement,
 } from "./assetRegistry.ts";
-import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import { LandscapeEffects } from "./landscape.ts";
-import { fetchModelManifest } from "./modelManifest.ts";
+import { createProceduralBuilding } from "./proceduralBuildings.ts";
 
 export interface PickedTile {
   readonly x: number;
@@ -528,7 +527,6 @@ export class WorldView {
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
     const assetLoader = new ModelAssetLoader();
-    void fetchModelManifest();
     for (const placement of layout.placements ?? MODEL_PLACEMENTS) {
       const assetRoot = new THREE.Group();
       this.#scene.add(assetRoot);

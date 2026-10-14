@@ -20,6 +20,8 @@ import {
   parseRunningSnapshot,
 } from "../../shared/integration/running.ts";
 import { chunkId, localIndex } from "../../shared/world/coordinates.ts";
+import type { CampaignProvider } from "./CampaignProvider.ts";
+import { campaignProviderFromEnv } from "./HttpCampaignProvider.ts";
 import type {
   SchoolPlayActor,
   SchoolPlayFixture,
@@ -82,14 +84,17 @@ export class SignedGameplay {
   private pool: Pool;
   private fixture: SchoolPlayFixture;
   private draw: () => number;
+  private readonly campaignProvider: CampaignProvider | undefined;
   constructor(
     pool: Pool,
     fixture: SchoolPlayFixture,
     draw: () => number = () => randomInt(GAME_CONFIG.rewards.weightTotal),
+    campaignProvider: CampaignProvider | undefined = campaignProviderFromEnv(),
   ) {
     this.pool = pool;
     this.fixture = fixture;
     this.draw = draw;
+    this.campaignProvider = campaignProvider;
   }
   async settle(): Promise<void> {
     const db = await this.pool.connect();
@@ -383,6 +388,7 @@ export class SignedGameplay {
       await db.query("COMMIT");
       return {
         ruleVersion: 1,
+        runningMode: this.campaignProvider ? "http" : "synthetic",
         crystals: balance("fixture-crystals"),
         treasureMaps: balance("fixture-treasure-map"),
         revealedTiles,
@@ -518,27 +524,104 @@ export class SignedGameplay {
   ): Promise<GameReceipt> {
     const now = Date.now();
     if (c.action === "running") {
-      if (!c.amount) throw new RuleRejection("METERS_REQUIRED");
-      const provider = new SyntheticCampaignProvider(
-        db,
-        this.fixture.campaignId,
-        a,
-      );
-      await provider.verifySession(a.token);
-      const before = parseRunningSnapshot(
-        await provider.fetchRunningSnapshot(a.actorId),
-      );
-      await provider.addMeters(c.amount);
-      const after = parseRunningSnapshot(
-        await provider.fetchRunningSnapshot(a.actorId),
-      );
-      const delta = Number(
-        (after.cumulativeMeters * BigInt(GAME_CONFIG.running.kmToPointsRate)) /
-          1000n -
-          (before.cumulativeMeters *
+      let delta: number;
+      if (this.campaignProvider) {
+        const identity = await this.campaignProvider.verifySession(a.token);
+        const binding = (
+          await db.query<{
+            external_student_id: string;
+            external_school_id: string;
+          }>(
+            "SELECT external_student_id,external_school_id FROM r2pl_prep.running_bindings WHERE campaign_id=$1 AND actor_id=$2",
+            [this.fixture.campaignId, a.actorId],
+          )
+        ).rows[0];
+        if (
+          !binding ||
+          identity.externalStudentId !== binding.external_student_id ||
+          identity.externalSchoolId !== binding.external_school_id ||
+          identity.sessionExpiresAtMs <= now
+        )
+          throw new RuleRejection("CAMPAIGN_IDENTITY_MISMATCH");
+        const snapshot = parseRunningSnapshot(
+          await this.campaignProvider.fetchRunningSnapshot(
+            identity.externalStudentId,
+          ),
+        );
+        if (
+          snapshot.provider !== identity.provider ||
+          snapshot.externalStudentId !== identity.externalStudentId ||
+          snapshot.observedAtMs > now + 60000 ||
+          now - snapshot.observedAtMs > 300000
+        )
+          throw new RuleRejection("INVALID_RUNNING_SNAPSHOT");
+        const before = await this.state<{
+          revision?: string;
+          meters?: number;
+          attributedPoints?: number;
+          provider?: string;
+        }>(db, "running", a.actorId, {});
+        const target = Number(
+          (snapshot.cumulativeMeters *
             BigInt(GAME_CONFIG.running.kmToPointsRate)) /
             1000n,
-      );
+        );
+        if (
+          !Number.isSafeInteger(target) ||
+          snapshot.cumulativeMeters > BigInt(Number.MAX_SAFE_INTEGER) ||
+          snapshot.weeklyMeters > BigInt(Number.MAX_SAFE_INTEGER)
+        )
+          throw new RuleRejection("INVALID_RUNNING_SNAPSHOT");
+        if (before.provider && before.provider !== snapshot.provider)
+          throw new RuleRejection("RUNNING_PROVIDER_CHANGED");
+        if (before.revision && snapshot.revision < BigInt(before.revision))
+          throw new RuleRejection("STALE_RUNNING_SNAPSHOT");
+        if (
+          before.provider &&
+          snapshot.revision === BigInt(before.revision ?? "0") &&
+          Number(snapshot.cumulativeMeters) !== before.meters
+        )
+          throw new RuleRejection("INVALID_RUNNING_SNAPSHOT");
+        delta =
+          target -
+          (before.attributedPoints ??
+            Math.floor(
+              ((before.meters ?? 0) * GAME_CONFIG.running.kmToPointsRate) /
+                1000,
+            ));
+        if (delta < 0) throw new RuleRejection("RUNNING_DISTANCE_REGRESSION");
+        await this.save(db, "running", a.actorId, {
+          provider: snapshot.provider,
+          revision: snapshot.revision.toString(),
+          meters: Number(snapshot.cumulativeMeters),
+          weeklyMeters: Number(snapshot.weeklyMeters),
+          week: snapshot.weekStartMs,
+          attributedPoints: target,
+        });
+      } else {
+        if (!c.amount) throw new RuleRejection("METERS_REQUIRED");
+        const provider = new SyntheticCampaignProvider(
+          db,
+          this.fixture.campaignId,
+          a,
+        );
+        await provider.verifySession(a.token);
+        const before = parseRunningSnapshot(
+          await provider.fetchRunningSnapshot(a.actorId),
+        );
+        await provider.addMeters(c.amount);
+        const after = parseRunningSnapshot(
+          await provider.fetchRunningSnapshot(a.actorId),
+        );
+        delta = Number(
+          (after.cumulativeMeters *
+            BigInt(GAME_CONFIG.running.kmToPointsRate)) /
+            1000n -
+            (before.cumulativeMeters *
+              BigInt(GAME_CONFIG.running.kmToPointsRate)) /
+              1000n,
+        );
+      }
       await this.change(db, a, key, "fixture-credit", delta);
       return {
         status: "applied",
@@ -712,20 +795,33 @@ export class SignedGameplay {
           weight: reward.weight,
         };
       else {
-        giftCode = `R2PL-GIFT-${randomBytes(3).toString("hex").toUpperCase()}`;
+        // Retry random-code collisions without aborting the reward transaction.
+        for (;;) {
+          giftCode =
+            "R2PL-GIFT-" + randomBytes(3).toString("hex").toUpperCase();
+          const inserted = await db.query(
+            "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'gift-entitlement',$2,$3) ON CONFLICT DO NOTHING RETURNING id",
+            [
+              this.fixture.campaignId,
+              a.actorId + ":" + c.key,
+              JSON.stringify({
+                actorId: a.actorId,
+                schoolSlot: a.schoolSlot,
+                schoolName:
+                  this.fixture.schools[a.schoolSlot]?.label ?? "Unknown",
+                tier: o.tier,
+                giftCode,
+                sourceKind: kind,
+                sourceId: o.id,
+                createdAt: now,
+                redeemedAt: null,
+              }),
+            ],
+          );
+          if (inserted.rowCount) break;
+        }
         stock.remaining--;
         await this.save(db, "gift-stock", o.tier, stock);
-        await this.save(db, "gift-entitlement", c.key, {
-          actorId: a.actorId,
-          schoolSlot: a.schoolSlot,
-          schoolName: this.fixture.schools[a.schoolSlot]?.label ?? "Unknown",
-          tier: o.tier,
-          giftCode,
-          sourceKind: kind,
-          sourceId: o.id,
-          createdAt: now,
-          redeemedAt: null,
-        });
       }
     }
     let discovery: WorldObject | undefined;
@@ -777,7 +873,10 @@ export class SignedGameplay {
     redeemedAt: number | null;
   } | null> {
     const normalized = giftCode.trim().toUpperCase();
-    const res = await this.pool.query<{ id: string; data: Record<string, unknown> }>(
+    const res = await this.pool.query<{
+      id: string;
+      data: Record<string, unknown>;
+    }>(
       "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND (UPPER(data->>'giftCode')=$2 OR UPPER(id)=$2) LIMIT 1",
       [this.fixture.campaignId, normalized],
     );
@@ -808,7 +907,10 @@ export class SignedGameplay {
       redeemedAt: number | null;
     }>
   > {
-    const res = await this.pool.query<{ id: string; data: Record<string, unknown> }>(
+    const res = await this.pool.query<{
+      id: string;
+      data: Record<string, unknown>;
+    }>(
       "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' ORDER BY id DESC LIMIT $2",
       [this.fixture.campaignId, limit],
     );
@@ -838,7 +940,7 @@ export class SignedGameplay {
     const normalized = giftCode.trim().toUpperCase();
     const db = await this.pool.connect();
     try {
-      await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await db.query("BEGIN");
       const res = await db.query<{ id: string; data: Record<string, unknown> }>(
         "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND (UPPER(data->>'giftCode')=$2 OR UPPER(id)=$2) FOR UPDATE",
         [this.fixture.campaignId, normalized],
@@ -864,8 +966,8 @@ export class SignedGameplay {
       const now = Date.now();
       data.redeemedAt = now;
       await db.query(
-        "UPDATE r2pl_v2.game_state SET data=$1 WHERE campaign_id=$2 AND scope='gift-entitlement' AND id=$3",
-        [JSON.stringify(data), this.fixture.campaignId, row.id],
+        "UPDATE r2pl_v2.game_state SET data=$1,redeemed_at=to_timestamp($4::double precision/1000) WHERE campaign_id=$2 AND scope='gift-entitlement' AND id=$3",
+        [JSON.stringify(data), this.fixture.campaignId, row.id, now],
       );
       await db.query(
         "INSERT INTO r2pl_v2.game_events(campaign_id, actor_id, school_slot, title, body) VALUES($1, $2, $3, $4, $5)",
