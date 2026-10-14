@@ -88,3 +88,7 @@ Authorized synthetic multi-school development simulation: eight display aliases,
 ## 2026-10-14 planned implementation increment
 
 Owner instruction Triển khai starts bounded development work from the completion plan. Relay failure cleanup and synthetic8-school playable/account bootstrap are implemented under existingv1/ruleVersion0/fixture-credit permissions. This is not signoff of pending economy, world layout, Knowledge/landmark rules, external running endpoints or Gift policy. [Increment and evidence](COMPLETION_INCREMENT_01_2026-10-14.md); [remaining parity gates](COMPLETION_PROGRESS.md).
+
+## 2026-10-14 owner update — direct Codex implementation
+
+Owner instruction: “Hiện tại có thể tự làm hết, không cần qua Antigravity!” Codex may implement frontend and remaining bounded development directly; Antigravity assignment no longer blocks presentation work. This changes implementation ownership, not production rules, external API authorization or milestone acceptance. Inventory/reward panel is implemented under existing synthetic fixture permissions. [Increment03 report](COMPLETION_INCREMENT_03_2026-10-14.md).

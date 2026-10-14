@@ -985,3 +985,156 @@ body[data-school="dusk"] .tile-panel button small {
     font-size: 22px;
   }
 }
+
+/* Account inventory uses a native modal to preserve map input and keyboard focus. */
+#inventory-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #77bc9f;
+  border-radius: 8px;
+  background: #284b43;
+  color: #cbf9df;
+  font-size: 12px;
+}
+#rewards-dialog {
+  width: min(480px, calc(100vw - 24px));
+  max-height: calc(100dvh - 40px);
+  padding: 24px;
+  border: 1px solid #608d7b;
+  border-radius: 18px;
+  background: #142f32;
+  color: #e4f5ea;
+  overflow-y: auto;
+  box-shadow: 0 24px 80px #0009;
+}
+#rewards-dialog::backdrop {
+  background: #071519ab;
+  backdrop-filter: blur(4px);
+}
+.reward-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.reward-header h2 {
+  margin: 8px 0;
+  font-size: 24px;
+}
+#rewards-dialog button {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid #679e89;
+  border-radius: 8px;
+  background: #254c43;
+  color: #d3fbe2;
+  font: inherit;
+  cursor: pointer;
+}
+#rewards-dialog button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+#rewards-dialog button:focus-visible,
+#inventory-button:focus-visible {
+  outline: 2px solid #b7ffd5;
+  outline-offset: 3px;
+}
+#reward-player {
+  color: #acd5c3;
+  font-size: 13px;
+}
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 18px 0;
+}
+.inventory-grid div {
+  background: #203e3d;
+  border-radius: 10px;
+  padding: 12px 6px;
+  text-align: center;
+}
+.inventory-grid strong {
+  display: block;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+#rewards-dialog .inventory-grid span {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  color: #abd2c0;
+}
+.reward-note,
+.reward-card p,
+.reward-feedback {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #abcbbd;
+}
+#reward-targets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.reward-card {
+  padding: 14px;
+  border: 1px solid #3f645b;
+  border-radius: 12px;
+  background: #1a3838;
+}
+.reward-card h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+  color: #e1fae9;
+}
+.reward-card p {
+  min-height: 58px;
+  margin: 0 0 12px;
+}
+#rewards-dialog .reward-card button {
+  width: 100%;
+  font-size: 12px;
+}
+.reward-feedback {
+  padding: 12px;
+  margin-top: 14px;
+  background: #10272a;
+  border-radius: 10px;
+}
+.reward-feedback p {
+  margin: 4px 0;
+}
+#reward-receipt {
+  color: #a5ecc2;
+}
+#reward-command {
+  overflow-wrap: anywhere;
+  display: block;
+}
+.reward-footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+@media (max-width: 480px) {
+  #rewards-dialog {
+    padding: 16px;
+  }
+  #reward-targets {
+    grid-template-columns: 1fr;
+  }
+  .reward-card p {
+    min-height: 0;
+  }
+  .inventory-grid {
+    gap: 4px;
+  }
+  #inventory-button {
+    font-size: 10px;
+    padding: 8px 4px;
+  }
+}

@@ -1,4 +1,4 @@
-/** Codex-owned HTTP transport only; presentation is assigned to Antigravity. */
+/** Validated synthetic reward HTTP transport. */
 import {
   parseRewardCommand,
   type RewardPreparationCommand,

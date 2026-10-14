@@ -24,7 +24,11 @@
 
 Strict compilation, lint/format, relevant tests, documented schema/protocol/rule changes, no unauthorized gameplay change, measured performance where applicable, and a reviewable milestone report. Preserve the owner review gate after M4-A.
 
-## Multi-agent implementation policy — active for the next gameplay iteration
+## Implementation ownership — owner update 2026-10-14
+
+- The owner explicitly authorized Codex to implement all remaining development directly without Antigravity. This supersedes the frontend assignment below. Production rule and review gates still apply.
+
+## Historical multi-agent implementation policy
 
 - Codex owns architecture, minimal shared contracts, Colyseus/PostgreSQL integration, review, merges and final tests. Antigravity owns client presentation in its isolated worktree; MiMo owns pure gameplay rules and tests in its isolated worktree. Each agent may edit and commit only its assigned files. No agent may edit V1, production data, credentials, the integration branch, or another agent's worktree.
 - Both external agents use the exact owner-requested models and high effort. They may read the listed V2 architecture, specification and assigned source files; do not pass credentials, production data or V1 source. Keep code changes bounded, synthetic development rules explicit, and protocol v1 unchanged. Codex reviews every agent diff before integration.

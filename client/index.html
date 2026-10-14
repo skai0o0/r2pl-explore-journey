@@ -19,6 +19,7 @@
         <h1 id="school-name">Dawn University</h1>
         <label for="player-select">Playing as</label>
         <select id="player-select" aria-label="Choose synthetic explorer"></select>
+        <button id="inventory-button" type="button" hidden>Kho & phần thưởng</button>
         <p class="identity-note">Two synthetic universities · four local test explorers</p>
       </aside>
       <section class="resources glass" aria-label="Test resources">
@@ -45,8 +46,17 @@
       </section>
       <section class="activity-panel glass" aria-label="Recent actions"><p class="eyebrow">EXPEDITION LOG <span><b id="pending-count">0</b> pending</span></p><ul id="activity-list"></ul></section>
       <footer class="status-strip glass"><span class="strip-hint">DRAG TO PAN · SCROLL TO ZOOM · CLICK TO EXPLORE</span><span id="strip-hover" class="strip-hover">CURSOR: — / —</span><span><b id="viewport-count">0</b> local chunks · server-authoritative fog</span></footer>
-      <div class="fixture-banner">DEVELOPMENT FIXTURE · Synthetic credits and exploration rule v0 · No rewards or official school mapping</div>
+      <div class="fixture-banner">DEVELOPMENT FIXTURE · Synthetic credits and exploration rule v0 · Fixture rewards only · No real Gifts or official school mapping</div>
     </main>
-    <script type="module" src="/src/main.ts"></script>
+    <dialog id="rewards-dialog" aria-labelledby="reward-title" lang="vi">
+        <header class="reward-header"><div><p class="eyebrow">SYNTHETIC EXPEDITION</p><h2 id="reward-title">Kho & phần thưởng</h2></div><button id="rewards-close" type="button" aria-label="Đóng kho">×</button></header>
+        <p id="reward-player"></p>
+        <div class="inventory-grid"><div><strong id="inventory-credits">—</strong><span>Test credits</span></div><div><strong id="inventory-crystals">—</strong><span>Crystals</span></div><div><strong id="inventory-maps">—</strong><span>Treasure Maps</span></div><div><strong id="inventory-keys">—</strong><span>Keys</span></div></div>
+        <p class="reward-note">Điểm thử nghiệm đã mở sẵn cho trường. Aspire và Chest dùng luật dev; Gift chưa được kích hoạt.</p>
+        <div id="reward-targets"></div>
+        <section class="reward-feedback" aria-live="polite"><p id="reward-status"></p><p id="reward-receipt"></p><small id="reward-command"></small></section>
+        <div class="reward-footer"><button id="rewards-refresh" type="button">Đồng bộ</button><button id="rewards-retry" type="button" hidden>Thử lại lệnh cũ</button></div>
+      </dialog>
+      <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

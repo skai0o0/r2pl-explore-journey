@@ -1,6 +1,6 @@
 # Tiến độ kế hoạch hoàn thiện — checkpoint 2026-10-14
 
-Kế hoạch: [V2 completion / G-V1 và G-FULL](V2_COMPLETION_PLAN_2026-10-13.md). Hiện gồm increment02; backend rewards đã tích hợp, frontend panel còn bị chặn bởi tooling. Đây là trạng thái triển khai, không là signed production ruleVersion. Build này giữ protocol v1 và fixture-credit v0.
+Kế hoạch: [V2 completion / G-V1 và G-FULL](V2_COMPLETION_PLAN_2026-10-13.md). Hiện gồm increment03; inventory/reward UI đã tích hợp trực tiếp bởi Codex theo owner reassignment. Browser reward mutation acceptance còn chờ explicit approval do auto-review. Đây là trạng thái triển khai, không là signed production ruleVersion. Build này giữ protocol v1 và fixture-credit v0.
 
 ## Current implementation baseline
 
@@ -9,7 +9,7 @@ Kế hoạch: [V2 completion / G-V1 và G-FULL](V2_COMPLETION_PLAN_2026-10-13.md
 | Roster/session | 8 generic fixture-school slots0–7, 16 human aliases và24 bot, validated bootstrap; campaign synthetic persistent | Real school IDs/mapping/HQ và auth từ campaign |
 | World/authority | 1000×1000,64×64 chunks, own-school mask/fog; bot và browser dùng cùng server/campaign | Object layout/protected footprints/visibility party/admin, full gameplay |
 | Wallet/explore | M3 wallet_accounts/ledger_entries/idempotency/outbox; resource fixture-credit, ruleVersion0, cost1; profile/receipt riêng actor | Points/Crystals/inventory chung, promotion running/reward prep, approved numeric rules |
-| UI | Existing Three.js renderer/HUD/selection; dynamic roster/ws port/home anchor; own bot Knowledge visible | 8 HQ artwork/markers, map editor, inventory/reward/landmark/shared modals, branding/device QA |
+| UI | Existing Three.js renderer/HUD/selection; dynamic roster/ws port/home anchor; own bot Knowledge visible | 8 HQ artwork/markers, map editor, landmark/shared modals và reward mutation browser acceptance, branding/device QA |
 | Knowledge lifecycle | Explore/no-change/retry only | Shared fees/upkeep/consolidation/decay/refund và private party views; legacy candidates stay inactive |
 | Rewards/Running | Aspire/fixed Chest dùng chung dev wallet qua private HTTP; running preparation vẫn riêng | Live feature adapters/account integration; no Gift-bearing draw or external endpoint enabled |
 | Outbox failure | On any batch processing failure, release all remaining own-token leases, keep delivered/newer-owned leases intact | Reproduce original triggering relay error if it returns, large hotspot capacity; DB outage still uses lease expiry |
@@ -23,9 +23,9 @@ Source reconciliation for R0: Gamenote remains latest product idea direction; DE
 | R0-01 parity checklist | Established18 criteria below | Add browser journey/receipt evidence as each feature ships |
 | R0-02/03 current spec reconciliation | Baseline documented; full rule freeze pending | Resolve four conflict groups with owner examples; production cases stay blocked |
 | R1-01 synthetic8-school binding | Delivered dev scope | Stable actor IDs/tokens, generic registry, profile and same authority |
-| R1-02 unified Points/Crystals/inventory | PARTIAL dev backend delivered | Rewards/explore dùng chung wallet và inventory; running/production currency chưa tích hợp, UI panel chưa có |
+| R1-02 unified Points/Crystals/inventory | PARTIAL dev backend delivered | Rewards/explore dùng chung wallet và inventory; running/production currency chưa tích hợp, UI panel có; browser reward mutation acceptance còn chờ |
 | R1-03 persisted exploration command | Existing path retained and verified | No new migration; same-key retry and server reconstruction keep account/world |
-| R1-04 private account/inventory relay | PARTIAL | Private HTTP inventory/catalog/receipt/events delivered; normal UI panel chưa mount, binary push chưa có |
+| R1-04 private account/inventory relay | PARTIAL | Private HTTP inventory/catalog/receipt/events delivered; normal UI panel đã mount, actor-private cursor/recovery đã test; binary push chưa có |
 | R1-05 client transport bootstrap | Delivered dev scope | Minimal main.ts adapter, no frontend redesign or new opcode |
 | R3-03 bot→player-view | Delivered own-school view |24 bots share playable server; approved combined3D observer pending |
 | R3-01/02/04/05 | PARTIAL/NOT DONE | Real world objects/UX/art/onboarding/mobile QA still required |
@@ -43,12 +43,12 @@ PARTIAL does not satisfy G-V1. All remaining player/operator journeys are still 
 | PV03 explore/review | PARTIAL | Approved review semantics |
 | PV04 shared/giao lưu | PARTIAL fixture overlap | Actual shared commands/private party UI |
 | PV05 upkeep/lifecycle | NOT DONE | Durable deadlines/claims/refunds |
-| PV06 resources/conversion | PARTIAL common dev inventory API | Inventory panel, running account và approved conversion nếu chọn |
+| PV06 resources/conversion | PARTIAL common dev inventory API | Running account, approved conversion và browser reward mutation acceptance |
 | PV07 Landmark puzzle | NOT DONE live | Server command + modal + cooldown/hints |
 | PV08 Landmark contribution/beacon | NOT DONE live | Atomic Crystal pots/takeover/buffs |
-| PV09 UniStop | PARTIAL Aspire private dev API | Normal UI, access policy, Gift-bearing tiers |
+| PV09 UniStop | PARTIAL Aspire private dev API | Browser Aspire mutation acceptance, world access policy, Gift-bearing tiers |
 | PV10 Treasure Map | NOT DONE journey | Discovery/clue/navigation/privacy |
-| PV11 Chest/Key/carousel | PARTIAL fixed Chest/common Key wallet API | World contact, normal UI/carousel và complete catalog |
+| PV11 Chest/Key/carousel | PARTIAL fixed Chest/common Key wallet API | World contact/carousel, complete catalog và browser Chest mutation acceptance |
 | PV12 Gift | NOT DONE live | Signed policy, synthetic E2E then real fulfillment |
 | PV13 ranking/guidance | NOT DONE product | Metrics/ties/corrections/onboarding |
 | PV14 notifications/events | NOT DONE product | Durable triggers/inbox/dedup |
@@ -57,4 +57,4 @@ PARTIAL does not satisfy G-V1. All remaining player/operator journeys are still 
 | PV17 provider/campaign | PARTIAL synthetic | Real contract adapter and identity |
 | PV18 visual/normal-dev separation | PARTIAL | Existing visual assets only;8-school polish/device QA |
 
-Next bounded build: inventory/reward panel theo FRONTEND_REWARD_HANDOFF_2026-10-14.md và browser acceptance; backend/contracts đã sẵn sàng. Restore external frontend tooling hoặc owner reassign trước khi edit presentation; không âm thầm thay model. [Increment02 report](COMPLETION_INCREMENT_02_2026-10-14.md). R0 decisions và production gates vẫn riêng.
+Inventory/reward panel đã triển khai theo owner reassignment; xem [Increment03 report](COMPLETION_INCREMENT_03_2026-10-14.md). Bước browser mutation acceptance bị auto-review chặn việc tiêu synthetic Key/credit; cần owner cho phép test này. Các phần độc lập tiếp theo: hoàn thiện world objects/8 HQ và hướng dẫn synthetic play, chuẩn bị Landmark/Knowledge commands trong phạm vi dev đã duyệt. R0 decisions và production gates vẫn riêng.

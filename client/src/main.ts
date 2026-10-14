@@ -25,6 +25,7 @@ import {
   LEGACY_DEV_SESSION,
   parseDevSession,
 } from "../../shared/integration/devSession.ts";
+import { RewardsPanel } from "./rewardsPanel.ts";
 
 // Codex-owned transport bootstrap contract; existing presentation stays intact.
 const bootstrapResponse = await fetch("/api/fixture/bootstrap", {
@@ -97,6 +98,7 @@ let reconnectTimer: number | undefined;
 let subscribed = "";
 let profileBalance: string | undefined;
 let profileCost: string | undefined;
+let profileRequest = 0;
 const pending = new Map<string, PendingAction>();
 
 function lacksTestCredits(): boolean {
@@ -253,6 +255,8 @@ function updateHover(hovered?: PickedTile): void {
 }
 
 async function refreshProfile(token = player.token): Promise<void> {
+  const attempt = generation;
+  const request = ++profileRequest;
   try {
     const response = await fetch("/api/fixture/me", {
       headers: { Authorization: `Bearer ${token}` },
@@ -261,6 +265,8 @@ async function refreshProfile(token = player.token): Promise<void> {
     if (!response.ok) throw new Error(`Profile ${response.status}`);
     const profile = (await response.json()) as Profile;
     if (
+      attempt !== generation ||
+      request !== profileRequest ||
       token !== player.token ||
       profile.schoolSlot !== player.slot ||
       !profile.fixtureOnly
@@ -272,10 +278,11 @@ async function refreshProfile(token = player.token): Promise<void> {
     ui.cost.textContent = profile.cost;
     profileBalance = profile.balance;
     profileCost = profile.cost;
+    rewards.refresh();
     updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
   } catch {
-    if (token === player.token)
+    if (attempt === generation && token === player.token)
       activity("Balance temporarily unavailable", "error");
   }
 }
@@ -284,6 +291,10 @@ function refreshBalanceSoon(): void {
   window.clearTimeout(balanceTimer);
   balanceTimer = window.setTimeout(() => void refreshProfile(), 180);
 }
+
+const rewards = new RewardsPanel(session !== LEGACY_DEV_SESSION, (token) => {
+  if (token === player.token) void refreshProfile(token);
+});
 
 const world = new WorldView(
   get("world-view"),
@@ -436,6 +447,10 @@ async function connect(nextPlayer: Player): Promise<void> {
   subscribed = "";
   if (previous) void previous.leave();
   player = nextPlayer;
+  rewards.select(player.token, player.label);
+  ui.balance.textContent = "—";
+  ui.player.textContent = player.label;
+  ui.school.textContent = player.schoolName;
   profileBalance = undefined;
   profileCost = undefined;
   sessionStorage.setItem("r2pl-fixture-player", player.token);
@@ -506,6 +521,8 @@ get("zoom-out").addEventListener("click", () => world.zoom(1.38));
 
 window.addEventListener("keydown", (event) => {
   if (
+    rewards.open ||
+    event.target instanceof HTMLButtonElement ||
     event.target instanceof HTMLSelectElement ||
     event.target instanceof HTMLInputElement
   )

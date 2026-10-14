@@ -32,3 +32,7 @@ Fixture point rewards use the existing fixture-credit exploration wallet; no pro
 Real browser: open Chest from1000 credit/Key1 →1002/Key0; explore a fresh tile →1001; retry/reload does not subtract another Key or regrant. Aspire gives exactly the persisted server draw, then cooldown. Second human actor at same school sees shared Chest consumed but retains own Key and receives no other actor's event. Different school's targets/history stay absent. Forged request/change payload is handled as an error, not success. Mobile panel fits agreed viewport and has accessible buttons, loading/reduced motion and clear disabled states.
 
 Backend and transport have114 passing regression tests. UI screenshots/E2E are still required and cannot be inferred from those tests.
+
+## Superseding owner update
+
+On2026-10-14 the owner authorized Codex to implement frontend directly without Antigravity. The inventory/reward panel is now integrated; see [increment03](COMPLETION_INCREMENT_03_2026-10-14.md) for implementation, passing tests and pending browser mutation acceptance. Historical assignment notes above do not block Codex presentation edits.
