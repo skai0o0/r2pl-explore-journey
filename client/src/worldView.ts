@@ -451,8 +451,23 @@ export class WorldView {
     });
     this.#renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.#renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.#renderer.toneMappingExposure = 1.15;
     host.append(this.#renderer.domElement);
     this.#scene.background = new THREE.Color(0x0b1a20);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.15);
+    this.#scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.95);
+    hemiLight.position.set(0, 0, 300);
+    this.#scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfffbe8, 1.6);
+    dirLight.position.set(180, -180, 320);
+    dirLight.target.position.set(0, 0, 0);
+    this.#scene.add(dirLight);
+    this.#scene.add(dirLight.target);
 
     const terrain = new THREE.DataTexture(
       foggedBaseTerrainPixels(),
@@ -570,20 +585,26 @@ export class WorldView {
               new THREE.CircleGeometry(0.5, 4),
               new THREE.MeshBasicMaterial({ color: 0xc3a5eb }),
             );
-      this.#assetMounts.push(
-        mountModelAsset(
-          assetRoot,
-          assetLoader,
-          modelUrl,
-          placement,
-          fallback,
-          this.#render,
-          {
-            skipIfUnavailable: true,
-            colorHex: school?.color,
-          },
-        ),
+      const mount = mountModelAsset(
+        assetRoot,
+        assetLoader,
+        modelUrl,
+        placement,
+        fallback,
+        this.#render,
+        {
+          skipIfUnavailable: true,
+          colorHex: school?.color,
+        },
       );
+      mount.ready.then((status) => {
+        if (status === "loaded") {
+          support.visible = false;
+          assetRoot.position.z = 0;
+          this.#render();
+        }
+      });
+      this.#assetMounts.push(mount);
     }
 
     for (const o of layout.objects ?? []) {
@@ -622,28 +643,38 @@ export class WorldView {
             ? getChestModelUrl(o.tier)
             : "";
       if (modelUrl) {
-        this.#assetMounts.push(
-          mountModelAsset(
-            this.#scene,
-            assetLoader,
-            modelUrl,
-            {
-              id: o.id,
-              asset: "hq",
-              worldX: o.x,
-              worldZ: o.z,
-              scale: o.kind === "chest" ? 2 : 4,
-              rotationZ: 0,
-            },
-            fallback,
-            this.#render,
-            {
-              skipIfUnavailable: true,
-              colorHex: color,
-              isChestOpened: false,
-            },
-          ),
+        const mount = mountModelAsset(
+          this.#scene,
+          assetLoader,
+          modelUrl,
+          {
+            id: o.id,
+            asset: "hq",
+            worldX: o.x,
+            worldZ: o.z,
+            scale: o.kind === "chest" ? 2 : 4,
+            rotationZ: 0,
+          },
+          fallback,
+          this.#render,
+          {
+            skipIfUnavailable: true,
+            colorHex: color,
+            isChestOpened: false,
+            targetSpan: o.kind === "chest" ? 2.5 : 10,
+          },
         );
+        mount.ready.then((status) => {
+          if (status === "loaded" && mount.model) {
+            if (o.kind === "unistop") {
+              this.#unistopMeshes.set(o.id, mount.model);
+            } else {
+              this.#chestMeshes.set(o.id, mount.model);
+            }
+            this.#render();
+          }
+        });
+        this.#assetMounts.push(mount);
       }
     }
     for (const marker of this.#markers) {

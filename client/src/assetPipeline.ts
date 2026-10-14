@@ -16,6 +16,87 @@ export interface MountModelOptions {
   readonly colorHex?: string | number | undefined;
   readonly skipIfUnavailable?: boolean | undefined;
   readonly isChestOpened?: boolean | undefined;
+  readonly targetSpan?: number | undefined;
+}
+
+export function getTargetFootprintSpan(
+  placement: ModelPlacement | { readonly id?: string; readonly asset?: string },
+): number {
+  const id = (placement.id ?? "").toLowerCase();
+  const asset = (placement.asset ?? "").toLowerCase();
+  if (id.includes("chest") || asset === "chest") return 2.5;
+  if (id.includes("unistop") || asset === "unistop") return 10;
+  if (id.includes("landmark") || asset === "landmark") return 36;
+  if (id.includes("hq") || asset === "hq") return 20;
+  return 20;
+}
+
+export function tunePbrMaterials(root: THREE.Object3D): void {
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || !object.material) return;
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    for (const mat of materials) {
+      if (
+        mat instanceof THREE.MeshStandardMaterial ||
+        ("metalness" in mat && "roughness" in mat)
+      ) {
+        const standardMat = mat as THREE.MeshStandardMaterial;
+        if (!standardMat.envMap && standardMat.metalness > 0.35) {
+          standardMat.metalness = 0.25;
+          standardMat.roughness = Math.max(0.35, standardMat.roughness);
+          standardMat.needsUpdate = true;
+        }
+      }
+    }
+  });
+}
+
+export function applyGlbModelPlacement(
+  model: THREE.Object3D,
+  placement: ModelPlacement,
+  targetSpanOverride?: number,
+): THREE.Group {
+  // 1. glTF is Y-up, WorldView is Z-up: rotate model upright on X-axis (+90 deg)
+  model.rotation.set(Math.PI / 2, 0, 0);
+  model.position.set(0, 0, 0);
+  model.scale.set(1, 1, 1);
+  model.updateMatrixWorld(true);
+
+  // 2. Measure bounding box after Z-up rotation
+  const box = new THREE.Box3().setFromObject(model);
+  const currentHorizontalSpan = Math.max(
+    box.max.x - box.min.x,
+    box.max.y - box.min.y,
+  );
+
+  // 3. Scale model so largest horizontal dimension matches target footprint
+  const targetSpan = targetSpanOverride ?? getTargetFootprintSpan(placement);
+  const scaleFactor =
+    currentHorizontalSpan > 0.0001 ? targetSpan / currentHorizontalSpan : 1;
+  model.scale.setScalar(scaleFactor);
+  model.updateMatrixWorld(true);
+
+  // 4. Center model horizontally and align base at z = 0.12
+  box.setFromObject(model);
+  const centerX = (box.min.x + box.max.x) / 2;
+  const centerY = (box.min.y + box.max.y) / 2;
+  const minZ = box.min.z;
+  model.position.set(-centerX, -centerY, 0.12 - minZ);
+
+  // 5. Wrap in group positioned at world tile and rotated by placement.rotationZ around Z
+  const wrapper = new THREE.Group();
+  wrapper.name = `${placement.id}-glb-wrapper`;
+  wrapper.position.set(
+    placement.worldX - 500,
+    500 - placement.worldZ,
+    0,
+  );
+  wrapper.rotation.set(0, 0, placement.rotationZ);
+  wrapper.add(model);
+
+  return wrapper;
 }
 
 export function applyModelPlacement(
@@ -107,18 +188,23 @@ export function mountModelAsset(
         disposeSceneObject(loaded);
         return "fallback" as const;
       }
-      model = loaded;
-      applyModelPlacement(model, placement);
+      tunePbrMaterials(loaded);
       if (options?.colorHex !== undefined) {
-        tintModelFactionMaterials(model, options.colorHex);
+        tintModelFactionMaterials(loaded, options.colorHex);
       }
       if (options?.isChestOpened !== undefined) {
-        setChestLidRotation(model, options.isChestOpened);
+        setChestLidRotation(loaded, options.isChestOpened);
       }
+      const placed = applyGlbModelPlacement(
+        loaded,
+        placement,
+        options?.targetSpan,
+      );
+      model = placed;
       scene.remove(fallback);
       disposeSceneObject(fallback);
       fallbackDisposed = true;
-      scene.add(model);
+      scene.add(placed);
       onChange();
       return "loaded" as const;
     },

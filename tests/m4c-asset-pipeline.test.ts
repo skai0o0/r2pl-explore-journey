@@ -357,3 +357,89 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
   setChestLidRotation(chestRoot, false);
   assert.equal(lid.rotation.x, 0);
 });
+
+test("Hotfix: PBR lighting material tuning, target footprint spans, and Z-up auto-fit GLB placement", async () => {
+  const {
+    applyGlbModelPlacement,
+    getTargetFootprintSpan,
+    tunePbrMaterials,
+  } = await import("../client/src/assetPipeline.ts");
+
+  // 1. Target footprint spans
+  assert.equal(getTargetFootprintSpan({ id: "hq-hcmut", asset: "hq" }), 20);
+  assert.equal(
+    getTargetFootprintSpan({ id: "landmark-fansipan", asset: "landmark" }),
+    36,
+  );
+  assert.equal(
+    getTargetFootprintSpan({ id: "unistop-aspire-1", asset: "hq" }),
+    10,
+  );
+  assert.equal(
+    getTargetFootprintSpan({ id: "chest-predator-0", asset: "hq" }),
+    2.5,
+  );
+
+  // 2. PBR material tuning (clamp metalness and adjust roughness)
+  const group = new THREE.Group();
+  const highMetalMesh = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshStandardMaterial({ metalness: 0.85, roughness: 0.1 }),
+  );
+  const lowMetalMesh = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshStandardMaterial({ metalness: 0.2, roughness: 0.5 }),
+  );
+  group.add(highMetalMesh, lowMetalMesh);
+
+  tunePbrMaterials(group);
+  assert.equal(
+    (highMetalMesh.material as THREE.MeshStandardMaterial).metalness,
+    0.25,
+  );
+  assert.equal(
+    (highMetalMesh.material as THREE.MeshStandardMaterial).roughness,
+    0.35,
+  );
+  assert.equal(
+    (lowMetalMesh.material as THREE.MeshStandardMaterial).metalness,
+    0.2,
+  );
+  assert.equal(
+    (lowMetalMesh.material as THREE.MeshStandardMaterial).roughness,
+    0.5,
+  );
+
+  // 3. GLB model placement (Y-up to Z-up rotation, auto-fit footprint, and base at z=0.12)
+  // Simulate a model with Y-up orientation (e.g. 17.32 wide in X, 20 high in Y, 13.32 deep in Z)
+  const sampleModel = new THREE.Mesh(
+    new THREE.BoxGeometry(17.32, 20, 13.32),
+    new THREE.MeshBasicMaterial(),
+  );
+  const placement = {
+    id: "hq-hcmut",
+    asset: "hq" as const,
+    worldX: 500,
+    worldZ: 280,
+    scale: 12,
+    rotationZ: Math.PI / 2,
+  };
+
+  const wrapper = applyGlbModelPlacement(sampleModel, placement);
+  assert.equal(wrapper.position.x, 0); // 500 - 500
+  assert.equal(wrapper.position.y, 220); // 500 - 280
+  assert.equal(wrapper.position.z, 0);
+  assert.equal(wrapper.rotation.z, Math.PI / 2);
+
+  // Check world bounding box
+  wrapper.updateMatrixWorld(true);
+  const worldBox = new THREE.Box3().setFromObject(wrapper);
+  // Base must sit at z = 0.12
+  assert.ok(Math.abs(worldBox.min.z - 0.12) < 0.001);
+  // Horizontal span matches targetSpan (20)
+  const spanX = worldBox.max.x - worldBox.min.x;
+  const spanY = worldBox.max.y - worldBox.min.y;
+  const maxSpan = Math.max(spanX, spanY);
+  assert.ok(Math.abs(maxSpan - 20) < 0.01);
+});
+

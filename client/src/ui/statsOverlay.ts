@@ -370,7 +370,7 @@ export class StatsOverlay {
       <button class="hud-identity" id="btnFlyHQ" title="Về trụ sở HQ">
         <div class="hud-brand-tag"><span class="brand-predator-text">PREDATOR</span><span class="brand-r2pl-badge">R2PL</span></div>
         <span class="school-pill" style="--school-color:${this.stats.schoolColor}">
-          <strong>${this.stats.schoolId.toUpperCase()}</strong><span class="student-name">${this.stats.schoolName}</span>
+          <strong>${this.stats.schoolName || this.stats.schoolId.toUpperCase()}</strong>
         </span>
       </button>
       <div class="hud-resources">
@@ -378,7 +378,7 @@ export class StatsOverlay {
         <div class="stat-crystals hud-resource" aria-label="Tinh Thể">${Icons.crystal(18)}<span class="stat-content"><span class="stat-label">Tinh Thể</span><strong class="stat-value">${(this.stats.crystals || 0).toLocaleString()}</strong></span></div>
       </div>
       <div class="hud-progress-strip">
-        <div class="stat-territory"><span class="stat-label">Ô Tri Thức</span><span class="stat-value">${this.stats.totalSchoolTiles} <small>ô (${this.stats.controlPercentage.toFixed(4)}%)</small></span></div>
+        <div class="stat-territory"><span class="stat-label">Ô Tri Thức: </span><span class="stat-value">${(this.stats.totalSchoolTiles || 0).toLocaleString()} <small>ô (${(this.stats.controlPercentage || 0).toFixed(4)}%)</small></span></div>
         <div class="stat-exploration"><span class="stat-label">Khám phá</span><span class="stat-value">${(this.stats.explorationPercentage || 0).toFixed(2)}% <small class="exploration-sub">(${(this.stats.revealedTilesCount || 0).toLocaleString()} ô)</small></span><progress class="hud-exploration-meter" max="100" value="${this.stats.explorationPercentage || 0}" aria-label="Tiến độ khám phá"></progress></div>
         <button class="stat-school-rank" id="btnSchoolRankPopover" aria-label="Xem bảng xếp hạng" aria-expanded="${this.showRankingPopover}">${Icons.trophy(18)}<span id="stat-school-rank-text">${this.getSchoolRankText()}</span><span aria-hidden="true">›</span></button>
       </div>
