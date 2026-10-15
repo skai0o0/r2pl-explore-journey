@@ -1,9 +1,5 @@
 import * as THREE from "three";
-import {
-  LANDMARKS,
-  SCHOOLS,
-  type WorldObject,
-} from "../../shared/gameplay/gameConfig.ts";
+import { SCHOOLS, type WorldObject } from "../../shared/gameplay/gameConfig.ts";
 import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
 import {
   CHUNK_SIZE,
@@ -34,6 +30,12 @@ import {
   MODEL_PLACEMENTS,
   type ModelPlacement,
 } from "./assetRegistry.ts";
+import { TerrainBiomes } from "./terrainBiomes.ts";
+import {
+  TerrainChunks,
+  terrainPointFromRay,
+  type TerrainLayer,
+} from "./terrainChunks.ts";
 import { LandscapeEffects } from "./landscape.ts";
 import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import {
@@ -177,7 +179,9 @@ export class TileIndicatorLayer {
   readonly #states = new Map<TileIndicatorKind, THREE.Group>();
   readonly #materials: THREE.Material[] = [];
 
-  constructor() {
+  readonly #heightAt: (x: number, z: number) => number;
+  constructor(heightAt: (x: number, z: number) => number = () => 0) {
+    this.#heightAt = heightAt;
     for (const kind of TILE_INDICATOR_KINDS) {
       const style = TILE_INDICATOR_STYLE[kind];
       const fillMaterial = new THREE.MeshBasicMaterial({
@@ -222,7 +226,7 @@ export class TileIndicatorLayer {
     state.position.set(
       tile.x + 0.5 - WORLD_WIDTH / 2,
       WORLD_HEIGHT / 2 - tile.z - 0.5,
-      0,
+      this.#heightAt(tile.x, tile.z),
     );
   }
 
@@ -270,116 +274,6 @@ const markers: readonly WorldMarker[] = [
   },
 ] as const;
 
-function baseTerrainColor(x: number, z: number): [number, number, number] {
-  const wave =
-    Math.sin(x * 0.018) * 0.32 +
-    Math.cos(z * 0.023) * 0.3 +
-    Math.sin((x + z) * 0.009) * 0.27 +
-    Math.cos((x - z) * 0.014) * 0.18;
-  const grain = (((x * 73856093) ^ (z * 19349663)) >>> 0) % 17;
-  const water = wave < -0.55;
-  const road = x % 128 < 2 || z % 128 < 2;
-  if (water) return [18 + grain, 72 + grain, 104 + grain];
-  if (road) return [66 + grain, 84 + grain, 82 + grain];
-  return [32 + grain, 76 + grain, 58 + grain];
-}
-
-/** Soft tileable cloud alpha map for the animated fog-of-war mist. */
-function mistTexture(): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  ctx.clearRect(0, 0, size, size);
-  for (let i = 0; i < 70; i++) {
-    const x = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
-    const y = Math.abs(Math.sin(i * 78.233) * 12345.6789) % 1;
-    const r = 18 + ((i * 37) % 40);
-    for (const ox of [-size, 0, size])
-      for (const oy of [-size, 0, size]) {
-        const g = ctx.createRadialGradient(
-          x * size + ox,
-          y * size + oy,
-          0,
-          x * size + ox,
-          y * size + oy,
-          r,
-        );
-        g.addColorStop(0, "rgba(190,215,225,0.35)");
-        g.addColorStop(1, "rgba(190,215,225,0)");
-        ctx.fillStyle = g;
-        ctx.fillRect(x * size + ox - r, y * size + oy - r, r * 2, r * 2);
-      }
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(5, 5);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-function hexRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-/** Soft glow at every school HQ (school colour) and Landmark (lilac). */
-const CLEARINGS: readonly {
-  readonly x: number;
-  readonly z: number;
-  readonly r: number;
-  readonly color: [number, number, number];
-}[] = [
-  ...SCHOOLS.map((s) => ({
-    x: s.hq.x,
-    z: s.hq.z,
-    r: 22,
-    color: hexRgb(s.accent),
-  })),
-  ...LANDMARKS.map((l) => ({
-    x: l.x,
-    z: l.z,
-    r: 26,
-    color: [195, 165, 235] as [number, number, number],
-  })),
-];
-
-const FOG_TEXTURE_SIZE = 128;
-function foggedBaseTerrainPixels(): Uint8Array {
-  const pixels = new Uint8Array(FOG_TEXTURE_SIZE * FOG_TEXTURE_SIZE * 4);
-  for (let row = 0; row < FOG_TEXTURE_SIZE; row++) {
-    for (let col = 0; col < FOG_TEXTURE_SIZE; col++) {
-      const x = (col * WORLD_WIDTH) / FOG_TEXTURE_SIZE;
-      const z = (row * WORLD_HEIGHT) / FOG_TEXTURE_SIZE;
-      const mistWave =
-        Math.sin(x * 0.012 + z * 0.008) * 0.5 +
-        Math.cos(x * 0.007 - z * 0.015) * 0.5;
-      const mist = Math.floor(mistWave * 4);
-      const centre = Math.max(0, 1 - Math.hypot(x - 500, z - 500) / 560);
-      const lattice = x % 16 === 0 && z % 16 === 0 ? 9 : 0;
-      let r = 8 + mist + Math.round(centre * 3) + lattice;
-      let g = 20 + mist + Math.round(centre * 9) + lattice;
-      let b = 27 + mist + Math.round(centre * 13) + lattice;
-
-      for (const c of CLEARINGS) {
-        if (Math.abs(x - c.x) >= c.r || Math.abs(z - c.z) >= c.r) continue;
-        const d = Math.hypot(x - c.x, z - c.z);
-        if (d >= c.r) continue;
-        const t = Math.max(0, 1 - d / c.r) * 0.85;
-        r = Math.round(r * (1 - t) + c.color[0] * t);
-        g = Math.round(g * (1 - t) + c.color[1] * t);
-        b = Math.round(b * (1 - t) + c.color[2] * t);
-      }
-
-      const offset =
-        ((FOG_TEXTURE_SIZE - 1 - row) * FOG_TEXTURE_SIZE + col) * 4;
-      pixels[offset] = r;
-      pixels[offset + 1] = g;
-      pixels[offset + 2] = b;
-      pixels[offset + 3] = 255;
-    }
-  }
-  return pixels;
-}
-
 export class WorldView {
   readonly #host: HTMLElement;
   readonly #renderer: THREE.WebGLRenderer;
@@ -397,14 +291,10 @@ export class WorldView {
   readonly #ndc = new THREE.Vector2();
   readonly #groundPoint = new THREE.Vector3();
   readonly #projectedPoint = new THREE.Vector3();
-  readonly #chunkLayers = new Map<
-    number,
-    {
-      pixels: Uint8Array;
-      texture: THREE.DataTexture;
-      mesh: THREE.Mesh;
-    }
-  >();
+  readonly #chunkLayers = new Map<number, TerrainLayer>();
+  readonly #terrain: TerrainBiomes;
+  readonly #terrainChunks: TerrainChunks;
+  readonly #rootBaseHeights = new WeakMap<THREE.Object3D, number>();
   #renderFrame: number | undefined;
   #renderWidth = 0;
   #renderHeight = 0;
@@ -438,12 +328,12 @@ export class WorldView {
   readonly #unistopMeshes = new Map<string, THREE.Object3D>();
   readonly #chestMeshes = new Map<string, THREE.Object3D>();
   readonly #landscape: LandscapeEffects;
-  readonly #mist: THREE.Mesh;
-  readonly #mistTexture: THREE.CanvasTexture;
   #shared: ReadonlyMap<number, readonly number[]> = new Map();
   #replica: ProjectionReplica | undefined;
   readonly #editorPreview = new THREE.Group();
-  readonly #tileIndicators = new TileIndicatorLayer();
+  readonly #tileIndicators = new TileIndicatorLayer((x, z) =>
+    this.#terrain.getTerrainHeight(x, z),
+  );
   readonly #selection: HTMLElement;
   readonly #hoverElement: HTMLElement;
   readonly #pendingElement: HTMLElement;
@@ -490,6 +380,7 @@ export class WorldView {
     this.#onPickObject = layout.onPickObject;
     this.#markers = [...(layout.markers ?? markers)];
     this.#baseCatalog = layout.objects ?? [];
+    this.#terrain = new TerrainBiomes(this.#baseCatalog);
     this.#catalog = [...this.#baseCatalog];
     this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
     this.#isDev = document.body.dataset.debug === "true";
@@ -527,70 +418,14 @@ export class WorldView {
     this.#scene.add(dirLight);
     this.#scene.add(dirLight.target);
 
-    // Transparent ground that only shows cast shadows (terrain itself is unlit).
-    const shadowGround = new THREE.Mesh(
-      new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
-      new THREE.ShadowMaterial({ color: 0x050a10, opacity: 0.38 }),
+    this.#terrainChunks = new TerrainChunks(this.#terrain, this.#render);
+    this.#scene.add(this.#terrainChunks.group);
+    this.#landscape = new LandscapeEffects(
+      layout.objects ?? [],
+      this.#render,
+      this.#terrain,
     );
-    shadowGround.position.z = 0.08;
-    shadowGround.receiveShadow = false;
-    shadowGround.renderOrder = 1;
-    this.#scene.add(shadowGround);
-
-    const terrain = new THREE.DataTexture(
-      foggedBaseTerrainPixels(),
-      FOG_TEXTURE_SIZE,
-      FOG_TEXTURE_SIZE,
-      THREE.RGBAFormat,
-    );
-    terrain.magFilter = THREE.NearestFilter;
-    terrain.minFilter = THREE.LinearFilter;
-    terrain.colorSpace = THREE.SRGBColorSpace;
-    terrain.needsUpdate = true;
-    this.#scene.add(
-      new THREE.Mesh(
-        new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
-        new THREE.MeshBasicMaterial({ map: terrain }),
-      ),
-    );
-
-    const gridPoints: number[] = [];
-    for (let i = 0; i <= 1000; i += 64) {
-      const p = i - 500;
-      gridPoints.push(p, -500, 0.02, p, 500, 0.02);
-      gridPoints.push(-500, p, 0.02, 500, p, 0.02);
-    }
-    const gridGeometry = new THREE.BufferGeometry();
-    gridGeometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(gridPoints, 3),
-    );
-    this.#scene.add(
-      new THREE.LineSegments(
-        gridGeometry,
-        new THREE.LineBasicMaterial({
-          color: 0xa9d6bd,
-          transparent: true,
-          opacity: 0.14,
-        }),
-      ),
-    );
-
-    this.#landscape = new LandscapeEffects(layout.objects ?? [], this.#render);
     this.#scene.add(this.#landscape.group);
-    this.#mistTexture = mistTexture();
-    this.#mist = new THREE.Mesh(
-      new THREE.PlaneGeometry(WORLD_WIDTH, WORLD_HEIGHT),
-      new THREE.MeshBasicMaterial({
-        map: this.#mistTexture,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-      }),
-    );
-    // Above the fog base, below explored chunk layers (z 0.05): drifts only over unexplored land.
-    this.#mist.position.z = 0.03;
-    this.#scene.add(this.#mist);
     this.#scene.add(this.#privateObjects);
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
@@ -811,7 +646,7 @@ export class WorldView {
     window.clearTimeout(this.#revealTimer);
     window.clearTimeout(this.#rejectTimer);
     this.#landscape.dispose();
-    this.#mistTexture.dispose();
+    this.#terrainChunks.dispose();
     if (this.#renderFrame !== undefined)
       cancelAnimationFrame(this.#renderFrame);
     if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
@@ -912,7 +747,12 @@ export class WorldView {
       }
       halo.position.z = 0.2;
       beam.add(core, aura, halo);
-      beam.position.set(marker.x - 500, 500 - marker.z, 0);
+      beam.position.set(
+        marker.x - 500,
+        500 - marker.z,
+        this.#terrain.getTerrainHeight(marker.x, marker.z),
+      );
+      beam.userData.landmarkId = beacon.id;
       beam.userData.beacon = true;
       this.#beacons.add(beam);
     }
@@ -999,7 +839,11 @@ export class WorldView {
           opacity: 0.9,
         }),
       );
-      mesh.position.set(o.x - 500, 500 - o.z, 1.5);
+      mesh.position.set(
+        o.x - 500,
+        500 - o.z,
+        this.#terrain.getTerrainHeight(o.x, o.z) + 1.5,
+      );
       this.#editorPreview.add(mesh);
     }
     this.#render();
@@ -1032,6 +876,7 @@ export class WorldView {
     this.#privateCatalog = objects;
     this.#catalog = [...this.#baseCatalog, ...objects];
     this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
+    this.#syncTerrainLayout();
     for (const child of [...this.#privateObjects.children]) {
       this.#privateObjects.remove(child);
       this.#disposeGroup(child);
@@ -1134,12 +979,7 @@ export class WorldView {
     for (const kind of TILE_INDICATOR_KINDS) {
       this.#tileIndicators.setTile(kind, undefined);
     }
-    for (const layer of this.#chunkLayers.values()) {
-      this.#scene.remove(layer.mesh);
-      layer.texture.dispose();
-      layer.mesh.geometry.dispose();
-      (layer.mesh.material as THREE.Material).dispose();
-    }
+    this.#terrainChunks.resetKnowledge();
     this.#chunkLayers.clear();
     this.#shared = new Map();
     this.#replica = undefined;
@@ -1220,7 +1060,11 @@ export class WorldView {
   projectToScreen(x: number, z: number): { x: number; y: number } | undefined {
     const worldX = x - 500 + 0.5;
     const worldY = 500 - z - 0.5;
-    const point = new THREE.Vector3(worldX, worldY, 0.15).project(this.#camera);
+    const point = new THREE.Vector3(
+      worldX,
+      worldY,
+      this.#terrain.getTerrainHeight(x, z) + 0.15,
+    ).project(this.#camera);
     const rect = this.#host.getBoundingClientRect();
     const screenX = rect.left + ((point.x + 1) / 2) * rect.width;
     const screenY = rect.top + ((-point.y + 1) / 2) * rect.height;
@@ -1373,64 +1217,26 @@ export class WorldView {
 
     const pair = this.#shared.get(z * WORLD_WIDTH + x);
     if (!replica.isDiscovered(id, local) && !pair) {
-      // Unexplored tile: transparent so base fog texture shows through
       pixels[offset + 3] = 0;
       return;
     }
-
-    const [tr, tg, tb] = baseTerrainColor(x, z);
-    if (pair && pair.length === 2) {
-      // Shared Knowledge: checker weave of both school colours.
-      const a = parseInt(SCHOOLS[pair[0]!]!.color.slice(1), 16);
-      const b = parseInt(SCHOOLS[pair[1]!]!.color.slice(1), 16);
-      const color = Math.floor((x + z) / 3) % 2 === 0 ? a : b;
-      pixels[offset] = Math.round(tr * 0.25 + ((color >> 16) & 255) * 0.75);
-      pixels[offset + 1] = Math.round(tg * 0.25 + ((color >> 8) & 255) * 0.75);
-      pixels[offset + 2] = Math.round(tb * 0.25 + (color & 255) * 0.75);
-      pixels[offset + 3] = 255;
-      return;
-    }
-
-    // Discovered tile: fog is cleared!
-    const isOwned = (replica.maskAt(id, local) & (1 << this.#schoolSlot)) !== 0;
-
-    if (isOwned) {
-      // Differentiate authorized discovered school-owned tiles with vibrant school territory styling!
-      const hex = SCHOOLS[this.#schoolSlot]?.color ?? "#8bd9b4";
-      const color = parseInt(hex.slice(1), 16);
-      pixels[offset] = Math.round(tr * 0.35 + ((color >> 16) & 255) * 0.65);
-      pixels[offset + 1] = Math.round(tg * 0.35 + ((color >> 8) & 255) * 0.65);
-      pixels[offset + 2] = Math.round(tb * 0.35 + (color & 255) * 0.65);
-      pixels[offset + 3] = 255;
-    } else {
-      // Remembered fog: discovered once but no longer owned. Muted, desaturated terrain.
-      const gray = (tr + tg + tb) / 3;
-      pixels[offset] = Math.round((tr * 0.4 + gray * 0.6) * 0.62 + 18);
-      pixels[offset + 1] = Math.round((tg * 0.4 + gray * 0.6) * 0.62 + 24);
-      pixels[offset + 2] = Math.round((tb * 0.4 + gray * 0.6) * 0.62 + 30);
-      pixels[offset + 3] = 255;
-    }
+    const owned = !!(replica.maskAt(id, local) & (1 << this.#schoolSlot));
+    if (owned || pair?.length === 2) {
+      const slot =
+        pair?.length === 2
+          ? pair[Math.floor((x + z) / 3) % 2]!
+          : this.#schoolSlot;
+      const hex = parseInt(SCHOOLS[slot]!.color.slice(1), 16);
+      pixels[offset] = (hex >> 16) & 255;
+      pixels[offset + 1] = (hex >> 8) & 255;
+      pixels[offset + 2] = hex & 255;
+      pixels[offset + 3] = 127;
+    } else pixels[offset + 3] = 1;
   }
 
-  #layer(id: number) {
-    let layer = this.#chunkLayers.get(id);
-    if (layer) return layer;
-    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
-    const pixels = new Uint8Array(64 * 64 * 4);
-    const texture = new THREE.DataTexture(pixels, 64, 64, THREE.RGBAFormat);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    const material = new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-      depthWrite: false,
-    });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), material);
-    mesh.position.set(chunkX * 64 - 500 + 32, 500 - chunkZ * 64 - 32, 0.05);
-    this.#scene.add(mesh);
-    layer = { pixels, texture, mesh };
+  #layer(id: number): TerrainLayer {
+    const layer = this.#terrainChunks.layers.get(id);
+    if (!layer) throw new RangeError("Unknown terrain chunk");
     this.#chunkLayers.set(id, layer);
     return layer;
   }
@@ -1449,6 +1255,10 @@ export class WorldView {
     const current = this.#displayObject(object.id) ?? object;
     root.position.x = current.x - WORLD_WIDTH / 2;
     root.position.y = WORLD_HEIGHT / 2 - current.z;
+    const baseHeight = this.#rootBaseHeights.get(root) ?? root.position.z;
+    this.#rootBaseHeights.set(root, baseHeight);
+    root.position.z =
+      baseHeight + this.#terrain.getTerrainHeight(current.x, current.z);
     const entry = cacheInteractiveObject(current, root);
     const index = this.#interactiveObjects.findIndex(
       (e) => e.id === current.id,
@@ -1460,7 +1270,20 @@ export class WorldView {
     this.#render();
   }
 
+  #syncTerrainLayout(): void {
+    const objects = [
+      ...this.#baseCatalog,
+      ...this.#privateCatalog,
+      ...this.#previewCatalog.values(),
+    ];
+    if (this.#terrain.setObjects(objects)) {
+      this.#terrainChunks.invalidate();
+      this.#landscape.setObjects(objects);
+    }
+  }
+
   #moveObjectRoots(): void {
+    this.#syncTerrainLayout();
     this.#clearObjectHover();
     for (const entry of this.#interactiveObjects) {
       const object = this.#displayObject(entry.id);
@@ -1469,7 +1292,10 @@ export class WorldView {
       const y = WORLD_HEIGHT / 2 - object.z;
       if (
         entry.objectRoot.position.x !== x ||
-        entry.objectRoot.position.y !== y
+        entry.objectRoot.position.y !== y ||
+        entry.objectRoot.position.z !==
+          (this.#rootBaseHeights.get(entry.objectRoot) ?? 0) +
+            this.#terrain.getTerrainHeight(object.x, object.z)
       )
         this.#cacheObject(object, entry.objectRoot);
       const marker = this.#markers.find((m) => m.id === object.id);
@@ -1544,8 +1370,9 @@ export class WorldView {
   }
 
   #groundFromRay(): { x: number; z: number } {
-    const hit = this.#raycaster.ray.intersectPlane(
-      GROUND_PLANE,
+    const hit = terrainPointFromRay(
+      this.#raycaster.ray,
+      this.#terrain,
       this.#groundPoint,
     );
     return hit
@@ -1555,7 +1382,13 @@ export class WorldView {
 
   #point(clientX: number, clientY: number): { x: number; z: number } {
     this.#pointerRay(clientX, clientY);
-    return this.#groundFromRay();
+    const hit = this.#raycaster.ray.intersectPlane(
+      GROUND_PLANE,
+      this.#groundPoint,
+    );
+    return hit
+      ? { x: hit.x + WORLD_WIDTH / 2, z: WORLD_HEIGHT / 2 - hit.y }
+      : { x: Number.NaN, z: Number.NaN };
   }
 
   #pointFromNdc(
@@ -1578,7 +1411,11 @@ export class WorldView {
 
   #position(x: number, z: number): { left: string; top: string } {
     this.#projectedPoint
-      .set(x - WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - z, 0)
+      .set(
+        x - WORLD_WIDTH / 2,
+        WORLD_HEIGHT / 2 - z,
+        this.#terrain.getTerrainHeight(x, z),
+      )
       .project(this.#camera);
     return {
       left: `${(this.#projectedPoint.x * 0.5 + 0.5) * 100}%`,
@@ -1832,6 +1669,8 @@ export class WorldView {
       this.#renderer.setSize(width, height, false);
     }
     this.#syncCamera(width, height);
+    this.#terrainChunks.updateView(this.#camera, this.#span);
+    this.#landscape.updateView(this.#camera, this.#span);
     this.#updateReticles();
 
     for (let index = 0; index < this.#markers.length; index++) {

@@ -6,21 +6,21 @@ import {
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
 import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
-import { CHUNK_SIZE } from "../../shared/world/constants.ts";
 import {
   chunkCoordinatesForId,
   chunkId,
 } from "../../shared/world/coordinates.ts";
+import {
+  createBirchTreeGeometry,
+  createFlowerGeometry,
+  createGrassTuftGeometry,
+  createOakTreeGeometry,
+} from "./natureProps.ts";
+import { TerrainBiomes } from "./terrainBiomes.ts";
+import { type NatureInstance, naturePlanRows } from "./terrainNature.ts";
 
-/**
- * Ported V1 scenery (borderFlagManager / megaEmblemManager / natureGridManager)
- * for the V2 flat tile renderer. Everything is derived from the viewer's own
- * projected replica: rival masks are never needed or exposed.
- */
-const WORLD = 1000;
-const MAX_EMBLEMS_PER_CHUNK = 12;
-const HALF = WORLD / 2;
-
+const WORLD = 1000,
+  HALF = 500;
 interface Rect {
   readonly minX: number;
   readonly minZ: number;
@@ -34,20 +34,6 @@ function rectOf(o: WorldObject, margin = 0): Rect {
     maxX: o.x + o.width / 2 + margin,
     maxZ: o.z + o.height / 2 + margin,
   };
-}
-function inside(r: Rect, x: number, z: number): boolean {
-  return x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ;
-}
-function hash(x: number, z: number, seed: number): number {
-  const n = Math.sin(x * 12.9898 + z * 78.233 + seed) * 43758.5453;
-  return n - Math.floor(n);
-}
-function moisture(x: number, z: number): number {
-  return (
-    0.5 +
-    0.25 * Math.sin(x * 0.021 + 1.3) * Math.cos(z * 0.017) +
-    0.25 * Math.sin((x + z) * 0.011)
-  );
 }
 function tint(
   geometry: THREE.BufferGeometry,
@@ -75,33 +61,6 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return mergeGeometries(parts) ?? parts[0]!;
 }
 
-function oakGeometry(): THREE.BufferGeometry {
-  return merge([
-    tint(zUp(new THREE.CylinderGeometry(0.22, 0.3, 1.4, 6), 0.7), 0x6b4a2b),
-    tint(zUp(new THREE.IcosahedronGeometry(1.25, 0), 2.1), 0x2f8f4a),
-  ]);
-}
-function birchGeometry(): THREE.BufferGeometry {
-  return merge([
-    tint(zUp(new THREE.CylinderGeometry(0.14, 0.2, 1.8, 6), 0.9), 0xe2e0d4),
-    tint(zUp(new THREE.ConeGeometry(0.95, 2.4, 6), 2.9), 0x8fd36a),
-  ]);
-}
-function grassGeometry(): THREE.BufferGeometry {
-  return merge([
-    tint(zUp(new THREE.ConeGeometry(0.28, 0.9, 4), 0.45), 0x62b85a),
-    tint(
-      zUp(new THREE.ConeGeometry(0.22, 0.7, 4).translate(0.3, 0, 0), 0.35),
-      0x4ea04b,
-    ),
-  ]);
-}
-function flowerGeometry(): THREE.BufferGeometry {
-  return merge([
-    tint(zUp(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 4), 0.4), 0x3c8f48),
-    tint(zUp(new THREE.SphereGeometry(0.26, 6, 4), 0.9), 0xff8fc7),
-  ]);
-}
 function flagGeometry(): THREE.BufferGeometry {
   const cloth = new THREE.BufferGeometry();
   cloth.setAttribute(
@@ -177,227 +136,266 @@ export interface OwnedFrontier {
   readonly tile: { x: number; z: number };
 }
 
+/** V1 voxel scenery generated only for authorized chunk discoveries, with bounded incremental work. */
 export class LandscapeEffects {
   readonly group = new THREE.Group();
-  readonly #objects: readonly WorldObject[];
-  readonly #exclusions: Rect[];
+  #objects: readonly WorldObject[];
+  readonly #field: TerrainBiomes;
   readonly #hqRects = new Map<number, Rect>();
   readonly #chunks = new Map<
     number,
-    { group: THREE.Group; owned: Int32Array }
+    { group: THREE.Group; owned: Int32Array; bounds: THREE.Box3 }
   >();
+  readonly #sources = new Map<number, ProjectionReplica>();
+  readonly #pending = new Map<number, ProjectionReplica>();
   readonly #geo = {
-    oak: oakGeometry(),
-    birch: birchGeometry(),
-    grass: grassGeometry(),
-    flower: flowerGeometry(),
+    oak: createOakTreeGeometry(),
+    birch: createBirchTreeGeometry(),
+    grass: createGrassTuftGeometry(),
+    red: createFlowerGeometry(0xef4444),
+    yellow: createFlowerGeometry(0xfacc15),
+    blue: createFlowerGeometry(0x3b82f6),
     flag: flagGeometry(),
   };
-  readonly #material = new THREE.MeshBasicMaterial({ vertexColors: true });
+  readonly #material = new THREE.MeshLambertMaterial({ vertexColors: true });
   readonly #flagMaterial = new THREE.MeshBasicMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
   });
   readonly #emblemTextures = new Map<number, THREE.CanvasTexture>();
+  readonly #frustum = new THREE.Frustum();
+  readonly #matrix = new THREE.Matrix4();
   #slot = 0;
-  #pendingTimers = new Map<number, number>();
-  #onChange: (() => void) | undefined;
-
-  constructor(objects: readonly WorldObject[] = [], onChange?: () => void) {
+  #frame: number | undefined;
+  #disposed = false;
+  #span = 275;
+  #active:
+    | {
+        id: number;
+        replica: ProjectionReplica;
+        builder: Generator<void, NatureInstance[]>;
+      }
+    | undefined;
+  readonly #onChange: (() => void) | undefined;
+  constructor(
+    objects: readonly WorldObject[] = [],
+    onChange?: () => void,
+    field = new TerrainBiomes(objects),
+  ) {
     this.#objects = objects;
+    this.#field = field;
     this.#onChange = onChange;
-    this.group.name = "LandscapeEffects";
-    this.#exclusions = objects.map((o) =>
-      rectOf(o, o.kind === "hq" || o.kind === "landmark" ? 2 : 1),
-    );
-    for (const o of objects)
+    this.group.name = "VoxelNatureChunks";
+    this.#setHeadquarters();
+  }
+  #setHeadquarters(): void {
+    this.#hqRects.clear();
+    for (const o of this.#objects)
       if (o.kind === "hq" && o.schoolSlot !== undefined)
         this.#hqRects.set(o.schoolSlot, rectOf(o));
   }
-
+  setObjects(objects: readonly WorldObject[]): void {
+    this.#objects = objects;
+    this.#setHeadquarters();
+    const sources = [...this.#sources];
+    this.clear();
+    for (const [id, replica] of sources) this.rebuild(id, replica);
+  }
   setSchool(slot: number): void {
     this.#slot = slot;
     this.clear();
   }
-
   clear(): void {
-    for (const t of this.#pendingTimers.values()) window.clearTimeout(t);
-    this.#pendingTimers.clear();
+    if (this.#frame !== undefined) cancelAnimationFrame(this.#frame);
+    this.#frame = undefined;
+    this.#active = undefined;
+    this.#pending.clear();
+    this.#sources.clear();
     for (const { group } of this.#chunks.values()) this.#dispose(group);
     this.#chunks.clear();
     this.#syncEmblemFor();
   }
-
-  /** Debounced per-tile updates; full paints rebuild immediately. */
   rebuildSoon(id: number, replica: ProjectionReplica): void {
-    if (this.#pendingTimers.has(id)) return;
-    this.#pendingTimers.set(
-      id,
-      window.setTimeout(() => {
-        this.#pendingTimers.delete(id);
-        this.rebuild(id, replica);
-        this.#onChange?.();
-      }, 80),
-    );
+    this.rebuild(id, replica);
   }
-
   rebuild(id: number, replica: ProjectionReplica): void {
+    if (this.#disposed) return;
+    this.#sources.set(id, replica);
+    this.#pending.set(id, replica);
+    if (this.#sources.size > GAME_CONFIG.terrain.propCacheChunks) {
+      const first = this.#sources.keys().next().value!;
+      this.#sources.delete(first);
+      this.#pending.delete(first);
+      const old = this.#chunks.get(first);
+      if (old) this.#dispose(old.group);
+      this.#chunks.delete(first);
+    }
+    if (this.#frame === undefined)
+      this.#frame = requestAnimationFrame(this.#pump);
+  }
+  #pump = (): void => {
+    this.#frame = undefined;
+    if (this.#disposed) return;
+    if (!this.#active) {
+      const first = this.#pending.entries().next().value;
+      if (!first) return;
+      const [id, replica] = first;
+      this.#pending.delete(id);
+      const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+      this.#active = {
+        id,
+        replica,
+        builder: naturePlanRows(
+          this.#field,
+          id,
+          (x, z) =>
+            replica.hasChunk(id) &&
+            replica.isDiscovered(id, (z - chunkZ * 64) * 64 + x - chunkX * 64),
+        ),
+      };
+    }
+    const result = this.#active.builder.next();
+    if (result.done) {
+      if (this.#sources.has(this.#active.id))
+        this.#finish(this.#active.id, this.#active.replica, result.value);
+      this.#active = undefined;
+      this.#onChange?.();
+    }
+    if (this.#pending.size || this.#active)
+      this.#frame = requestAnimationFrame(this.#pump);
+  };
+  #finish(
+    id: number,
+    replica: ProjectionReplica,
+    instances: readonly NatureInstance[],
+  ): void {
     const previous = this.#chunks.get(id);
     if (previous) this.#dispose(previous.group);
-    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
-    const baseX = chunkX * CHUNK_SIZE;
-    const baseZ = chunkZ * CHUNK_SIZE;
-    const bit = 1 << this.#slot;
-    const owned = (x: number, z: number): boolean | undefined => {
-      if (x < 0 || z < 0 || x >= WORLD || z >= WORLD) return false;
-      const cid = chunkId(
-        Math.floor(x / CHUNK_SIZE),
-        Math.floor(z / CHUNK_SIZE),
-      );
-      if (!replica.hasChunk(cid)) return undefined;
-      const local = (z % CHUNK_SIZE) * CHUNK_SIZE + (x % CHUNK_SIZE);
-      return (
-        replica.isDiscovered(cid, local) && !!(replica.maskAt(cid, local) & bit)
-      );
-    };
-    const size = (v: number): number => Math.min(CHUNK_SIZE, WORLD - v);
-    const w = size(baseX);
-    const h = size(baseZ);
-    const grid = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
-    const ownedTiles: number[] = [];
-    for (let z = 0; z < h; z++)
-      for (let x = 0; x < w; x++)
-        if (owned(baseX + x, baseZ + z)) {
-          grid[z * CHUNK_SIZE + x] = 1;
-          ownedTiles.push((baseZ + z) * WORLD + baseX + x);
-        }
-
-    const trees: THREE.Matrix4[] = [];
-    const birches: THREE.Matrix4[] = [];
-    const grasses: THREE.Matrix4[] = [];
-    const flowers: THREE.Matrix4[] = [];
-    const flags: { m: THREE.Matrix4; color: THREE.Color }[] = [];
-    const dummy = new THREE.Object3D();
-    const schoolColor = new THREE.Color(SCHOOLS[this.#slot]!.color);
-    const hq = this.#hqRects.get(this.#slot);
-    const excluded = (x: number, z: number): boolean =>
-      this.#exclusions.some((r) => inside(r, x, z));
-
-    for (let z = 0; z < h; z++)
-      for (let x = 0; x < w; x++) {
-        if (!grid[z * CHUNK_SIZE + x]) continue;
-        const wx = baseX + x;
-        const wz = baseZ + z;
-        const inHq = hq ? inside(hq, wx, wz) : false;
-        // Border flags on exposed edges (every other tile keeps the line airy).
-        if (!inHq) {
-          const edges: [number, number, number][] = [
-            [0, -1, Math.PI],
-            [0, 1, 0],
-            [-1, 0, -Math.PI / 2],
-            [1, 0, Math.PI / 2],
-          ];
-          for (const [dx, dz, rot] of edges) {
-            const n = owned(wx + dx, wz + dz);
-            if (n !== false) continue;
-            if ((wx + wz) % 8) continue;
-            if (excluded(wx, wz)) continue;
-            dummy.position.set(
-              wx + 0.5 + dx * 0.5 - HALF,
-              HALF - (wz + 0.5 + dz * 0.5),
-              0.1,
-            );
-            dummy.rotation.set(0, 0, rot);
-            dummy.scale.setScalar(0.85);
-            dummy.updateMatrix();
-            flags.push({ m: dummy.matrix.clone(), color: schoolColor });
-          }
-        }
-        // Nature props on owned tiles, sparse and deterministic.
-        if (inHq || excluded(wx, wz)) continue;
-        if (wx % 6 !== 0 || wz % 6 !== 0) continue;
-        const jx = wx + Math.floor(hash(wx, wz, 1.1) * 3) - 1;
-        const jz = wz + Math.floor(hash(wx, wz, 2.2) * 3) - 1;
-        if (excluded(jx, jz) || owned(jx, jz) !== true) continue;
-        const roll = hash(jx, jz, 3.3);
-        const m = moisture(jx, jz);
-        const sc = 0.85 + hash(jx, jz, 5.5) * 0.45;
-        dummy.position.set(jx + 0.5 - HALF, HALF - (jz + 0.5), 0.08);
-        dummy.rotation.set(0, 0, hash(jx, jz, 4.4) * Math.PI * 2);
-        dummy.scale.setScalar(sc);
-        dummy.updateMatrix();
-        if (m > 0.62) {
-          if (roll < 0.28) birches.push(dummy.matrix.clone());
-          else if (roll < 0.5) flowers.push(dummy.matrix.clone());
-          else if (roll < 0.7) grasses.push(dummy.matrix.clone());
-        } else if (m > 0.35) {
-          if (roll < 0.3) trees.push(dummy.matrix.clone());
-          else if (roll < 0.4) birches.push(dummy.matrix.clone());
-          else if (roll < 0.5) flowers.push(dummy.matrix.clone());
-          else if (roll < 0.72) grasses.push(dummy.matrix.clone());
-        } else if (roll < 0.15) trees.push(dummy.matrix.clone());
-        else if (roll < 0.45) grasses.push(dummy.matrix.clone());
-      }
-
-    const group = new THREE.Group();
-    const instanced = (
-      geometry: THREE.BufferGeometry,
-      matrices: THREE.Matrix4[],
-      material: THREE.Material,
-    ): void => {
-      if (!matrices.length) return;
-      const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
-      matrices.forEach((m, i) => {
-        mesh.setMatrixAt(i, m);
-      });
-      mesh.instanceMatrix.needsUpdate = true;
-      group.add(mesh);
-    };
-    instanced(this.#geo.oak, trees, this.#material);
-    instanced(this.#geo.birch, birches, this.#material);
-    instanced(this.#geo.grass, grasses, this.#material);
-    instanced(this.#geo.flower, flowers, this.#material);
-    if (flags.length) {
+    const { chunkX, chunkZ } = chunkCoordinatesForId(id),
+      baseX = chunkX * 64,
+      baseZ = chunkZ * 64;
+    const group = new THREE.Group(),
+      dummy = new THREE.Object3D();
+    for (const kind of [
+      "oak",
+      "birch",
+      "grass",
+      "red",
+      "yellow",
+      "blue",
+    ] as const) {
+      const entries = instances.filter((p) => p.kind === kind);
+      if (!entries.length) continue;
       const mesh = new THREE.InstancedMesh(
-        this.#geo.flag,
-        this.#flagMaterial,
-        flags.length,
+        this.#geo[kind],
+        this.#material,
+        entries.length,
       );
-      flags.forEach((f, i) => {
-        mesh.setMatrixAt(i, f.m);
-        mesh.setColorAt(i, f.color);
+      mesh.name =
+        kind === "grass"
+          ? "TallGrass"
+          : kind === "oak"
+            ? "OakTrees"
+            : kind === "birch"
+              ? "BirchTrees"
+              : "Wildflowers";
+      mesh.userData.detail = kind !== "oak" && kind !== "birch";
+      mesh.visible =
+        !mesh.userData.detail || this.#span <= GAME_CONFIG.terrain.detailSpan;
+      entries.forEach((p, i) => {
+        dummy.position.set(p.x - HALF, HALF - p.z, p.height);
+        dummy.rotation.set(0, 0, p.rotation);
+        dummy.scale.setScalar(p.scale);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
       });
       mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
       group.add(mesh);
     }
-    // Mega emblems: every fully owned aligned 8×8 block outside the HQ.
-    let emblems = 0;
-    for (let bz = 0; bz + 8 <= h && emblems < MAX_EMBLEMS_PER_CHUNK; bz += 8)
-      for (
-        let bx = 0;
-        bx + 8 <= w && emblems < MAX_EMBLEMS_PER_CHUNK;
-        bx += 8
-      ) {
-        let full = true;
-        for (let z = bz; z < bz + 8 && full; z++)
-          for (let x = bx; x < bx + 8; x++)
-            if (!grid[z * CHUNK_SIZE + x]) {
-              full = false;
-              break;
-            }
-        if (!full) continue;
-        const cx = baseX + bx;
-        const cz = baseZ + bz;
-        if (hq && inside(hq, cx + 4, cz + 4)) continue;
-        group.add(this.#emblemMesh(cx + 4, cz + 4, 8));
-        emblems++;
+    const ownedTiles: number[] = [],
+      flags: THREE.Matrix4[] = [];
+    const owned = (x: number, z: number): boolean => {
+      if (x < 0 || z < 0 || x >= WORLD || z >= WORLD) return false;
+      const cid = chunkId(Math.floor(x / 64), Math.floor(z / 64));
+      return (
+        replica.hasChunk(cid) &&
+        !!(replica.maskAt(cid, (z % 64) * 64 + (x % 64)) & (1 << this.#slot))
+      );
+    };
+    for (let z = baseZ; z < Math.min(WORLD, baseZ + 64); z++)
+      for (let x = baseX; x < Math.min(WORLD, baseX + 64); x++) {
+        if (!owned(x, z)) continue;
+        ownedTiles.push(z * WORLD + x);
+        if ((x + z) % 8 || this.#field.isFoundation(x + 0.5, z + 0.5)) continue;
+        if (
+          owned(x + 1, z) &&
+          owned(x - 1, z) &&
+          owned(x, z + 1) &&
+          owned(x, z - 1)
+        )
+          continue;
+        dummy.position.set(
+          x + 0.5 - HALF,
+          HALF - z - 0.5,
+          this.#field.getTerrainHeight(x, z) + 0.06,
+        );
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.setScalar(0.65);
+        dummy.updateMatrix();
+        flags.push(dummy.matrix.clone());
       }
+    if (flags.length) {
+      const mesh = new THREE.InstancedMesh(
+          this.#geo.flag,
+          this.#flagMaterial,
+          flags.length,
+        ),
+        color = new THREE.Color(SCHOOLS[this.#slot]!.color);
+      flags.forEach((m, i) => {
+        mesh.setMatrixAt(i, m);
+        mesh.setColorAt(i, color);
+      });
+      mesh.name = "BorderFlags";
+      mesh.userData.detail = true;
+      mesh.visible = this.#span <= GAME_CONFIG.terrain.detailSpan;
+      mesh.computeBoundingSphere();
+      group.add(mesh);
+    }
     this.group.add(group);
-    this.#chunks.set(id, { group, owned: Int32Array.from(ownedTiles) });
-    this.#syncEmblemFor();
+    this.#chunks.set(id, {
+      group,
+      owned: Int32Array.from(ownedTiles),
+      bounds: new THREE.Box3(
+        new THREE.Vector3(
+          baseX - HALF - 2,
+          HALF - Math.min(WORLD, baseZ + 64) - 2,
+          -0.4,
+        ),
+        new THREE.Vector3(
+          Math.min(WORLD, baseX + 64) - HALF + 2,
+          HALF - baseZ + 2,
+          9,
+        ),
+      ),
+    });
   }
-
+  updateView(camera: THREE.Camera, span: number): void {
+    this.#span = span;
+    this.#matrix.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    );
+    this.#frustum.setFromProjectionMatrix(this.#matrix);
+    for (const { group, bounds } of this.#chunks.values()) {
+      group.visible = this.#frustum.intersectsBox(bounds);
+      for (const child of group.children)
+        if (child.userData.detail)
+          child.visible = span <= GAME_CONFIG.terrain.detailSpan;
+    }
+  }
   #emblemGroup: THREE.Group | undefined;
   #syncEmblemFor(): void {
     if (this.#emblemGroup) {
@@ -474,15 +472,19 @@ export class LandscapeEffects {
   }
 
   dispose(): void {
+    this.#disposed = true;
     this.clear();
+    if (this.#emblemGroup) {
+      this.#dispose(this.#emblemGroup);
+      this.#emblemGroup = undefined;
+    }
     for (const g of Object.values(this.#geo)) g.dispose();
     this.#material.dispose();
     this.#flagMaterial.dispose();
     for (const t of this.#emblemTextures.values()) t.dispose();
   }
-
-  #dispose(group: THREE.Group): void {
-    this.group.remove(group);
+  #dispose(group: THREE.Object3D): void {
+    group.removeFromParent();
     group.traverse((o) => {
       if (o instanceof THREE.InstancedMesh) o.dispose();
       else if (o instanceof THREE.Mesh) {

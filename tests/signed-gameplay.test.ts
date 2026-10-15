@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Pool } from "pg";
+import { TerrainBiomes } from "../client/src/terrainBiomes.ts";
 import { cleanupBotFixture } from "../scripts/simulation/fixture.ts";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
 import { cleanupSchoolRewards } from "../server/integration/SchoolRewardFixture.ts";
@@ -405,6 +406,69 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
 });
 
 import { M3TestMutationService } from "../server/persistence/M3TestMutation.ts";
+
+test("rendered river tiles remain ordinary adjacent exploration with a single PostgreSQL Point debit", {
+  skip: !url,
+  timeout: 30000,
+}, async () => {
+  const pool = new Pool({ connectionString: url, max: 16 }),
+    campaign = randomUUID();
+  let server: Awaited<ReturnType<typeof createSchoolPlayServer>> | undefined;
+  try {
+    server = await createSchoolPlayServer(
+      pool,
+      { web: 0, websocket: 0 },
+      campaign,
+    );
+    const field = new TerrainBiomes();
+    const z = 100;
+    let x = 1;
+    while (x < 999 && field.getTerrainBiome(x, z) !== "river") x++;
+    assert(x < 999);
+    assert.equal(field.getTerrainHeight(x, z), -0.35);
+    await path(pool, campaign, 0, x - 1, z);
+    const actor = server.fixture.actors[0]!;
+    const response = await fetch(
+      `http://127.0.0.1:${server.webPort}/api/game/tile?index=${z * 1000 + x}`,
+      {
+        headers: { Authorization: `Bearer ${actor.token}` },
+      },
+    );
+    assert.deepEqual(await response.json(), {
+      tileIndex: z * 1000 + x,
+      action: "explore",
+      points: 1,
+    });
+    const before = BigInt(
+      (await server.accounts.profile(actor.token))!.balance,
+    );
+    const mutation = new M3TestMutationService(pool, {
+      realtimeViews: true,
+      boundary: { headquarters: server.fixture.headquarters, ruleVersion: 1 },
+    });
+    const command = {
+      campaignId: campaign,
+      actorId: actor.actorId,
+      schoolSlot: 0,
+      key: Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
+      tileIndex: z * 1000 + x,
+      cost: 1n,
+      intent: "explore" as const,
+    };
+    assert.equal((await mutation.apply(command)).result.status, "test_applied");
+    assert.equal((await mutation.apply(command)).result.status, "test_applied");
+    assert.equal(
+      before - BigInt((await server.accounts.profile(actor.token))!.balance),
+      1n,
+    );
+    assert((await server.accounts.profile(actor.token))!.ledgerConserved);
+  } finally {
+    await server?.close();
+    await cleanupSchoolRewards(pool, campaign);
+    await cleanupBotFixture(pool, campaign);
+    await pool.end();
+  }
+});
 
 async function rivalTiles(
   pool: Pool,
