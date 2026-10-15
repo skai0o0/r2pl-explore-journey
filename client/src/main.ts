@@ -9,7 +9,6 @@ import {
   FIRST_LANDMARK_BY_SLOT,
   GAME_CONFIG,
   LANDMARKS,
-  objectAt,
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
@@ -169,6 +168,7 @@ let privateObjects: readonly WorldObject[] = [];
 let replica = new ProjectionReplica(player.slot);
 let room: Room | undefined;
 let selected: PickedTile | undefined;
+let selectedBuilding: WorldObject | undefined;
 let generation = 0;
 let subscribeTimer: number | undefined;
 let balanceTimer: number | undefined;
@@ -314,10 +314,7 @@ function requestTileContext(tile: PickedTile): void {
 function updateTile(): void {
   get("explore-button").closest<HTMLElement>(".tile-panel")!.hidden = !selected;
   if (!selected) return;
-  const object = objectAt(selected.x, selected.z, [
-    ...publicWorld,
-    ...privateObjects,
-  ]);
+  const object = selectedBuilding;
   const owned =
     replica.hasChunk(selected.chunk) &&
     !!(replica.maskAt(selected.chunk, selected.local) & (1 << player.slot));
@@ -464,17 +461,14 @@ function refreshBalanceSoon(): void {
 
 const world = new WorldView(
   get("world-view"),
-  (tile) => {
+  (tile, object) => {
     if (operator?.relocating) {
       operator.relocate(tile.x, tile.z);
-      return;
+      return false;
     }
     selected = tile;
+    selectedBuilding = object;
     contextSignature = "";
-    const object = objectAt(tile.x, tile.z, [
-      ...publicWorld,
-      ...privateObjects,
-    ]);
     autoTarget = !object && autoExplore ? tile.index : undefined;
     updateTile();
     world.setSelectedObject(object?.id);
@@ -522,14 +516,22 @@ const world = new WorldView(
           })),
         objects: publicWorld,
         onPickObject: (obj) => {
-          if (gameplay.canShowObject(obj) && obj.kind !== "hq") {
+          if (
+            !operator?.relocating &&
+            gameplay.canShowObject(obj) &&
+            obj.kind !== "hq"
+          ) {
             gameplay.pick(obj);
           }
         },
       }
     : {
         onPickObject: (obj) => {
-          if (gameplay.canShowObject(obj) && obj.kind !== "hq") {
+          if (
+            !operator?.relocating &&
+            gameplay.canShowObject(obj) &&
+            obj.kind !== "hq"
+          ) {
             gameplay.pick(obj);
           }
         },
@@ -576,14 +578,11 @@ window.setInterval(() => {
         if (found) {
           if (
             found.ownerSchoolSlot !== obj.ownerSchoolSlot ||
-            found.ownerSchoolId !== obj.ownerSchoolId
+            found.ownerSchoolId !== obj.ownerSchoolId ||
+            found.x !== obj.x ||
+            found.z !== obj.z
           ) {
-            (
-              found as { ownerSchoolSlot?: number | null | undefined }
-            ).ownerSchoolSlot = obj.ownerSchoolSlot;
-            (
-              found as { ownerSchoolId?: string | null | undefined }
-            ).ownerSchoolId = obj.ownerSchoolId;
+            Object.assign(found, obj);
             changed = true;
           }
         }
@@ -719,9 +718,7 @@ function subscribeNow(): void {
 }
 
 function explore(): void {
-  const object = selected
-    ? objectAt(selected.x, selected.z, [...publicWorld, ...privateObjects])
-    : undefined;
+  const object = selectedBuilding;
   if (object && object.kind !== "hq") {
     if (gameplay.canShowObject(object)) gameplay.pick(object);
     return;
@@ -891,6 +888,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   replica = new ProjectionReplica(player.slot);
   selected = undefined;
+  selectedBuilding = undefined;
   contextSignature = "";
   tileContext = undefined;
   contextAbort?.abort();
@@ -965,6 +963,7 @@ get("camera-button").addEventListener("click", () => {
 });
 get("tile-close").addEventListener("click", () => {
   selected = undefined;
+  selectedBuilding = undefined;
   autoTarget = undefined;
   contextAbort?.abort();
   contextRequest++;

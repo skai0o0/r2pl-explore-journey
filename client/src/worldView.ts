@@ -18,7 +18,10 @@ import {
 import { ModelAssetLoader } from "./assetLoader.ts";
 import {
   type AssetMount,
+  cacheInteractiveObject,
+  type InteractiveObject,
   mountModelAsset,
+  pickInteractiveObject,
   setChestLidRotation,
   tintModelFactionMaterials,
 } from "./assetPipeline.ts";
@@ -407,7 +410,9 @@ export class WorldView {
   #renderHeight = 0;
   readonly #markerElements: HTMLElement[] = [];
   readonly #markers: WorldMarker[];
-  readonly #baseCatalog: readonly WorldObject[];
+  #baseCatalog: readonly WorldObject[];
+  #privateCatalog: readonly WorldObject[] = [];
+  #previewCatalog = new Map<string, WorldObject>();
   #catalog: readonly WorldObject[];
   readonly #solvedLandmarks = new Set<string>();
   readonly #isDev: boolean;
@@ -418,6 +423,15 @@ export class WorldView {
   #sharedDigest = "";
   #objectById = new Map<string, WorldObject>();
   readonly #assetMounts: AssetMount[] = [];
+  readonly #interactiveObjects: InteractiveObject[] = [];
+  readonly #hitIntersections: THREE.Intersection[] = [];
+  readonly #privateObjectIds = new Set<string>();
+  readonly #privateMounts = new Map<string, AssetMount>();
+  readonly #assetLoader = new ModelAssetLoader();
+  #hoverFrame: number | undefined;
+  #hoverPointer: { x: number; y: number } | undefined;
+  #disposed = false;
+  readonly #objectTooltip: HTMLElement;
   readonly #assetRoots: THREE.Group[] = [];
   readonly #privateObjects = new THREE.Group();
   readonly #beacons = new THREE.Group();
@@ -435,7 +449,7 @@ export class WorldView {
   readonly #pendingElement: HTMLElement;
   readonly #revealElement: HTMLElement;
   readonly #rejectElement: HTMLElement;
-  readonly #onPick: (tile: PickedTile) => void;
+  readonly #onPick: (tile: PickedTile, object?: WorldObject) => boolean | void;
   readonly #onViewChange: () => void;
   readonly #onHover: ((tile: PickedTile | undefined) => void) | undefined;
   readonly #onPickObject: ((object: WorldObject) => void) | undefined;
@@ -459,7 +473,7 @@ export class WorldView {
 
   constructor(
     host: HTMLElement,
-    onPick: (tile: PickedTile) => void,
+    onPick: (tile: PickedTile, object?: WorldObject) => boolean | void,
     onViewChange: () => void,
     onHover?: (tile: PickedTile | undefined) => void,
     layout: {
@@ -580,7 +594,7 @@ export class WorldView {
     this.#scene.add(this.#privateObjects);
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
-    const assetLoader = new ModelAssetLoader();
+    const assetLoader = this.#assetLoader;
     for (const placement of layout.placements ?? MODEL_PLACEMENTS) {
       const assetRoot = new THREE.Group();
       this.#scene.add(assetRoot);
@@ -617,6 +631,9 @@ export class WorldView {
         {
           skipIfUnavailable: true,
           colorHex: school?.color,
+          onRootChanged: (root) => {
+            if (footprint) this.#cacheObject(footprint, root);
+          },
         },
       );
       this.#assetMounts.push(mount);
@@ -669,6 +686,7 @@ export class WorldView {
             colorHex: color,
             isChestOpened: false,
             targetSpan: o.kind === "chest" ? 2.5 : 10,
+            onRootChanged: (root) => this.#cacheObject(o, root),
           },
         );
         mount.ready.then((status) => {
@@ -685,6 +703,7 @@ export class WorldView {
       } else {
         fallback.position.set(o.x - 500, 500 - o.z, 0.12);
         this.#scene.add(fallback);
+        this.#cacheObject(o, fallback);
       }
     }
     for (const marker of this.#markers) {
@@ -710,25 +729,11 @@ export class WorldView {
       detail.hidden = !this.#isDev;
       element.dataset.markerId = marker.id ?? marker.title;
       copy.append(title, detail);
-      copy.append(title);
       element.append(glyph, copy);
       element.addEventListener("click", (e) => {
         e.stopPropagation();
-        const obj = this.#catalog.find(
-          (o) => o.id === (marker.id ?? marker.title),
-        );
-        if (obj) {
-          const tile: PickedTile = {
-            x: obj.x,
-            z: obj.z,
-            index: tileIndex(obj.x, obj.z),
-            chunk: chunkId(Math.floor(obj.x / 64), Math.floor(obj.z / 64)),
-            local: (obj.z % 64) * 64 + (obj.x % 64),
-          };
-          this.select(tile);
-          this.#onPick(tile);
-          this.#onPickObject?.(obj);
-        }
+        const obj = this.#displayObject(marker.id ?? marker.title);
+        if (obj) this.#pickObject(obj);
       });
       host.append(element);
       this.#markerElements.push(element);
@@ -738,6 +743,11 @@ export class WorldView {
     this.#hoverElement.className = "tile-hover";
     this.#hoverElement.hidden = true;
     host.append(this.#hoverElement);
+    this.#objectTooltip = document.createElement("div");
+    this.#objectTooltip.className = "object-hover-tooltip";
+    this.#objectTooltip.hidden = true;
+    this.#objectTooltip.style.pointerEvents = "none";
+    host.append(this.#objectTooltip);
 
     this.#selection = document.createElement("div");
     this.#selection.className = "tile-selection";
@@ -787,6 +797,17 @@ export class WorldView {
   }
 
   dispose(): void {
+    this.#disposed = true;
+    this.#clearObjectHover();
+    this.#interactiveObjects.length = 0;
+    this.#objectTooltip.remove();
+    this.#host.removeEventListener("pointerdown", this.#pointerDown);
+    this.#host.removeEventListener("pointermove", this.#pointerMove);
+    this.#host.removeEventListener("pointerup", this.#pointerUp);
+    this.#host.removeEventListener("pointercancel", this.#pointerUp);
+    this.#host.removeEventListener("pointerleave", this.#pointerLeave);
+    this.#host.removeEventListener("wheel", this.#wheel);
+    window.removeEventListener("resize", this.#render);
     window.clearTimeout(this.#revealTimer);
     window.clearTimeout(this.#rejectTimer);
     this.#landscape.dispose();
@@ -797,6 +818,8 @@ export class WorldView {
     this.#scene.remove(this.#tileIndicators.object);
     this.#tileIndicators.dispose();
     for (const mount of this.#assetMounts) mount.dispose();
+    for (const mount of this.#privateMounts.values()) mount.dispose();
+    this.#privateMounts.clear();
     this.#assetMounts.length = 0;
     for (const root of this.#assetRoots) this.#scene.remove(root);
     this.#assetRoots.length = 0;
@@ -807,6 +830,7 @@ export class WorldView {
   }
 
   toggleCameraMode(): CameraMode {
+    this.#clearObjectHover();
     this.#cameraMode =
       this.#cameraMode === "isometric" ? "top-down" : "isometric";
     this.#render();
@@ -895,6 +919,10 @@ export class WorldView {
     this.#render();
   }
   updateObjects(objects: readonly WorldObject[]): void {
+    this.#baseCatalog = objects;
+    this.#catalog = [...objects, ...this.#privateCatalog];
+    this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
+    this.#moveObjectRoots();
     for (const o of objects) {
       if (o.kind === "unistop") {
         const mesh = this.#unistopMeshes.get(o.id);
@@ -926,6 +954,8 @@ export class WorldView {
     const mesh = this.#chestMeshes.get(id);
     if (mesh) {
       setChestLidRotation(mesh, open);
+      const object = this.#displayObject(id);
+      if (object) this.#cacheObject(object, mesh);
       this.#render();
     }
   }
@@ -938,6 +968,8 @@ export class WorldView {
     });
   }
   setEditorPreview(objects: readonly WorldObject[]): void {
+    this.#previewCatalog = new Map(objects.map((o) => [o.id, o]));
+    this.#moveObjectRoots();
     for (const child of [...this.#editorPreview.children]) {
       this.#editorPreview.remove(child);
       if (child instanceof THREE.Mesh) {
@@ -989,6 +1021,17 @@ export class WorldView {
     const digest = JSON.stringify(objects);
     if (digest === this.#privateDigest) return;
     this.#privateDigest = digest;
+    for (const mount of this.#privateMounts.values()) mount.dispose();
+    this.#privateMounts.clear();
+    for (let i = this.#interactiveObjects.length - 1; i >= 0; i--)
+      if (this.#privateObjectIds.has(this.#interactiveObjects[i]!.id))
+        this.#interactiveObjects.splice(i, 1);
+    for (const id of this.#privateObjectIds) this.#chestMeshes.delete(id);
+    this.#privateObjectIds.clear();
+    this.#clearObjectHover();
+    this.#privateCatalog = objects;
+    this.#catalog = [...this.#baseCatalog, ...objects];
+    this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
     for (const child of [...this.#privateObjects.children]) {
       this.#privateObjects.remove(child);
       this.#disposeGroup(child);
@@ -1011,9 +1054,29 @@ export class WorldView {
         o,
         o.tier,
       );
-      mesh.position.set(o.x - 500, 500 - o.z, 0.12);
-      this.#privateObjects.add(mesh);
-      this.#chestMeshes.set(o.id, mesh);
+      this.#privateObjectIds.add(o.id);
+      const mount = mountModelAsset(
+        this.#privateObjects,
+        this.#assetLoader,
+        getChestModelUrl(o.tier ?? "aspire"),
+        {
+          id: o.id,
+          asset: "hq",
+          worldX: o.x,
+          worldZ: o.z,
+          scale: 1,
+          rotationZ: 0,
+        },
+        mesh,
+        this.#render,
+        {
+          skipIfUnavailable: true,
+          targetSpan: 2.5,
+          isChestOpened: false,
+          onRootChanged: (root) => this.#cacheObject(o, root),
+        },
+      );
+      this.#privateMounts.set(o.id, mount);
       const marker: WorldMarker = {
         id: o.id,
         kind: "chest",
@@ -1033,25 +1096,16 @@ export class WorldView {
       copy.className = "marker-copy";
       const title = document.createElement("b");
       title.textContent = marker.title;
+      copy.append(title);
       element.append(glyph, copy);
       element.addEventListener("click", (e) => {
         e.stopPropagation();
-        const tile: PickedTile = {
-          x: o.x,
-          z: o.z,
-          index: tileIndex(o.x, o.z),
-          chunk: chunkId(Math.floor(o.x / 64), Math.floor(o.z / 64)),
-          local: (o.z % 64) * 64 + (o.x % 64),
-        };
-        this.select(tile);
-        this.#onPick(tile);
-        this.#onPickObject?.(o);
+        const object = this.#displayObject(o.id);
+        if (object) this.#pickObject(object);
       });
       this.#host.append(element);
       this.#markerElements.push(element);
     }
-    this.#catalog = [...this.#baseCatalog, ...objects];
-    this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
     this.#render();
   }
   get viewState(): { x: number; z: number; span: number } {
@@ -1059,6 +1113,7 @@ export class WorldView {
   }
 
   setSchool(slot: number): void {
+    this.#clearObjectHover();
     this.#schoolSlot = slot;
     this.#selectedObject = undefined;
     this.#hoveredObject = undefined;
@@ -1094,6 +1149,7 @@ export class WorldView {
   }
 
   focus(x: number, z: number, span = this.#span): void {
+    this.#clearObjectHover();
     if (this.#animId !== undefined) {
       cancelAnimationFrame(this.#animId);
       this.#animId = undefined;
@@ -1112,6 +1168,7 @@ export class WorldView {
     targetSpan = this.#span,
     durationMs = 380,
   ): void {
+    this.#clearObjectHover();
     if (this.#animId !== undefined) {
       cancelAnimationFrame(this.#animId);
       this.#animId = undefined;
@@ -1383,15 +1440,122 @@ export class WorldView {
     this.#centerZ = Math.max(0, Math.min(999, this.#centerZ));
   }
 
-  #point(clientX: number, clientY: number): { x: number; z: number } {
+  #displayObject(id: string): WorldObject | undefined {
+    return this.#previewCatalog.get(id) ?? this.#objectById.get(id);
+  }
+
+  #cacheObject(object: WorldObject, root: THREE.Object3D): void {
+    if (this.#disposed) return;
+    const current = this.#displayObject(object.id) ?? object;
+    root.position.x = current.x - WORLD_WIDTH / 2;
+    root.position.y = WORLD_HEIGHT / 2 - current.z;
+    const entry = cacheInteractiveObject(current, root);
+    const index = this.#interactiveObjects.findIndex(
+      (e) => e.id === current.id,
+    );
+    if (index < 0) this.#interactiveObjects.push(entry);
+    else this.#interactiveObjects[index] = entry;
+    if (current.kind === "unistop") this.#unistopMeshes.set(current.id, root);
+    if (current.kind === "chest") this.#chestMeshes.set(current.id, root);
+    this.#render();
+  }
+
+  #moveObjectRoots(): void {
+    this.#clearObjectHover();
+    for (const entry of this.#interactiveObjects) {
+      const object = this.#displayObject(entry.id);
+      if (!object) continue;
+      const x = object.x - WORLD_WIDTH / 2;
+      const y = WORLD_HEIGHT / 2 - object.z;
+      if (
+        entry.objectRoot.position.x !== x ||
+        entry.objectRoot.position.y !== y
+      )
+        this.#cacheObject(object, entry.objectRoot);
+      const marker = this.#markers.find((m) => m.id === object.id);
+      if (marker) Object.assign(marker, { x: object.x, z: object.z });
+    }
+  }
+
+  #interactiveEligible = (entry: InteractiveObject): boolean => {
+    const object = this.#displayObject(entry.id);
+    if (!object) return false;
+    if (this.#isDev) return true;
+    if (entry.kind === "chest") return this.#privateObjectIds.has(entry.id);
+    return entry.kind !== "unistop" || this.isObjectDiscovered(object);
+  };
+
+  #pickBuilding(): WorldObject | undefined {
+    const entry = pickInteractiveObject(
+      this.#raycaster,
+      this.#interactiveObjects,
+      this.#interactiveEligible,
+      this.#hitIntersections,
+    );
+    return entry ? this.#displayObject(entry.id) : undefined;
+  }
+
+  #pickObject(object: WorldObject): void {
+    const x = Math.floor(object.x),
+      z = Math.floor(object.z);
+    const tile: PickedTile = {
+      x,
+      z,
+      index: tileIndex(x, z),
+      chunk: chunkId(Math.floor(x / 64), Math.floor(z / 64)),
+      local: (z % 64) * 64 + (x % 64),
+    };
+    this.select(tile);
+    this.setSelectedObject(object.id);
+    if (this.#onPick(tile, object) !== false) this.#onPickObject?.(object);
+  }
+
+  #setObjectHover(object: WorldObject | undefined, x = 0, y = 0): void {
+    const changed = this.#hoveredObject !== object?.id;
+    this.#hoveredObject = object?.id;
+    this.#host.style.cursor = object ? "pointer" : "";
+    this.#objectTooltip.hidden = !object;
+    if (object) {
+      this.#objectTooltip.textContent = objectDisplayName(
+        object,
+        object.kind !== "landmark" || this.#solvedLandmarks.has(object.id),
+      );
+      this.#objectTooltip.style.transform = `translate3d(${x + 12}px, ${y + 12}px, 0)`;
+    }
+    if (changed) this.#render();
+  }
+
+  #clearObjectHover(): void {
+    if (this.#hoverFrame !== undefined) cancelAnimationFrame(this.#hoverFrame);
+    this.#hoverFrame = undefined;
+    this.#hoverPointer = undefined;
+    this.#setObjectHover(undefined);
+  }
+
+  #pointerRay(clientX: number, clientY: number): DOMRect {
     const rect = this.#host.getBoundingClientRect();
     this.#syncCamera(rect.width, rect.height);
-    return (
-      this.#pointFromNdc(
-        ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
-        1 - ((clientY - rect.top) / Math.max(1, rect.height)) * 2,
-      ) ?? { x: Number.NaN, z: Number.NaN }
+    this.#ndc.set(
+      ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+      1 - ((clientY - rect.top) / Math.max(1, rect.height)) * 2,
     );
+    this.#raycaster.setFromCamera(this.#ndc, this.#camera);
+    return rect;
+  }
+
+  #groundFromRay(): { x: number; z: number } {
+    const hit = this.#raycaster.ray.intersectPlane(
+      GROUND_PLANE,
+      this.#groundPoint,
+    );
+    return hit
+      ? { x: hit.x + WORLD_WIDTH / 2, z: WORLD_HEIGHT / 2 - hit.y }
+      : { x: Number.NaN, z: Number.NaN };
+  }
+
+  #point(clientX: number, clientY: number): { x: number; z: number } {
+    this.#pointerRay(clientX, clientY);
+    return this.#groundFromRay();
   }
 
   #pointFromNdc(
@@ -1425,6 +1589,7 @@ export class WorldView {
   #pointerDown = (event: PointerEvent): void => {
     if ((event.target as Element).closest(".map-marker")) return;
     if (event.button !== 0 && event.pointerType === "mouse") return;
+    this.#clearObjectHover();
     this.#host.setPointerCapture(event.pointerId);
     this.#pointers.set(event.pointerId, {
       x: event.clientX,
@@ -1488,8 +1653,30 @@ export class WorldView {
       return;
     }
 
-    // Hover detection when not dragging
-    const point = this.#point(event.clientX, event.clientY);
+    // Coalesce input bursts into one bounded broad/narrow-phase pass per frame.
+    this.#hoverPointer = { x: event.clientX, y: event.clientY };
+    if (this.#hoverFrame === undefined) {
+      this.#hoverFrame = requestAnimationFrame(this.#hoverAtPointer);
+    }
+  };
+
+  #hoverAtPointer = (): void => {
+    this.#hoverFrame = undefined;
+    const pointer = this.#hoverPointer;
+    if (!pointer || this.#drag || this.#pointers.size > 0 || this.#disposed)
+      return;
+    const rect = this.#pointerRay(pointer.x, pointer.y);
+    const object = this.#pickBuilding();
+    this.#setObjectHover(object, pointer.x - rect.left, pointer.y - rect.top);
+    if (object) {
+      if (this.#hovered) {
+        this.#hovered = undefined;
+        this.#onHover?.(undefined);
+        this.#render();
+      }
+      return;
+    }
+    const point = this.#groundFromRay();
     const x = Math.floor(point.x);
     const z = Math.floor(point.z);
     if (x >= 0 && z >= 0 && x < WORLD_WIDTH && z < WORLD_HEIGHT) {
@@ -1517,12 +1704,26 @@ export class WorldView {
     const drag = this.#drag;
     this.#drag = undefined;
     if (this.#pointers.size === 0) this.#pinchDist = 0;
-    if (!drag || drag.moved) return;
+    if (!drag || drag.moved || event.type === "pointercancel") return;
 
-    const point = this.#point(event.clientX, event.clientY);
+    this.#pointerRay(event.clientX, event.clientY);
+    const object = this.#pickBuilding();
+    if (object) {
+      this.#pickObject(object);
+      return;
+    }
+    const point = this.#groundFromRay();
     const x = Math.floor(point.x);
     const z = Math.floor(point.z);
-    if (x < 0 || z < 0 || x >= WORLD_WIDTH || z >= WORLD_HEIGHT) return;
+    if (
+      !Number.isInteger(x) ||
+      !Number.isInteger(z) ||
+      x < 0 ||
+      z < 0 ||
+      x >= WORLD_WIDTH ||
+      z >= WORLD_HEIGHT
+    )
+      return;
     const tile: PickedTile = {
       x,
       z,
@@ -1530,12 +1731,13 @@ export class WorldView {
       chunk: chunkId(Math.floor(x / 64), Math.floor(z / 64)),
       local: (z % 64) * 64 + (x % 64),
     };
-    if (event.type === "pointercancel") return;
+    this.setSelectedObject(undefined);
     this.select(tile);
     this.#onPick(tile);
   };
 
   #pointerLeave = (): void => {
+    this.#clearObjectHover();
     this.#hovered = undefined;
     this.#hoverElement.hidden = true;
     this.#onHover?.(undefined);
@@ -1544,6 +1746,7 @@ export class WorldView {
 
   #wheel = (event: WheelEvent): void => {
     event.preventDefault();
+    this.#clearObjectHover();
     if (this.#animId !== undefined) {
       cancelAnimationFrame(this.#animId);
       this.#animId = undefined;
@@ -1612,6 +1815,7 @@ export class WorldView {
   }
 
   #render = (): void => {
+    if (this.#disposed) return;
     if (this.#renderFrame !== undefined) return;
     this.#renderFrame = requestAnimationFrame(() => {
       this.#renderFrame = undefined;
@@ -1655,13 +1859,16 @@ export class WorldView {
       element.classList.toggle("icon-only", supply && this.#span > 160);
       element.classList.toggle(
         "is-emphasized",
-        marker.id === this.#selectedObject,
+        marker.id === this.#selectedObject || marker.id === this.#hoveredObject,
       );
     }
     for (const [id, mesh] of this.#unistopMeshes) {
       const object = this.#objectById.get(id);
       mesh.visible =
         this.#isDev || (!!object && this.isObjectDiscovered(object));
+    }
+    for (const [id, mesh] of this.#chestMeshes) {
+      mesh.visible = this.#isDev || this.#privateObjectIds.has(id);
     }
     this.#renderer.render(this.#scene, this.#camera);
   };

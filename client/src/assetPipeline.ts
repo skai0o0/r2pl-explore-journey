@@ -1,6 +1,87 @@
 import * as THREE from "three";
+import type { WorldObject } from "../../shared/gameplay/gameConfig.ts";
 import type { ModelPlacement } from "./assetRegistry.ts";
 import { isModelAvailable } from "./modelManifest.ts";
+
+export interface InteractiveObject {
+  readonly id: string;
+  readonly kind: WorldObject["kind"];
+  readonly objectRoot: THREE.Object3D;
+  readonly worldBox: THREE.Box3;
+}
+
+/** Call only on mount, replacement, relocation, or a geometry/pose change. */
+export function cacheInteractiveObject(
+  object: Pick<WorldObject, "id" | "kind">,
+  objectRoot: THREE.Object3D,
+): InteractiveObject {
+  objectRoot.updateWorldMatrix(true, true);
+  // Raycaster otherwise computes these lazily on the first hover of a GLB.
+  objectRoot.traverse((node) => {
+    if (node instanceof THREE.Mesh && !node.geometry.boundingSphere)
+      node.geometry.computeBoundingSphere();
+    if (
+      node instanceof THREE.SkinnedMesh ||
+      node instanceof THREE.InstancedMesh
+    )
+      node.computeBoundingSphere();
+  });
+  return {
+    id: object.id,
+    kind: object.kind,
+    objectRoot,
+    worldBox: new THREE.Box3().setFromObject(objectRoot),
+  };
+}
+
+function visibleInHierarchy(object: THREE.Object3D): boolean {
+  for (let node: THREE.Object3D | null = object; node; node = node.parent)
+    if (!node.visible) return false;
+  return true;
+}
+
+/** No matrix/bounds rebuild and no terrain/scenery raycasts on the input path. */
+export function pickInteractiveObject(
+  raycaster: THREE.Raycaster,
+  entries: readonly InteractiveObject[],
+  eligible: (entry: InteractiveObject) => boolean = () => true,
+  intersections: THREE.Intersection[] = [],
+): InteractiveObject | undefined {
+  let nearest: InteractiveObject | undefined;
+  let distance = Infinity;
+  for (const entry of entries) {
+    if (
+      !visibleInHierarchy(entry.objectRoot) ||
+      !raycaster.ray.intersectsBox(entry.worldBox) ||
+      !eligible(entry)
+    )
+      continue;
+    intersections.length = 0;
+    raycaster.intersectObject(entry.objectRoot, true, intersections);
+    for (const hit of intersections) {
+      if (
+        !visibleInHierarchy(hit.object) ||
+        !(hit.object instanceof THREE.Mesh)
+      )
+        continue;
+      const material = Array.isArray(hit.object.material)
+        ? hit.object.material[hit.face?.materialIndex ?? 0]
+        : hit.object.material;
+      if (
+        !material?.visible ||
+        (material.transparent && material.opacity === 0)
+      )
+        continue;
+      if (hit.distance < distance) {
+        nearest = entry;
+        distance = hit.distance;
+      }
+      break;
+    }
+  }
+  intersections.length = 0;
+  return nearest;
+}
 
 export interface ModelInstanceLoader {
   loadInstance(url: string): Promise<THREE.Object3D>;
@@ -9,10 +90,13 @@ export interface ModelInstanceLoader {
 export interface AssetMount {
   readonly ready: Promise<"loaded" | "fallback">;
   readonly model?: THREE.Object3D | undefined;
+  /** The mounted fallback or fitted GLB wrapper, never both. */
+  readonly objectRoot: THREE.Object3D;
   dispose(): void;
 }
 
 export interface MountModelOptions {
+  readonly onRootChanged?: ((root: THREE.Object3D) => void) | undefined;
   readonly colorHex?: string | number | undefined;
   readonly skipIfUnavailable?: boolean | undefined;
   readonly isChestOpened?: boolean | undefined;
@@ -180,10 +264,12 @@ export function mountModelAsset(
   applyModelPlacement(fallback, placement);
   enableShadows(fallback);
   scene.add(fallback);
+  options?.onRootChanged?.(fallback);
 
   if (options?.skipIfUnavailable && !isModelAvailable(url)) {
     return {
       ready: Promise.resolve("fallback" as const),
+      objectRoot: fallback,
       dispose(): void {
         if (disposed) return;
         disposed = true;
@@ -217,6 +303,7 @@ export function mountModelAsset(
       disposeSceneObject(fallback);
       fallbackDisposed = true;
       scene.add(placed);
+      options?.onRootChanged?.(placed);
       onChange();
       return "loaded" as const;
     },
@@ -225,6 +312,9 @@ export function mountModelAsset(
 
   return {
     ready,
+    get objectRoot() {
+      return model ?? fallback;
+    },
     get model() {
       return model;
     },

@@ -2409,6 +2409,8 @@ body[data-mode="dev"] .status-strip {
 
 .auto-explore-toggle { display: flex; align-items: center; gap: 8px; padding-top: 10px; font-size: 12px; cursor: pointer; }
 .map-marker[hidden] { display: none !important; }
+.object-hover-tooltip { position: absolute; left: 0; top: 0; z-index: 20; padding: 6px 10px; border: 1px solid #46736a; border-radius: 6px; color: #e5fff5; background: #102720ed; font-size: 12px; max-width: 260px; pointer-events: none; }
+.object-hover-tooltip[hidden] { display: none; }
 
 .tile-panel { bottom: 24px; }
 @media (max-width: 640px) { .tile-panel { bottom: 16px; left: 12px; right: 12px; width: auto; max-width: none; } }
