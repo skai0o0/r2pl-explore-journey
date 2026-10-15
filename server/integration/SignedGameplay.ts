@@ -97,16 +97,19 @@ export class SignedGameplay {
   private fixture: SchoolPlayFixture;
   private draw: () => number;
   private readonly campaignProvider: CampaignProvider | undefined;
+  private readonly portalMode: boolean;
   constructor(
     pool: Pool,
     fixture: SchoolPlayFixture,
     draw: () => number = () => randomInt(GAME_CONFIG.rewards.weightTotal),
     campaignProvider: CampaignProvider | undefined = campaignProviderFromEnv(),
+    portalMode = false,
   ) {
     this.pool = pool;
     this.fixture = fixture;
     this.draw = draw;
-    this.campaignProvider = campaignProvider;
+    this.campaignProvider = portalMode ? undefined : campaignProvider;
+    this.portalMode = portalMode;
   }
   async tileAction(actor: SchoolPlayActor, index: number): Promise<TileAction> {
     if (
@@ -165,7 +168,7 @@ export class SignedGameplay {
       await settleShared(
         db,
         this.fixture.campaignId,
-        this.fixture.actors[0]!.actorId,
+        this.fixture.actors[0]?.actorId ?? this.fixture.campaignId,
         Date.now(),
       );
       await db.query("COMMIT");
@@ -447,7 +450,11 @@ export class SignedGameplay {
       await db.query("COMMIT");
       return {
         ruleVersion: 1,
-        runningMode: this.campaignProvider ? "http" : "synthetic",
+        runningMode: this.portalMode
+          ? "portal"
+          : this.campaignProvider
+            ? "http"
+            : "synthetic",
         crystals: balance("fixture-crystals"),
         treasureMaps: balance("fixture-treasure-map"),
         revealedTiles,
@@ -490,6 +497,13 @@ export class SignedGameplay {
         [this.fixture.campaignId, actor.actorId, actor.schoolSlot],
       );
       if (binding.rowCount !== 1) throw new TypeError("Unbound actor");
+      if (this.portalMode) {
+        const member = await db.query(
+          "SELECT 1 FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND actor_id=$2 AND school_slot=$3 AND active FOR SHARE",
+          [this.fixture.campaignId, actor.actorId, actor.schoolSlot],
+        );
+        if (!member.rowCount) throw new TypeError("Unbound actor");
+      }
       const inserted = await db.query(
         "INSERT INTO r2pl_v2.command_results(campaign_id,actor_id,command_key,payload_hash,status) VALUES($1,$2,$3,$4,'processing') ON CONFLICT DO NOTHING RETURNING 1",
         [this.fixture.campaignId, actor.actorId, key, hash],
@@ -583,6 +597,10 @@ export class SignedGameplay {
   ): Promise<GameReceipt> {
     const now = Date.now();
     if (c.action === "running") {
+      if (this.portalMode)
+        throw new RuleRejection(
+          "Thành tích chạy được đồng bộ từ web giải chạy",
+        );
       let delta: number;
       if (this.campaignProvider) {
         const identity = await this.campaignProvider.verifySession(a.token);

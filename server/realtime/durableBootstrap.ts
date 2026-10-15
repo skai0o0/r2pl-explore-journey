@@ -7,7 +7,7 @@ import type { ExploreBoundary } from "../persistence/ExploreBoundary.ts";
 import type { FaultHooks } from "../persistence/M3TestMutation.ts";
 import { M35FixtureAuthority } from "../persistence/M35FixtureAuthority.ts";
 import { DurableRealtimeCore } from "./DurableRealtimeCore.ts";
-import { createGatewayRoom } from "./GatewayRoom.ts";
+import { createGatewayRoom, type GatewayAuth } from "./GatewayRoom.ts";
 import { SyntheticAuth } from "./SyntheticAuth.ts";
 
 /** Separate test bootstrap; production mutation opcode remains disabled. */
@@ -21,6 +21,7 @@ export async function createDurableSyntheticServer(
   traceCorrelationIds?: ReadonlySet<string>,
   devExplore?: EvaluateDevExplore,
   boundary?: ExploreBoundary,
+  authenticatedGateway?: GatewayAuth,
 ): Promise<{
   readonly server: Server;
   readonly transport: WebSocketTransport;
@@ -39,7 +40,7 @@ export async function createDurableSyntheticServer(
   const core = new DurableRealtimeCore(authority, {
     ...(traceCorrelationIds ? { traceCorrelationIds } : {}),
   });
-  const auth = new SyntheticAuth(registry, fixtures);
+  const auth = authenticatedGateway ?? new SyntheticAuth(registry, fixtures);
   const transport = new WebSocketTransport();
   const server = new Server({
     transport,

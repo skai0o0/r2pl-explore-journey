@@ -1,5 +1,134 @@
 # Chạy R2PL G-V1 đầy đủ — ruleVersion = 1
 
+## Bàn giao tích hợp web giải chạy — Partner API v1
+
+Game cung cấp sẵn cổng tích hợp. Web tổng đăng nhập sinh viên bằng email edu, xác minh trường và nhận các hoạt động **được chấp nhận** từ vRace. Web tổng gửi danh tính và snapshot tổng quãng đường hợp lệ **trong chiến dịch** vào game; không gửi mật khẩu/email, số điểm tùy ý hoặc quyền quản trị. Không cần game gọi trực tiếp vRace. Bộ kết nối HTTP pull cũ vẫn phục vụ dev; luồng portal mới dùng API push bên dưới và không bật tài khoản giả lập.
+
+**File gửi webdev:** `integration/openapi.json` (OpenAPI 3.1, import vào Postman/Swagger), `integration/partner-client.mjs` (SDK Node server độc lập, không cần dependencies), và phần hướng dẫn này. Khi server chạy, tải contract tại `/api/partner/v1/openapi.json`. Webdev dùng ngôn ngữ khác có thể triển khai theo JSON contract và thuật toán ký bên dưới.
+
+```text
+vRace -> backend web giải chạy -> API game -> PostgreSQL / ví / gameplay
+                 |                   |
+          email edu + BXH       đăng nhập game + Three.js
+```
+
+Trách nhiệm web tổng: xác thực email edu và quyền tham dự; map mã trường sang `hcmut`, `hcmcou`, `dtu`, `dhhp`, `hsu`, `huce`, `ntu`, `hcmiu`; loại hoạt động gian lận/ngoài giải; duy trì stable `externalStudentId`; xếp hạng chạy. Game không đoán trường từ email và không tự công nhận số km do trình duyệt gửi. Portal phải chỉ provision sinh viên đủ điều kiện; `eduVerified: true` là lời xác nhận có chữ ký từ backend đối tác, không phải cơ chế tự kiểm chứng email của game.
+
+Trách nhiệm game: tài khoản/phiên chơi, mapping trường bất biến, quy đổi ruleVersion 1 **1 km = 10 Points**, số dư có thể tiêu, ledger, thưởng, bản đồ và BXH Knowledge. Hai trường điểm được tách rõ:
+
+- `earnedRunningPoints`: tổng Points từ quãng đường chạy được công nhận; dùng cho BXH chạy. Tiêu điểm trong game không làm giảm giá trị này. Thưởng trong game không làm tăng BXH chạy.
+- `spendablePoints`: số dư thực tế dùng chơi game, sau đồng bộ chạy, thưởng và các khoản đã tiêu. Không ghi đè số dư bằng tổng điểm chạy.
+
+Ví dụ: 1.500 m -> 15 Points; mở một ô tốn 1 -> BXH chạy vẫn 15, ví game còn 14. Snapshot 2.000 m ở revision mới chỉ cộng thêm 5 -> ví 19. Tổng quãng đường được giữ trước khi làm tròn nên nhiều lần chạy ngắn không mất phần lẻ.
+
+### Các API đối tác triển khai
+
+| API, đều POST JSON server-to-server | Nội dung |
+| --- | --- |
+| `/api/partner/v1/members` | `{externalStudentId, schoolId, displayName, eduVerified:true, active:true}`; lặp lại không reset ví. `active:false` thu hồi đăng nhập. Đổi trường yêu cầu xử lý riêng, không tự chuyển Knowledge. |
+| `/api/partner/v1/running` | `{externalStudentId, revision, cumulativeMeters, weeklyMeters, observedAtMs, weekStartMs}`; các số quãng đường/revision là chuỗi decimal. |
+| `/api/partner/v1/accounts` | `{externalStudentId}` -> tổng điểm chạy, ví còn lại, tổng mét và revision mới nhất, chỉ dành cho backend. |
+| `/api/partner/v1/launches` | `{externalStudentId, codeChallenge}` -> link đăng nhập game một lần, hạn 60 giây. |
+
+`revision` tăng theo từng sinh viên/chiến dịch, bắt đầu từ `"1"`. `cumulativeMeters` là tổng mét được công nhận trong giải, **không phải delta của một hoạt động, không phải tổng lifetime vRace**. `weeklyMeters` dùng tuần bắt đầu thứ Hai 00:00 Asia/Ho_Chi_Minh. `observedAtMs` là thời điểm portal tạo snapshot hiện tại, không phải thời điểm chạy gần nhất; lệch tối đa 5 phút so với server. Cập nhật tuần mới cũng tăng revision.
+
+Lưu snapshot vào outbox/job queue bền vững trên web tổng trước khi gửi. Khi timeout/mạng lỗi, gửi lại **đúng nguyên snapshot**, gồm cả observedAtMs, với nonce/chữ ký HTTP mới. Cùng revision + payload giống hệt trả biên nhận cũ, không cộng lại. Cùng revision khác payload -> `409 REVISION_CONFLICT`; revision thấp chưa từng nhận -> `409 STALE_REVISION`. Biên nhận đã commit có thể replay kể cả sau khi hết freshness. Số dư trong biên nhận là tại thời điểm commit; dùng `accounts` để lấy số dư hiện tại.
+
+Khi vRace sửa/hủy một hoạt động: gửi tổng hợp đã điều chỉnh ở revision cao hơn. Game trừ phần chênh lệch nếu ví đủ. Nếu khoản cần thu hồi đã được tiêu, trả `409 CORRECTION_REQUIRES_REVIEW`, không sửa checkpoint hay ví và không tự tạo số dư âm. BTC phải xử lý đối soát trước khi retry; không tự tăng revision để bỏ qua lỗi. Thay tỷ lệ quy đổi giữa giải cũng cần đối soát/rebase riêng.
+
+### Chữ ký và ví dụ Node backend
+
+Mỗi môi trường/chiến dịch được cấp origin, campaign UUID, key ID và secret riêng qua kênh kín. Secret chỉ ở backend hai bên. Có thể giữ đồng thời key cũ/mới trong `PORTAL_KEYS_JSON` khi rotate, sau khi web tổng chuyển xong thì gỡ key cũ và restart game. Không gửi secret/token qua email công khai hoặc log.
+
+HTTP headers: `Content-Type: application/json`, `X-R2PL-Campaign`, `X-R2PL-Key-Id`, `X-R2PL-Timestamp` (Unix milliseconds dạng chuỗi 13 chữ số), `X-R2PL-Nonce` (random base64url 16–128 ký tự), `X-R2PL-Signature`.
+
+Canonical message gồm **7 dòng UTF-8**, nối bằng LF, không có LF cuối:
+
+```text
+r2pl-v1
+<campaign UUID>
+POST
+<exact path, ví dụ /api/partner/v1/running>
+<timestamp milliseconds>
+<nonce>
+<lowercase hex SHA256 của nguyên byte JSON body>
+```
+
+Signature = lowercase hex HMAC-SHA256(canonical message, partner secret). Ký xong không serialize lại body. Đây là protocol HMAC riêng, không tự nhận tương thích OAuth hoặc HTTP Message Signatures. Campaign và request path được ký để chống dùng nhầm chữ ký sang chiến dịch/endpoint khác. Server giữ nonce trong PostgreSQL để chống replay qua restart/nhiều process. Hạn 300 request/phút/key/chiến dịch; JSON tối đa 16 KiB. Đồng bộ NTP hai bên. Retry 429/503/network với exponential backoff có giới hạn; 429 có `Retry-After: 60`. Các 4xx khác cần sửa dữ liệu/quyền trước. `requestId` trong lỗi dùng để đối chiếu; không log body xác thực, ticket hay Authorization.
+
+```javascript
+import { R2plPartnerClient } from './partner-client.mjs';
+const game = new R2plPartnerClient({
+  origin: process.env.R2PL_GAME_ORIGIN,
+  campaignId: process.env.R2PL_CAMPAIGN_ID,
+  keyId: process.env.R2PL_KEY_ID,
+  secret: process.env.R2PL_PARTNER_SECRET,
+});
+await game.request('members', {
+  externalStudentId: verifiedStudent.id, // lấy từ phiên server đã xác thực
+  schoolId: approvedSchoolMapping[verifiedStudent.schoolId],
+  displayName: verifiedStudent.displayName,
+  eduVerified: true, active: true,
+});
+const receipt = await game.request('running', durableSnapshot);
+// receipt.earnedRunningPoints -> BXH chạy; receipt.spendablePoints -> ví game
+```
+
+### Đăng nhập từ landing page sang game
+
+1. Nút **Chơi game** trên landing page mở `<PUBLIC_ORIGIN>/?entry=portal` trong cùng tab. Game luôn bắt đầu handoff mới từ phiên portal hiện tại để đổi tài khoản đúng; mở game trực tiếp khi chưa có phiên sẽ hiện màn hình **Đăng nhập qua web giải chạy**.
+2. Khi bấm nút, game sinh verifier ngẫu nhiên trong sessionStorage và chuyển trình duyệt đến `PORTAL_LOGIN_URL` kèm `game_campaign`, `game_challenge` (base64url SHA256 verifier, không padding) và `game_return`.
+3. Portal đăng nhập/kiểm tra phiên sinh viên; kiểm tra campaign và `game_return` khớp **chính xác URL game đã đăng ký**, không redirect tới URL tùy ý. Gọi `members` nếu cần, rồi gọi `launches` từ backend với sinh viên của phiên hiện tại và challenge nhận được. Không nhận ID sinh viên từ query làm danh tính.
+4. Portal trả HTTP **303** tới `launchUrl` do game trả về, trên cùng tab. Không chuyển ticket qua query string, iframe hoặc postMessage.
+5. Game xóa fragment khỏi thanh địa chỉ và POST ticket + verifier đến `/api/portal/session` từ đúng Origin. Ticket được tiêu một lần, lưu hash server-side. Session game hạn 1 giờ trong cookie HttpOnly, SameSite=Lax, Path=/; Production dùng Secure và tên `__Host-r2pl_game`. Response chỉ có thời hạn, không trả session token cho JavaScript. sessionStorage chỉ giữ verifier tạm trong lúc handoff.
+6. Bootstrap trả `csrfToken`; mọi POST đã đăng nhập cần đúng Origin và header `X-CSRF-Token`. Trước mỗi lần join Colyseus, client POST `/api/portal/ws-ticket` để lấy vé một lần hạn 60 giây; session cookie không đi trong payload join. Đăng xuất thu hồi session và socket; hết hạn thì đăng nhập lại. Portal dùng `members active:false` để khóa sinh viên khỏi chiến dịch. Đây là luồng handoff riêng có proof key, không phải OAuth đầy đủ.
+
+Màn hình tải phản ánh các mốc xác thực, hồ sơ/ví, cảnh 3D và snapshot bản đồ. Khi đủ profile, kết nối realtime và vùng bản đồ ban đầu, game mới mở tương tác; lỗi có nút thử lại. HUD hiển thị tên sinh viên/trường; bấm tên để xem điểm chạy tích lũy và điểm còn lại.
+
+Sinh viên chỉ nhận bootstrap của chính mình; không có menu chọn tài khoản người khác hoặc tài khoản dev. Ví khởi tạo **0 Points, 0 Crystal, 0 Keys**. Chạy giả lập và bot bị tắt trong portal mode. Shared Knowledge/rewards/gameplay hiện tại dùng cùng ví được API nạp; tên nội bộ `fixture-credit` và bridge `r2pl_prep.running_bindings` được giữ để tương thích schema hiện có, không cấp tiền giả trong portal campaign.
+
+### Chạy sandbox để webdev thử ngay
+
+Trong PowerShell ở thư mục repo (Node 22.12+, PostgreSQL đang chạy):
+
+```powershell
+npm ci
+Copy-Item .env.portal.example .env.portal
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Sửa `.env.portal`: đặt DATABASE_URL đúng database **test** của máy; tạo **hai secret độc lập** bằng lệnh trên cho `PORTAL_KEYS_JSON` và `ADMIN_KEY`. Các giá trị `REPLACE_...` bị server từ chối. Nếu game dev đang giữ cổng 4176/2568, dừng bằng Ctrl+C hoặc đổi PORT/WS_PORT cùng PUBLIC_ORIGIN/PUBLIC_WEBSOCKET_URL. File `.env.portal` được Git ignore; không commit secret.
+
+```powershell
+npm run migrate:portal
+npm run build
+npm run start:portal
+```
+
+Mở cửa sổ PowerShell thứ hai, cùng thư mục:
+
+```powershell
+npm run demo:portal
+```
+
+Mở portal theo origin của PORTAL_LOGIN_URL (mặc định http://127.0.0.1:4180/), chọn **Tạo tài khoản**, nhập tên, email kiểm thử, trường và mật khẩu riêng cho sandbox (tối thiểu 10 ký tự). Không dùng mật khẩu thật. Edu verification ở đây chỉ được mô phỏng. Sinh viên mới bắt đầu từ **0**, không tự nạp km/Points.
+
+Trong dashboard, **Thêm hoạt động & đồng bộ**, ví dụ 1,5 km → 15 Điểm. Xem lịch sử, trạng thái đồng bộ, BXH chạy và số dư game rồi bấm **Chơi game**. Nếu game tạm tắt, hoạt động/job vẫn được lưu PostgreSQL và retry khi game trở lại; có nút thử lại. Reload/restart/đăng nhập lại giữ tài khoản và lịch sử, không cộng trùng. Đăng xuất portal để tạo sinh viên thứ hai; mỗi sinh viên có ví và hoạt động riêng. Đăng xuất game và portal là hai phiên riêng.
+
+Trong game, **Tìm ô để mở** chọn một ô chưa sở hữu chung cạnh với Tri thức trường mình, ưu tiên hướng công trình tiếp theo; bấm **Khám Phá Ô Này** để xác nhận tiêu Điểm. Bấm HQ/ô đã sở hữu sẽ hiện **Đã mở · 0 Points** và không tiêu thêm. Game tự làm mới ví mỗi 5 giây khi đang xem, khi quay lại tab hoặc khi bấm **Cập nhật Điểm**. Cổng synthetic `4176` và campaign portal là hai thế giới/tài khoản riêng; số dư giả lập không chuyển vào tài khoản portal.
+
+Dummy portal dùng schema `r2pl_dummy`, cookie HttpOnly, password hash scrypt có salt và hàng đợi có lease/retry; mọi đồng bộ game đi qua Partner API v1 có chữ ký, không ghi trực tiếp ví game. `npm run build` build cả game lẫn portal. Demo từ chối chạy ở Production hoặc host ngoài loopback; không dùng thay hệ thống edu/vRace thật. `play:schools` vẫn chạy độc lập cho test gameplay.
+
+Nghiệm thu portal/student entry: **172/172 test PASS, 0 fail, 0 skip** khi đặt cả hai biến PostgreSQL test ở phần kiểm thử; strict TypeScript và build game/portal PASS. Các test mới bao phủ tài khoản riêng, giữ dữ liệu qua restart, đồng bộ khi game offline, chống cộng trùng, PKCE, HttpOnly/CSRF, socket ticket một lần và ví sau khi tiêu Điểm. [Portal desktop](artifacts/portal/student-portal-desktop.jpg), [mobile](artifacts/portal/student-portal-mobile.jpg), [đăng nhập game](artifacts/portal/game-login.jpg).
+
+### Triển khai Production và phần cần trao đổi với webdev
+
+Chạy `migrate:portal` bằng tài khoản triển khai trên database dành riêng cho game; migration có checksum, chạy lại không reset dữ liệu. Dùng một campaign UUID riêng, không tái sử dụng campaign synthetic. Seed world theo layout đã duyệt; campaign được giữ qua restart. Startup hiện vẫn cần quyền DDL cho schema/world initialization của engine; chưa tách hoàn toàn deployment role khỏi runtime role.
+
+Đặt `PORTAL_MODE=production`; HTTPS cho PUBLIC_ORIGIN/PORTAL_LOGIN_URL và WSS cho PUBLIC_WEBSOCKET_URL, ADMIN_KEY/partner key thật. Server chỉ bind loopback; reverse proxy TLS công khai HTTP và WebSocket/Colyseus, bao gồm HTTP matchmaking và WebSocket upgrades, tới đúng cổng. Không tắt TLS verification của PostgreSQL. Proxy phải giữ Cookie/Origin và các header HMAC/CSRF, đặt giới hạn body/timeouts và không log cookie/token/ticket. Áp dụng CSP phù hợp client, không nhúng script bên thứ ba trên origin game. `/health` kiểm tra được DB. Bảo đảm backup/restore PostgreSQL, theo dõi lỗi 409/503, ledger và backlog outbox trước khi mở chiến dịch. Launcher hiện giữ **một game writer cho mỗi campaign**; chạy nhiều game instance sẽ bị từ chối. Không xem kết quả sandbox là chứng nhận chịu tải hay production readiness.
+
+Webdev chỉ cần chốt với mình: domain game/portal và endpoint đăng nhập; stable student/campaign IDs; mapping 8 trường; tiêu chí km hợp lệ và phạm vi thời gian giải; lịch push/retry; dữ liệu BXH tổng/trường; quy trình khóa sinh viên và sửa km sau đối soát. Không cần chờ tài liệu vRace để bắt đầu nối sandbox. Khi có tài liệu thật, giữ API v1 này và viết adapter ở backend web tổng. Các điều khoản campaign/anti-cheat, hệ thống edu thật, credential vRace và hosting/TLS chưa được xác minh bằng sandbox này.
+
 Bản G-V1 local/dev đã nghiệm thu **PV01–PV18: 18/18 FULL**, với 8 trường HCMUT, HCMCOU, DTU, DHHP, HSU, HUCE, NTU, HCMIU. Gameplay gồm Shared Knowledge/upkeep/consolidation, Landmark/puzzle/Beacon, UniStop 3 cấp, Treasure Map/Chest/Key/carousel, Running/Gift staging, leaderboard, notifications và Admin Map Editor.
 
 Commit mã nguồn nghiệm thu Phase 3: **`b05e456`**; sửa GLB/procedural Z-Up: **`b743257`**. Bộ test đầy đủ: **142/142 PASS, 0 fail, 0 skip** khi bật PostgreSQL fixtures; build PASS. Commit cập nhật tài liệu xem `git log -1 --oneline`.

@@ -1,6 +1,7 @@
 import type { SchoolRegistry } from "../../shared/world/registry.ts";
 
 export interface SyntheticIdentity {
+  readonly authReference?: string;
   readonly actorId: string;
   readonly schoolSlot: number;
 }

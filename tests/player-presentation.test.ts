@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   campaignDisplayText,
+  findExpansionTile,
   footprintDiscovered,
   layoutMapLabels,
   objectDisplayName,
@@ -13,6 +14,59 @@ import {
   encodeExplore,
 } from "../shared/protocol/m2.ts";
 import { ProjectionReplica } from "../shared/protocol/replica.ts";
+
+test("expansion guide uses loaded own-school edges across seams and excludes protected HQs", () => {
+  const replica = new ProjectionReplica(0);
+  const mask = new Uint8Array(8192);
+  new DataView(mask.buffer).setUint16((10 * 64 + 63) * 2, 1, true);
+  replica.applySnapshot({
+    chunkId: 0,
+    viewRevision: 0n,
+    mask,
+    fog: new Uint8Array(512),
+  });
+  const target = { x: 64, z: 10 };
+  assert.notEqual(
+    findExpansionTile(replica, [0], 0, [], target),
+    10064,
+    "unloaded next chunk is not treated as empty",
+  );
+  replica.applySnapshot({
+    chunkId: 1,
+    viewRevision: 0n,
+    mask: new Uint8Array(8192),
+    fog: new Uint8Array(512),
+  });
+  assert.equal(findExpansionTile(replica, [0, 1], 0, [], target), 10064);
+  assert.notEqual(
+    findExpansionTile(
+      replica,
+      [0, 1],
+      0,
+      [{ schoolSlot: 1, x: 64, z: 10, size: 1 }],
+      target,
+    ),
+    10064,
+  );
+  replica.applyDelta({
+    chunkId: 1,
+    localIndex: 10 * 64,
+    baseRevision: 0n,
+    nextRevision: 1n,
+    mask: 1,
+    discovered: true,
+  });
+  assert.notEqual(
+    findExpansionTile(replica, [0, 1], 0, [], target),
+    10064,
+    "already-owned tile cannot be offered again",
+  );
+  assert.equal(
+    findExpansionTile(replica, [0, 1], 1, [], target),
+    undefined,
+    "another school's knowledge cannot be reused",
+  );
+});
 
 test("player mode is default and operator modes require explicit entry", () => {
   assert.equal(uiModeFromSearch(""), "player");

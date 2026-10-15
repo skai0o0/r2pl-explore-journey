@@ -1,0 +1,186 @@
+.journey-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(ellipse at 90% 50%, #1c493e 0, transparent 55%), #0b1b20;
+  color: #eff6ef;
+  font-family: system-ui;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.boot-card {
+  position: relative;
+  width: min(100%, 1040px);
+  padding: 36px 0;
+}
+.boot-brand {
+  font-size: 40px;
+  font-weight: 1000;
+  color: #d5fa83;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.boot-brand span {
+  font-size: 24px;
+  align-self: flex-end;
+}
+.boot-brand small {
+  margin-left: 20px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #dbe8db;
+}
+.boot-content {
+  max-width: 660px;
+  padding: 64px 0 54px;
+}
+.boot-content h1 {
+  font-size: clamp(36px, 6vw, 76px);
+  line-height: 1.06;
+  letter-spacing: -3px;
+  margin: 20px 0 26px;
+}
+.boot-kicker {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #d5fa83;
+}
+.boot-note {
+  max-width: 460px;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #b4c7c2;
+  margin: 0 0 28px;
+}
+.boot-primary {
+  border: 0;
+  border-radius: 12px;
+  background: #d5fa83;
+  color: #142522;
+  padding: 18px 24px;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.boot-primary:hover {
+  transform: translateY(-2px);
+}
+.boot-primary:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.boot-secondary {
+  display: block;
+  margin-top: 20px;
+  color: #dceadf;
+  font-size: 13px;
+}
+.boot-how {
+  color: #8da69f;
+  font-size: 11px;
+  line-height: 2;
+  margin-top: 38px;
+}
+.boot-card footer {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #7e9d92;
+  border-top: 1px solid #ffffff18;
+  padding-top: 24px;
+}
+.boot-orbit {
+  position: fixed;
+  right: -180px;
+  top: 8%;
+  width: 740px;
+  height: 740px;
+  transform: rotate(-24deg);
+  pointer-events: none;
+  opacity: 0.3;
+}
+.boot-orbit span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid #c0ef8d;
+  border-radius: 44%;
+}
+.boot-orbit span:nth-child(2) {
+  inset: 64px;
+}
+.boot-orbit span:nth-child(3) {
+  inset: 128px;
+  background: radial-gradient(circle, #a3de7730, transparent);
+}
+.boot-stages {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  color: #718b83;
+}
+.boot-stages li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+.boot-stages li:before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+}
+.boot-stages li[data-state="active"] {
+  color: #e1fcad;
+}
+.boot-stages li[data-state="active"]:before {
+  background: #d5fa83;
+  animation: bootPulse 1s infinite alternate;
+}
+.boot-stages li[data-state="done"] {
+  color: #b0c2b9;
+}
+.boot-stages li[data-state="done"]:before {
+  background: #75bca0;
+  border-color: #75bca0;
+}
+@keyframes bootPulse {
+  to {
+    opacity: 0.3;
+  }
+}
+@media (max-width: 600px) {
+  .journey-boot {
+    padding: 24px;
+  }
+  .boot-card {
+    padding: 16px 0;
+  }
+  .boot-content {
+    padding: 48px 0 30px;
+  }
+  .boot-content h1 {
+    letter-spacing: -1.5px;
+  }
+  .boot-primary {
+    width: 100%;
+  }
+  .boot-brand small {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .boot-orbit {
+    right: -560px;
+  }
+  .boot-how {
+    max-width: 240px;
+  }
+}

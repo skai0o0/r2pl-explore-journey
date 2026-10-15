@@ -13,6 +13,6 @@
     }
   },
   "files": {
-    "includes": ["shared/**", "server/**", "client/**", "tests/**", "scripts/**", "!**/node_modules/**"]
+    "includes": ["portal/**", "shared/**", "server/**", "client/**", "tests/**", "scripts/**", "!**/node_modules/**"]
   }
 }

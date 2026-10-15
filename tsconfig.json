@@ -14,6 +14,6 @@
     "skipLibCheck": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["client/src/**/*.ts", "server/**/*.ts", "shared/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
+  "include": ["portal/**/*.ts", "client/src/**/*.ts", "server/**/*.ts", "shared/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["land-rush-prototype", "dist", "node_modules"]
 }

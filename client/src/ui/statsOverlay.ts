@@ -14,6 +14,7 @@ export interface StudentStats {
   studentName: string;
   studentEmail?: string | undefined;
   displayName?: string | undefined;
+  earnedRunningPoints?: number;
   schoolId: string;
   schoolName: string;
   schoolColor: string;
@@ -55,6 +56,8 @@ export class StatsOverlay {
 
   public onFlyToHQRequested?: () => void;
   public onInventoryRequested?: () => void;
+  public onExploreRequested?: () => void;
+  public onWalletRefreshRequested?: () => void;
   public onSchoolChange?: (schoolId: string) => void;
 
   constructor(parent?: HTMLElement, initialStats?: Partial<StudentStats>) {
@@ -70,7 +73,7 @@ export class StatsOverlay {
       schoolId: "hcmut",
       schoolName: defaultSchool?.name || "HCMUT",
       schoolColor: defaultSchool?.colorHex || "#0062FF",
-      points: 500,
+      points: 0,
       crystals: 0,
       aspireKeys: 0,
       nitroKeys: 0,
@@ -368,6 +371,7 @@ export class StatsOverlay {
       ? document.activeElement?.id
       : undefined;
     this.element.innerHTML = `
+      <button class="hud-student" id="btnStudentProfile" aria-label="Xem hồ sơ sinh viên"><span class="student-avatar" aria-hidden="true"></span><span><small>SINH VIÊN</small><strong class="student-display-name"></strong></span><span aria-hidden="true">›</span></button>
       <button class="hud-identity" id="btnFlyHQ" title="Về trụ sở (H)" aria-label="Về trụ sở">
         <span class="hud-home-icon" aria-hidden="true">⌂</span>
         <span class="school-pill" style="--school-color:${this.stats.schoolColor}">
@@ -384,10 +388,12 @@ export class StatsOverlay {
         <div class="stat-exploration"><span class="stat-label">Khám phá</span><span class="stat-value">${(this.stats.explorationPercentage || 0).toFixed(2)}% <small class="exploration-sub">(${(this.stats.revealedTilesCount || 0).toLocaleString()} ô)</small></span><progress class="hud-exploration-meter" max="100" value="${this.stats.explorationPercentage || 0}" aria-label="Tiến độ khám phá"></progress></div>
         <button class="stat-school-rank" id="btnSchoolRankPopover" aria-label="Xem bảng xếp hạng" aria-expanded="${this.showRankingPopover}">${Icons.trophy(18)}<span id="stat-school-rank-text">${this.getSchoolRankText()}</span><span aria-hidden="true">›</span></button>
       </div>
+      <div class="hud-play-actions"><button id="btnFindExpansion" title="Chọn ô chưa mở sát Tri thức trường mình; bạn xác nhận trước khi tiêu Điểm">Tìm ô để mở ↗</button><button id="btnRefreshWallet" title="Lấy số dư mới nhất từ máy chủ">Cập nhật Điểm ↻</button></div>
       <button id="btnHudMenu" class="hud-menu-toggle" aria-label="Menu thông tin" aria-expanded="${this.showMenu}" aria-controls="hud-secondary-menu">☰</button>
       <section id="hud-secondary-menu" class="hud-secondary-menu" ${this.showMenu ? "" : "hidden"} aria-label="Thông tin thêm">
         <header><strong>Hành trình khám phá</strong><button id="btnHudMenuClose" class="hud-menu-close" aria-label="Đóng menu">×</button></header>
         <p class="hud-player-name"></p>
+        <p>Điểm chạy tích lũy <strong>${(this.stats.earnedRunningPoints ?? 0).toLocaleString()}</strong> · Điểm còn lại <strong>${this.stats.points.toLocaleString()}</strong></p>
         <div class="stat-beacons">Đèn hiệu đã thắp <strong class="stat-value">${this.stats.litLandmarksCount || 0} công trình</strong></div><div class="active-buffs">${this.stats.buffs?.map((b) => `<p>◆ ${b.name}: ${b.description}</p>`).join("") ?? ""}</div>
         <div>Đã khám phá <strong>${this.stats.revealedTilesCount ?? 0} ô</strong></div><p>Chìa Khóa: Aspire ${this.stats.aspireKeys ?? 0} · Nitro ${this.stats.nitroKeys ?? 0} · Predator ${this.stats.predatorKeys ?? 0}</p>
         <p class="hud-menu-hint">Chạm tên trường để về trụ sở. Chạm bản đồ để tương tác với ô tri thức.</p>
@@ -398,6 +404,16 @@ export class StatsOverlay {
       </section>`;
     this.element.querySelector(".hud-player-name")!.textContent =
       this.stats.displayName || this.stats.studentName;
+    const studentName = this.stats.displayName || this.stats.studentName;
+    const nameElement = this.element.querySelector<HTMLElement>(
+      ".student-display-name",
+    )!;
+    nameElement.textContent = studentName;
+    nameElement.title = studentName;
+    this.element.querySelector(".student-avatar")!.textContent = studentName
+      .trim()
+      .slice(0, 1)
+      .toUpperCase();
     this.bindEvents();
     if (focusedId)
       this.element.querySelector<HTMLButtonElement>(`#${focusedId}`)?.focus();
@@ -410,6 +426,12 @@ export class StatsOverlay {
     this.element
       .querySelector("#btnFlyHQ")
       ?.addEventListener("click", () => this.onFlyToHQRequested?.());
+    this.element
+      .querySelector("#btnFindExpansion")
+      ?.addEventListener("click", () => this.onExploreRequested?.());
+    this.element
+      .querySelector("#btnRefreshWallet")
+      ?.addEventListener("click", () => this.onWalletRefreshRequested?.());
     const toggleRank = () => {
       this.showRankingPopover = !this.showRankingPopover;
       this.showMenu = false;
@@ -443,6 +465,9 @@ export class StatsOverlay {
       ?.addEventListener("click", toggleMenu);
     this.element
       .querySelector(".hud-menu-close")
+      ?.addEventListener("click", toggleMenu);
+    this.element
+      .querySelector("#btnStudentProfile")
       ?.addEventListener("click", toggleMenu);
   }
 }

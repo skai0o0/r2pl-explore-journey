@@ -10,3 +10,7 @@ land-rush-prototype/
 .m4b-local-db/
 .m26-worktree/
 .agent-worktrees/
+.env
+.env.*
+!.env.example
+!.env.portal.example

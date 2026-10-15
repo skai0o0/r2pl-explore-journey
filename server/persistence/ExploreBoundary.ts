@@ -21,6 +21,7 @@ import { schoolBit } from "../../shared/world/registry.ts";
 export interface ExploreBoundary {
   readonly headquarters: readonly HeadquartersArea[];
   readonly ruleVersion?: 1;
+  readonly requirePortalMember?: true;
 }
 const idFor = (tile: number): number => {
   const { chunkX, chunkZ } = chunkCoordinatesForIndex(tile);

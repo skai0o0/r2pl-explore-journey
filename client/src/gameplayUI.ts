@@ -15,6 +15,7 @@ import {
   LANDMARK_PUZZLES,
 } from "../../shared/gameplay/landmarkPuzzle.ts";
 import type { DevPlayer } from "../../shared/integration/devSession.ts";
+import { gameFetch } from "./gameHttp.ts";
 import { CarouselModal } from "./ui/carouselModal.ts";
 import { ChestModal } from "./ui/chestModal.ts";
 import { LandmarkModal } from "./ui/landmarkModal.ts";
@@ -261,7 +262,7 @@ export class GameplayUI {
       generation = this.generation;
     const request = ++this.refreshRequest;
     try {
-      const r = await fetch("/api/game", {
+      const r = await gameFetch("/api/game", {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -364,7 +365,7 @@ export class GameplayUI {
     }
     sessionStorage.setItem(storage, JSON.stringify(c));
     try {
-      const r = await fetch("/api/game", {
+      const r = await gameFetch("/api/game", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -609,8 +610,17 @@ export class GameplayUI {
         action: "running",
         ...(this.view?.runningMode === "http" ? {} : { amount: 1000 }),
       });
-    if (this.devMode || this.view?.runningMode === "http")
+    if (
+      this.view?.runningMode !== "portal" &&
+      (this.devMode || this.view?.runningMode === "http")
+    )
       content.append(running);
+    if (this.view?.runningMode === "portal") {
+      const note = document.createElement("p");
+      note.textContent =
+        "Thành tích và Điểm chạy được đồng bộ từ web giải chạy. Tiêu Điểm trong game không làm giảm điểm BXH chạy.";
+      content.append(note);
+    }
     const km = document.createElement("p");
     km.textContent = `Tuần này: ${this.view?.weeklyKm ?? 0} km`;
     content.append(km);

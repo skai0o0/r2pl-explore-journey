@@ -12,23 +12,41 @@ import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { DevAccountService } from "./DevAccountService.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
+import { seedPortalCampaign } from "./PortalCampaign.ts";
+import { type PortalConfig, validatePortalConfig } from "./PortalConfig.ts";
+import {
+  gameCookieName,
+  gameCsrf,
+  readCookie,
+  validGameCsrf,
+} from "./PortalCookies.ts";
+import { PortalHttp } from "./PortalHttp.ts";
+import { PortalStore } from "./PortalStore.ts";
 import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
 import { provisionSchoolRewards } from "./SchoolRewardFixture.ts";
 import { SchoolRewardHttp } from "./SchoolRewardHttp.ts";
 import { SignedGameplay } from "./SignedGameplay.ts";
 import { SignedOperator } from "./SignedOperator.ts";
 
+interface PlayServerOptions {
+  readonly rewardDraw?: () => number;
+  readonly campaignProvider?: CampaignProvider;
+  readonly actorsPerSchool?: number;
+  readonly portal?: PortalConfig;
+}
+
 /** One local dev writer per persistent campaign. Not distributed lease/fencing. */
 export async function createSchoolPlayServer(
   pool: Pool,
   ports: { web: number; websocket: number },
   campaignId = SCHOOL_PLAY_CAMPAIGN,
-  options: {
-    readonly rewardDraw?: () => number;
-    readonly campaignProvider?: CampaignProvider;
-    readonly actorsPerSchool?: number;
-  } = {},
+  options: PlayServerOptions = {},
 ): Promise<Awaited<ReturnType<typeof startSchoolPlayServer>>> {
+  if (options.portal) {
+    validatePortalConfig(options.portal);
+    if (campaignId !== options.portal.campaignId)
+      throw new Error("Portal campaign mismatch");
+  }
   const writer = await pool.connect();
   const key = `school-play:${campaignId}`;
   let acquired = false;
@@ -83,24 +101,23 @@ async function startSchoolPlayServer(
   pool: Pool,
   ports: { web: number; websocket: number },
   campaignId?: string,
-  options: {
-    readonly rewardDraw?: () => number;
-    readonly campaignProvider?: CampaignProvider;
-    readonly actorsPerSchool?: number;
-  } = {},
+  options: PlayServerOptions = {},
 ) {
-  const fixture = await seedSchoolPlay(
-    pool,
-    campaignId,
-    options.actorsPerSchool ?? 5,
-  );
-  await provisionSchoolRewards(pool, fixture);
+  const fixture = options.portal
+    ? await seedPortalCampaign(pool, options.portal)
+    : await seedSchoolPlay(pool, campaignId, options.actorsPerSchool ?? 5);
+  if (!options.portal) await provisionSchoolRewards(pool, fixture);
+  const portal = options.portal
+    ? new PortalStore(pool, options.portal)
+    : undefined;
+  const portalHttp = portal ? new PortalHttp(portal) : undefined;
   const rewardHttp = new SchoolRewardHttp(pool, fixture);
   const gameplay = new SignedGameplay(
     pool,
     fixture,
     options.rewardDraw,
     options.campaignProvider,
+    !!portal,
   );
   await gameplay.initialize();
   const accounts = new DevAccountService(
@@ -117,7 +134,32 @@ async function startSchoolPlayServer(
     {},
     undefined,
     undefined,
-    { headquarters: fixture.headquarters, ruleVersion: 1 },
+    {
+      headquarters: fixture.headquarters,
+      ruleVersion: 1,
+      ...(portal ? { requirePortalMember: true as const } : {}),
+    },
+    portal
+      ? {
+          revalidate: true,
+          authenticate: async (token) => {
+            const { actor, sessionHash } =
+              await portal.consumeSocketTicket(token);
+            return {
+              actorId: actor.actorId,
+              schoolSlot: actor.schoolSlot,
+              authReference: sessionHash,
+            };
+          },
+          validate: async (identity) => {
+            if (
+              !identity.authReference ||
+              !(await portal.authenticateHash(identity.authReference))
+            )
+              throw new Error("Session expired");
+          },
+        }
+      : undefined,
   );
   await realtime.server.listen(ports.websocket, "127.0.0.1");
   const address = realtime.transport.server?.address();
@@ -126,7 +168,7 @@ async function startSchoolPlayServer(
   const operator = new SignedOperator(
     pool,
     fixture,
-    process.env.ADMIN_KEY ?? "dev-map-admin",
+    options.portal?.adminKey ?? process.env.ADMIN_KEY ?? "dev-map-admin",
     () => realtime.core.resyncViews(),
   );
   const clientRoot = resolve(
@@ -149,6 +191,7 @@ async function startSchoolPlayServer(
   const web = createServer(async (request, response) => {
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("Referrer-Policy", "no-referrer");
     let url: URL;
     try {
       url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -157,11 +200,44 @@ async function startSchoolPlayServer(
       return;
     }
     const path = url.pathname;
-    const token = request.headers.authorization?.replace(/^Bearer /, "");
+    const token = options.portal
+      ? readCookie(request, gameCookieName(options.portal))
+      : request.headers.authorization?.replace(/^Bearer /, "");
+    if (portalHttp && (await portalHttp.handle(request, response, url, token)))
+      return;
+    let portalActor: Awaited<ReturnType<PortalStore["authenticate"]>>;
+    if (portal) {
+      try {
+        portalActor = await portal.authenticate(token);
+      } catch {
+        response.writeHead(503).end();
+        return;
+      }
+      if (path === "/api/fixture/bots") {
+        response.writeHead(404).end();
+        return;
+      }
+      if (
+        path === "/api/game" &&
+        request.method === "POST" &&
+        !validGameCsrf(request, options.portal!, token)
+      ) {
+        response.writeHead(403).end(JSON.stringify({ error: "CSRF_REJECTED" }));
+        return;
+      }
+    }
+    const actorForRequest = () =>
+      portal ? portalActor : gameplay.actor(token);
+    const expectedOrigin =
+      options.portal?.publicOrigin ?? `http://${request.headers.host}`;
     if (
       path === "/api/fixture/rewards" ||
       path === "/api/fixture/rewards/events"
     ) {
+      if (portal) {
+        response.writeHead(404).end();
+        return;
+      }
       await rewardHttp.handle(request, response, url, token);
       return;
     }
@@ -187,7 +263,7 @@ async function startSchoolPlayServer(
           return;
         }
         const origin = request.headers.origin;
-        if (origin && origin !== `http://${request.headers.host}`) {
+        if (origin && origin !== expectedOrigin) {
           response.writeHead(403).end();
           return;
         }
@@ -313,7 +389,7 @@ async function startSchoolPlayServer(
       return;
     }
     if (path === "/api/game") {
-      const actor = gameplay.actor(token);
+      const actor = actorForRequest();
       if (!actor) {
         response.writeHead(401).end();
         return;
@@ -329,7 +405,7 @@ async function startSchoolPlayServer(
           return;
         }
         const origin = request.headers.origin;
-        if (origin && origin !== `http://${request.headers.host}`) {
+        if (origin && origin !== expectedOrigin) {
           response.writeHead(403).end();
           return;
         }
@@ -381,7 +457,7 @@ async function startSchoolPlayServer(
     };
     try {
       if (path === "/api/game/tile") {
-        const actor = gameplay.actor(token);
+        const actor = actorForRequest();
         if (!actor) {
           response.writeHead(401).end();
           return;
@@ -399,9 +475,9 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/chests") {
-        const actor = fixture.actors.find(
-          (a) => a.token === token && a.role === "human",
-        );
+        const actor = portal
+          ? portalActor
+          : fixture.actors.find((a) => a.token === token && a.role === "human");
         if (!actor) {
           response.writeHead(401).end();
           return;
@@ -444,6 +520,36 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/bootstrap") {
+        if (portal) {
+          if (!portalActor) {
+            response.writeHead(401).end();
+            return;
+          }
+          const home = fixture.headquarters.find(
+            (h) => h.schoolSlot === portalActor.schoolSlot,
+          )!;
+          json({
+            mode: "portal",
+            fixtureOnly: false,
+            version: 1,
+            websocketPort: address.port,
+            websocketUrl: options.portal!.websocketUrl,
+            csrfToken: gameCsrf(token!),
+            players: [
+              {
+                token: portalActor.actorId,
+                label: portalActor.name,
+                schoolName: portalActor.schoolName,
+                slot: portalActor.schoolSlot,
+                home: { x: home.x + home.size / 2, z: home.z + home.size / 2 },
+              },
+            ],
+            campaignId: fixture.campaignId,
+            adjacentOnly: true,
+            headquarters: fixture.headquarters,
+          });
+          return;
+        }
         json({
           fixtureOnly: true,
           version: 1,
@@ -460,14 +566,36 @@ async function startSchoolPlayServer(
         path === "/api/fixture/receipts" ||
         path === "/api/fixture/bots"
       ) {
-        const profile = await accounts.profile(token);
+        const actorAccounts =
+          portal && portalActor
+            ? new DevAccountService(pool, fixture.campaignId, [portalActor])
+            : accounts;
+        const profile =
+          portal && !portalActor ? null : await actorAccounts.profile(token);
         if (!profile) {
           response.writeHead(401).end();
           return;
         }
-        if (path === "/api/fixture/me") json(profile);
-        else if (path === "/api/fixture/receipts")
-          json({ fixtureOnly: true, receipts: await accounts.receipts(token) });
+        if (path === "/api/fixture/me") {
+          const running =
+            portal && portalActor
+              ? (
+                  await pool.query<{ data: { attributedPoints?: number } }>(
+                    "SELECT data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='running' AND id=$2",
+                    [fixture.campaignId, portalActor.actorId],
+                  )
+                ).rows[0]?.data
+              : undefined;
+          json({
+            ...profile,
+            fixtureOnly: !portal,
+            earnedRunningPoints: String(running?.attributedPoints ?? 0),
+          });
+        } else if (path === "/api/fixture/receipts")
+          json({
+            fixtureOnly: !portal,
+            receipts: await actorAccounts.receipts(token),
+          });
         else
           json({
             fixtureOnly: true,
@@ -485,7 +613,14 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/health") {
-        json({ fixtureOnly: true, schools: 8, botStatus });
+        await pool.query("SELECT 1");
+        json({
+          mode: portal ? options.portal!.mode : "synthetic",
+          contractVersion: 1,
+          fixtureOnly: !portal,
+          schools: 8,
+          botStatus,
+        });
         return;
       }
       const file = resolve(
@@ -547,6 +682,7 @@ async function startSchoolPlayServer(
   if (!webAddress || typeof webAddress === "string")
     throw new Error("Missing HTTP address");
   const startBots = (durationSeconds = 600): Promise<void> => {
+    if (portal) throw new Error("Bots are disabled in portal campaigns");
     if (botTask) throw new Error("Bots already started");
     if (
       !Number.isFinite(durationSeconds) ||

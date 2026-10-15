@@ -5,6 +5,34 @@ on:
   pull_request:
 
 jobs:
+  portal-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: r2pl_prep_test_portal_ci
+          POSTGRES_USER: r2pl_portal_ci
+          POSTGRES_PASSWORD: portal_ci_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U r2pl_portal_ci -d r2pl_prep_test_portal_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      R2PL_PREPARATION_DATABASE_URL: postgresql://r2pl_portal_ci:portal_ci_disposable@localhost:5432/r2pl_prep_test_portal_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:portal
+      - run: npm run test:portal
+
   verify:
     strategy:
       matrix:
@@ -21,6 +49,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build:client
+      - run: npm run build:portal
       - run: npm run report:size
 
   postgres-integration:

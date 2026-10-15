@@ -1,9 +1,66 @@
 import {
+  edgeNeighbors,
+  type HeadquartersArea,
+  headquartersOwner,
+} from "../../../shared/gameplay/expansion.ts";
+import {
   GAME_CONFIG,
   type WorldObject,
 } from "../../../shared/gameplay/gameConfig.ts";
 import type { ProjectionReplica } from "../../../shared/protocol/replica.ts";
-import { chunkId, localIndex } from "../../../shared/world/coordinates.ts";
+import {
+  chunkCoordinatesForId,
+  chunkId,
+  localIndex,
+  tileCoordinates,
+} from "../../../shared/world/coordinates.ts";
+
+/** Select a loaded, non-owned edge using only this school's projected knowledge. */
+export function findExpansionTile(
+  replica: ProjectionReplica,
+  chunks: Iterable<number>,
+  slot: number,
+  headquarters: readonly HeadquartersArea[],
+  target: { x: number; z: number },
+): number | undefined {
+  let best: number | undefined,
+    distance = Infinity;
+  const owned = (index: number) => {
+    const { x, z } = tileCoordinates(index),
+      id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
+    return (
+      replica.hasChunk(id) &&
+      !!(replica.maskAt(id, localIndex(x, z)) & (1 << slot))
+    );
+  };
+  for (const id of chunks) {
+    if (!replica.hasChunk(id)) continue;
+    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+    for (let local = 0; local < 4096; local++) {
+      const x = chunkX * 64 + (local % 64),
+        z = chunkZ * 64 + Math.floor(local / 64);
+      if (x >= 1000 || z >= 1000 || !(replica.maskAt(id, local) & (1 << slot)))
+        continue;
+      for (const index of edgeNeighbors(z * 1000 + x)) {
+        const point = tileCoordinates(index),
+          otherId = chunkId(Math.floor(point.x / 64), Math.floor(point.z / 64));
+        const hq = headquartersOwner(index, headquarters);
+        if (
+          !replica.hasChunk(otherId) ||
+          owned(index) ||
+          (hq !== undefined && hq !== slot)
+        )
+          continue;
+        const score = (point.x - target.x) ** 2 + (point.z - target.z) ** 2;
+        if (score < distance || (score === distance && index < best!)) {
+          best = index;
+          distance = score;
+        }
+      }
+    }
+  }
+  return best;
+}
 
 export type UiMode = "player" | "dev" | "admin";
 export function uiModeFromSearch(search: string): UiMode {

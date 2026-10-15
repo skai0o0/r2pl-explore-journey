@@ -1,6 +1,13 @@
 import { type Client, Room } from "@colyseus/core";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import type { OutboundSink } from "./OutboundQueue.ts";
-import type { SyntheticAuth, SyntheticIdentity } from "./SyntheticAuth.ts";
+import type { SyntheticIdentity } from "./SyntheticAuth.ts";
+
+export interface GatewayAuth {
+  authenticate(token: unknown): SyntheticIdentity | Promise<SyntheticIdentity>;
+  readonly revalidate?: boolean;
+  validate?(identity: SyntheticIdentity): Promise<void>;
+}
 
 /** Thin Colyseus adapter for either explicit synthetic authority. */
 export interface GatewayCore {
@@ -13,18 +20,37 @@ export interface GatewayCore {
   removeSession(sessionId: string): void;
 }
 
-export function createGatewayRoom(core: GatewayCore, auth: SyntheticAuth) {
+export function createGatewayRoom(core: GatewayCore, auth: GatewayAuth) {
   return class GatewayRoom extends Room {
     onCreate(): void {
       this.maxClients = 2000;
       this.autoDispose = false;
-      this.onMessageBytes("m2", (client, bytes: Uint8Array) => {
-        void core.handle(client.sessionId, bytes);
-      });
+      if (!auth.revalidate)
+        this.onMessageBytes("m2", (client, bytes: Uint8Array) => {
+          void core.handle(client.sessionId, bytes);
+        });
+      if (auth.revalidate) {
+        this.onMessageBytes("m2", (client, bytes: Uint8Array) => {
+          void Promise.resolve(auth.validate!(client.auth as SyntheticIdentity))
+            .then(() => core.handle(client.sessionId, bytes))
+            .catch(() => client.leave(4001, "Session expired"));
+        });
+        this.clock.setInterval(() => {
+          for (const client of this.clients) {
+            void Promise.resolve(
+              auth.validate!(client.auth as SyntheticIdentity),
+            ).catch(() => client.leave(4001, "Session expired"));
+          }
+        }, GAME_CONFIG.integration.sessionRecheckMs);
+      }
     }
 
-    onAuth(_client: Client, options: { token?: unknown }): SyntheticIdentity {
-      return auth.authenticate(options?.token);
+    async onAuth(
+      _client: Client,
+      options: { token?: unknown },
+    ): Promise<SyntheticIdentity> {
+      const identity = await auth.authenticate(options?.token);
+      return identity;
     }
 
     onJoin(

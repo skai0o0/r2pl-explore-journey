@@ -318,6 +318,13 @@ export class M3TestMutationService {
           [`signed-game:${command.campaignId}`],
         );
       if (this.#boundary) {
+        if (this.#boundary.requirePortalMember) {
+          const member = await client.query(
+            "SELECT 1 FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND actor_id=$2 AND school_slot=$3 AND active FOR SHARE",
+            [command.campaignId, command.actorId, command.schoolSlot],
+          );
+          if (!member.rowCount) throw new Error("Unauthorized campaign member");
+        }
         if (campaign.rows[0].write_strategy !== "full_chunk")
           throw new Error("Expansion requires full-chunk persistence");
         await lockExploreNeighborhood(

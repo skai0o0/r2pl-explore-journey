@@ -32,12 +32,14 @@ import {
   localIndex,
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
+import { gameFetch } from "./gameHttp.ts";
 import { GameplayUI } from "./gameplayUI.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
 import { MiniMap } from "./ui/miniMap.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
 import {
+  findExpansionTile,
   objectDisplayName,
   uiModeFromSearch,
 } from "./ui/playerPresentation.ts";
@@ -52,28 +54,27 @@ import "./style.css";
 import {
   type DevPlayer,
   LEGACY_DEV_SESSION,
-  parseDevSession,
 } from "../../shared/integration/devSession.ts";
+import {
+  bootFailure,
+  completeStage,
+  finishBoot,
+  loadingStage,
+} from "./bootScreen.ts";
+import { loadGameSession } from "./portalSession.ts";
 
 // Codex-owned transport bootstrap contract; existing presentation stays intact.
-const bootstrapResponse = await fetch("/api/fixture/bootstrap", {
-  cache: "no-store",
-});
-const session =
-  bootstrapResponse.status === 404
-    ? LEGACY_DEV_SESSION
-    : parseDevSession(await bootstrapResponse.json());
-if (bootstrapResponse.status !== 404 && !bootstrapResponse.ok)
-  throw new Error("Synthetic session unavailable");
+const session = await loadGameSession();
 const publicWorld =
   session === LEGACY_DEV_SESSION
     ? []
     : (
-        (await (await fetch("/api/fixture/world")).json()) as {
+        (await (await gameFetch("/api/fixture/world")).json()) as {
           objects: WorldObject[];
         }
       ).objects;
 // Preload availability before WorldView synchronously chooses GLB or fallback.
+loadingStage(2);
 await fetchModelManifest();
 const miniMap = new MiniMap();
 miniMap.setObjects(publicWorld);
@@ -100,7 +101,8 @@ interface Profile {
   schoolSlot: number;
   balance: string;
   cost: string;
-  fixtureOnly: true;
+  fixtureOnly: boolean;
+  earnedRunningPoints?: string;
   inventory?: { crystals: string; keys: string };
 }
 
@@ -158,7 +160,9 @@ const ui = {
 };
 
 const sdk = new ColyseusSDK(
-  `ws://${location.hostname}:${session.websocketPort}`,
+  "websocketUrl" in session
+    ? session.websocketUrl
+    : `ws://${location.hostname}:${session.websocketPort}`,
 );
 let player: Player =
   players.find(
@@ -178,6 +182,17 @@ let profileBalance: string | undefined;
 let profileCost: string | undefined;
 let profileRequest = 0;
 const pending = new Map<string, PendingAction>();
+let bootComplete = false,
+  bootProfile = false;
+const bootChunks = new Set<number>();
+const loadedChunks = new Set<number>();
+function checkBoot(): void {
+  if (bootComplete || !bootProfile || !room || bootChunks.size) return;
+  bootComplete = true;
+  completeStage(3);
+  loadingStage(4);
+  requestAnimationFrame(() => requestAnimationFrame(() => finishBoot()));
+}
 let tileContext: TileAction | undefined;
 let contextSignature = "";
 let contextRequest = 0;
@@ -278,7 +293,7 @@ function requestTileContext(tile: PickedTile): void {
     };
     return;
   }
-  void fetch(`/api/game/tile?index=${tile.index}`, {
+  void gameFetch(`/api/game/tile?index=${tile.index}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: controller.signal,
   })
@@ -359,7 +374,7 @@ function updateTile(): void {
   }
   if (owned) {
     ui.knowledge.textContent =
-      "Ô này đã thuộc tri thức của trường bạn. Không mất Points.";
+      "Ô này đã mở. Bấm Tìm ô để mở hoặc chọn ô mới chung cạnh với Tri thức trường mình.";
     ui.explore.disabled = true;
     ui.explore.textContent = "Đã mở · 0 Points";
     return;
@@ -415,10 +430,16 @@ async function refreshProfile(token = player.token): Promise<void> {
   const attempt = generation;
   const request = ++profileRequest;
   try {
-    const response = await fetch("/api/fixture/me", {
+    const response = await gameFetch("/api/fixture/me", {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(GAME_CONFIG.integration.bootstrapTimeoutMs),
     });
+    if (response.status === 401 && !session.fixtureOnly) {
+      sessionStorage.removeItem("r2pl-portal-session");
+      location.reload();
+      return;
+    }
     if (!response.ok) throw new Error(`Profile ${response.status}`);
     const profile = (await response.json()) as Profile;
     if (
@@ -426,7 +447,7 @@ async function refreshProfile(token = player.token): Promise<void> {
       request !== profileRequest ||
       token !== player.token ||
       profile.schoolSlot !== player.slot ||
-      !profile.fixtureOnly
+      profile.fixtureOnly !== session.fixtureOnly
     )
       return;
     ui.school.textContent = profile.schoolName;
@@ -438,17 +459,25 @@ async function refreshProfile(token = player.token): Promise<void> {
     stats.updateStats({
       studentName: profile.name,
       displayName:
-        !isDev && /Explorer|explorer|connector|steward/.test(profile.name)
+        session.fixtureOnly &&
+        !isDev &&
+        /Explorer|explorer|connector|steward/.test(profile.name)
           ? `Chiến binh ${profile.schoolName}`
           : profile.name,
       schoolId: SCHOOLS[player.slot]?.id ?? "hcmut",
       schoolName: profile.schoolName,
       schoolColor: SCHOOLS[player.slot]?.color ?? "#fff",
       points: Number(profile.balance),
+      earnedRunningPoints: Number(profile.earnedRunningPoints ?? 0),
     });
+    bootProfile = true;
+    completeStage(1);
+    checkBoot();
     updateTile();
     document.body.dataset.school = player.slot === 0 ? "dawn" : "dusk";
   } catch {
+    if (!bootComplete)
+      bootFailure("Chưa tải được hồ sơ và ví của bạn. Vui lòng kết nối lại.");
     if (attempt === generation && token === player.token)
       activity("Chưa đồng bộ được số dư. Vui lòng thử lại.", "error");
   }
@@ -547,6 +576,48 @@ const operator =
     : undefined;
 const stats = new StatsOverlay();
 stats.onInventoryRequested = () => gameplay.openInventory();
+stats.onWalletRefreshRequested = () => void refreshProfile();
+stats.onExploreRequested = () => {
+  if (!room) return;
+  const index = findExpansionTile(
+    replica,
+    loadedChunks,
+    player.slot,
+    session.headquarters ?? [],
+    homeLandmark(),
+  );
+  if (index === undefined) {
+    activity(
+      "Chưa tìm thấy ô biên trong vùng đã tải. Về trụ sở rồi thử lại.",
+      "normal",
+    );
+    return;
+  }
+  const { x, z } = tileCoordinates(index);
+  selected = {
+    index,
+    x,
+    z,
+    chunk: chunkId(Math.floor(x / 64), Math.floor(z / 64)),
+    local: localIndex(x, z),
+  };
+  selectedBuilding = undefined;
+  contextSignature = "";
+  autoTarget = undefined;
+  world.setSelectedObject(undefined);
+  world.select(selected);
+  world.animateFocus(x + 0.5, z + 0.5, 60);
+  updateTile();
+};
+const refreshVisibleProfile = () => {
+  if (!document.hidden && session !== LEGACY_DEV_SESSION) void refreshProfile();
+};
+window.setInterval(
+  refreshVisibleProfile,
+  GAME_CONFIG.integration.profileRefreshMs,
+);
+window.addEventListener("focus", refreshVisibleProfile);
+document.addEventListener("visibilitychange", refreshVisibleProfile);
 if (isDev) Object.assign(window, { world });
 /** First Landmark on this school's stepping-stone path (falls back to the map centre). */
 function homeLandmark(): { x: number; z: number; id: string } {
@@ -558,7 +629,7 @@ function homeLandmark(): { x: number; z: number; id: string } {
 stats.onFlyToHQRequested = () =>
   world.animateFocus(player.home.x, player.home.z, 100);
 function refreshRanking(): void {
-  void fetch("/api/game/ranking")
+  void gameFetch("/api/game/ranking")
     .then((r) => r.json())
     .then((page: { rankings: { schoolId: string; points: number }[] }) =>
       stats.updateSchoolRankings(page.rankings),
@@ -569,7 +640,7 @@ refreshRanking();
 window.setInterval(refreshRanking, 5000);
 const layoutDigest = JSON.stringify(publicWorld.map((o) => o.id));
 window.setInterval(() => {
-  void fetch("/api/fixture/world", { cache: "no-store" })
+  void gameFetch("/api/fixture/world", { cache: "no-store" })
     .then((r) => r.json())
     .then((v: { objects: WorldObject[] }) => {
       let changed = false;
@@ -713,6 +784,8 @@ function subscribeNow(): void {
   const signature = ids.join(",");
   if (signature === subscribed) return;
   subscribed = signature;
+  if (!bootComplete && !bootChunks.size)
+    for (const id of ids) bootChunks.add(id);
   ui.viewport.textContent = String(ids.length);
   room.sendBytes("m2", encodeSubscribe(ids));
 }
@@ -832,8 +905,11 @@ function handleFrame(raw: Uint8Array): void {
       case M2_KIND.SNAPSHOT: {
         const snapshot = decodeSnapshot(frame.payload);
         replica.applySnapshot(snapshot);
+        loadedChunks.add(snapshot.chunkId);
         world.paintChunk(snapshot.chunkId, replica);
         miniMap.paintProjection(snapshot.chunkId, replica);
+        bootChunks.delete(snapshot.chunkId);
+        checkBoot();
         updateTile();
         break;
       }
@@ -887,6 +963,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   profileCost = undefined;
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   replica = new ProjectionReplica(player.slot);
+  loadedChunks.clear();
   selected = undefined;
   selectedBuilding = undefined;
   contextSignature = "";
@@ -909,7 +986,21 @@ async function connect(nextPlayer: Player): Promise<void> {
   status("Đang kết nối…", false);
   void refreshProfile();
   try {
-    const joined = await sdk.joinOrCreate("m2", { token: player.token });
+    let socketToken = player.token;
+    if (!session.fixtureOnly) {
+      const response = await gameFetch("/api/portal/ws-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (response.status === 401) {
+        location.reload();
+        return;
+      }
+      if (!response.ok) throw new Error("Socket ticket unavailable");
+      socketToken = ((await response.json()) as { ticket: string }).ticket;
+    }
+    const joined = await sdk.joinOrCreate("m2", { token: socketToken });
     if (attempt !== generation) {
       void joined.leave();
       return;
@@ -918,8 +1009,13 @@ async function connect(nextPlayer: Player): Promise<void> {
     joined.onMessage("m2", (bytes: Uint8Array) => {
       if (attempt === generation) handleFrame(bytes);
     });
-    joined.onLeave(() => {
+    joined.onLeave((code) => {
       if (attempt !== generation) return;
+      if (code === 4001 && !session.fixtureOnly) {
+        sessionStorage.removeItem("r2pl-portal-session");
+        location.reload();
+        return;
+      }
       room = undefined;
       subscribed = "";
       status("Đang kết nối lại…", false);
@@ -933,6 +1029,8 @@ async function connect(nextPlayer: Player): Promise<void> {
     }
   } catch {
     if (attempt !== generation) return;
+    if (!bootComplete)
+      bootFailure("Chưa kết nối được bản đồ. Bạn có thể thử lại.");
     status("Chưa thể kết nối", false);
     activity("Chưa thể vào bản đồ. Bấm Kết nối lại để thử.", "error");
   }
@@ -942,6 +1040,26 @@ for (const option of players) {
   ui.select.add(new Option(option.label, option.token));
 }
 ui.select.value = player.token;
+if (!session.fixtureOnly) {
+  ui.select.disabled = true;
+  const logout = document.createElement("button");
+  logout.textContent = "Đăng xuất";
+  logout.style.cssText =
+    "margin-left:12px;padding:8px 12px;border:1px solid #ffffff30;border-radius:8px;background:#ffffff10;color:inherit;cursor:pointer";
+  logout.onclick = async () => {
+    await gameFetch("/api/portal/logout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${player.token}`,
+      },
+      body: "{}",
+    });
+    sessionStorage.removeItem("r2pl-portal-session");
+    location.reload();
+  };
+  document.querySelector(".top-bar .connection")!.append(logout);
+}
 ui.select.addEventListener("change", () => {
   const next = players.find((item) => item.token === ui.select.value);
   if (next) void connect(next);
@@ -1030,4 +1148,6 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+completeStage(2);
+loadingStage(3);
 void connect(player);
