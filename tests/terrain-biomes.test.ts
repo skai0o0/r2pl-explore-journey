@@ -16,14 +16,22 @@ import {
 import {
   buildTerrainChunkGeometry,
   TerrainChunks,
+  terrainMaterial,
+  terrainMist,
   terrainPointFromRay,
+  terrainTileColor,
+  writeTerrainTile,
 } from "../client/src/terrainChunks.ts";
 import { naturePlanRows } from "../client/src/terrainNature.ts";
 import {
   configureMapCamera,
   TileIndicatorLayer,
 } from "../client/src/worldView.ts";
-import { GAME_CONFIG, STAGING_OBJECTS } from "../shared/gameplay/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  SCHOOLS,
+  STAGING_OBJECTS,
+} from "../shared/gameplay/gameConfig.ts";
 import { ProjectionReplica } from "../shared/protocol/replica.ts";
 import { chunkId } from "../shared/world/coordinates.ts";
 
@@ -76,6 +84,8 @@ test("fixed simplex seeds and authored layout produce the same biomes regardless
   for (let z = 3; z < 1000; z += 17)
     for (let x = 5; x < 1000; x += 17) {
       const sample = a.sample(x, z);
+      if (sample.biome === "flower_meadow")
+        assert([0x5b8c32, 0x689f38].includes(sample.color));
       assert.deepEqual(sample, b.sample(x, z));
       assert.equal(sample.height, getTerrainHeight(x, z));
       biomes.add(sample.biome);
@@ -332,6 +342,31 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
     });
     assert(instances.length > 0);
     assert(instances.every((o) => !o.castShadow && !o.receiveShadow));
+    replica.applySnapshot({
+      chunkId: 0,
+      viewRevision: 1n,
+      mask: new Uint8Array(8192),
+      fog: new Uint8Array(512),
+    });
+    nature.rebuild(0, replica);
+    let stale = 0;
+    nature.group.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) stale++;
+    });
+    assert.equal(
+      stale,
+      0,
+      "Replacement fog must remove old crowns before the async rebuild",
+    );
+    frames.drain();
+    nature.group.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) stale++;
+    });
+    assert.equal(
+      stale,
+      0,
+      "Unknown tiles must have no trees, grass, flowers, or flags",
+    );
     terrain.layers.get(0)!.pixels.fill(127);
     terrain.resetKnowledge();
     assert(terrain.layers.get(0)!.pixels.every((v) => v === 0));
@@ -342,4 +377,154 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
     assert.equal(frames.callbacks.size, 0);
     frames.restore();
   }
+});
+
+test("live terrain painter keeps mist opaque, neutral biomes exact, school tint 68%, shared tint 50/50", () => {
+  const replica = new ProjectionReplica(0),
+    field = new TerrainBiomes();
+  const mask = new Uint8Array(8192),
+    fog = new Uint8Array(512),
+    pixels = new Uint8Array(16384);
+  const data = new DataView(mask.buffer);
+  // Unknown, neutral reveal, owned, private shared, and unknown with stale shared metadata.
+  for (const local of [1, 2, 3]) fog[local >> 3]! |= 1 << (local & 7);
+  for (const local of [2, 3]) data.setUint16(local * 2, 1, true);
+  replica.applySnapshot({ chunkId: 0, viewRevision: 0n, mask, fog });
+  const shared = new Map<number, readonly number[]>([
+    [3, [0, 1]],
+    [4, [0, 1]],
+  ]);
+  const read = (local: number) => {
+    writeTerrainTile(pixels, 0, local, replica, field, 0, shared);
+    const offset = 63 * 256 + local * 4;
+    return [...pixels.slice(offset, offset + 4)];
+  };
+  assert.equal(read(0)[3], 0);
+  assert.equal(
+    read(4)[3],
+    0,
+    "Shared metadata must not reveal unknown terrain",
+  );
+  const bytes = (hex: number) => [
+    (hex >> 16) & 255,
+    (hex >> 8) & 255,
+    hex & 255,
+  ];
+  assert.deepEqual(read(1), [...bytes(field.sample(1, 0).color), 1]);
+  const terrain = bytes(field.sample(2, 0).color),
+    school = bytes(parseInt(SCHOOLS[0].color.slice(1), 16));
+  assert.deepEqual(
+    read(2).slice(0, 3),
+    terrain.map((c, i) => Math.round(c * 0.32 + school[i]! * 0.68)),
+  );
+  assert(read(2)[3]! >= 128);
+  const rival = bytes(parseInt(SCHOOLS[1].color.slice(1), 16));
+  const sharedTerrain = bytes(field.sample(3, 0).color);
+  assert.deepEqual(
+    read(3).slice(0, 3),
+    sharedTerrain.map((c, i) =>
+      Math.round(c * 0.32 + ((school[i]! + rival[i]!) / 2) * 0.68),
+    ),
+  );
+  assert.equal(terrainTileColor(0x5b8c32, []), 0x5b8c32);
+});
+
+test("territory edges inspect four neighbors across chunk seams and follow deltas", () => {
+  const replica = new ProjectionReplica(0),
+    field = new TerrainBiomes(),
+    pixels = new Uint8Array(16384);
+  const left = new Uint8Array(8192),
+    right = new Uint8Array(8192);
+  new DataView(left.buffer).setUint16(63 * 2, 1, true);
+  new DataView(right.buffer).setUint16(0, 1, true);
+  replica.applySnapshot({
+    chunkId: 0,
+    viewRevision: 0n,
+    mask: left,
+    fog: new Uint8Array(512).fill(255),
+  });
+  const paint = () => {
+    writeTerrainTile(pixels, 0, 63, replica, field, 0, new Map());
+    return pixels[63 * 256 + 63 * 4 + 3]! - 128;
+  };
+  assert.equal(
+    paint(),
+    15,
+    "Absent neighbor chunks are safely treated as outside",
+  );
+  replica.applySnapshot({
+    chunkId: 1,
+    viewRevision: 0n,
+    mask: right,
+    fog: new Uint8Array(512).fill(255),
+  });
+  assert.equal(paint(), 13, "No inner seam on adjacent owned tiles");
+  replica.applyDelta({
+    chunkId: 1,
+    localIndex: 0,
+    baseRevision: 0n,
+    nextRevision: 1n,
+    mask: 0,
+    discovered: true,
+  });
+  assert.equal(paint(), 15, "Removed ownership restores only the exposed edge");
+});
+
+test("coarse terrain UVs retain individual tile sampling; mist covers all undiscovered elevations", () => {
+  const field = new TerrainBiomes(),
+    geometry = buildTerrainChunkGeometry(field, 0, 8);
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  for (const x of [1.5, 2.5, 6.5]) {
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(x - 500, 500 - 1.5, 10),
+      new THREE.Vector3(0, 0, -1),
+    );
+    const hit = ray.intersectObject(mesh)[0]!;
+    assert.equal(Math.floor(hit.uv!.x * 64), Math.floor(x));
+    assert.equal(Math.floor((1 - hit.uv!.y) * 64), 1);
+  }
+  const texture = new THREE.DataTexture(new Uint8Array(16384), 64, 64);
+  const mist = terrainMist(texture, 255);
+  assert(mist.position.z > GAME_CONFIG.terrain.hillHeights[2]);
+  assert.equal(mist.material.uniforms.knowledge!.value, texture);
+  assert.equal(mist.material.toneMapped, false);
+  assert.equal(mist.material.depthWrite, true);
+  assert.deepEqual(Object.keys(mist.material.uniforms).sort(), [
+    "knowledge",
+    "mistA",
+    "mistB",
+  ]);
+  const uv = mist.geometry.getAttribute("uv");
+  assert(
+    Math.abs(
+      Math.max(...Array.from({ length: uv.count }, (_, i) => uv.getX(i))) -
+        40 / 64,
+    ) < 1e-6,
+  );
+  const material = terrainMaterial(texture);
+  const shader = {
+    uniforms: {},
+    vertexShader: THREE.ShaderLib.lambert.vertexShader,
+    fragmentShader: THREE.ShaderLib.lambert.fragmentShader,
+  };
+  material.onBeforeCompile(
+    shader as THREE.WebGLProgramParametersWithUniforms,
+    {} as THREE.WebGLRenderer,
+  );
+  assert(shader.fragmentShader.includes("if (knowledge.a < 0.001) discard;"));
+  assert(
+    shader.fragmentShader.includes(
+      "if (terrainTop > 0.5) outgoingLight = diffuseColor.rgb;",
+    ),
+  );
+  assert.equal(material.toneMapped, false);
+  for (const disposable of [
+    geometry,
+    mesh.material,
+    texture,
+    mist.geometry,
+    mist.material,
+    material,
+  ])
+    disposable.dispose();
 });

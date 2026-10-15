@@ -30,14 +30,15 @@ import {
   MODEL_PLACEMENTS,
   type ModelPlacement,
 } from "./assetRegistry.ts";
+import { LandscapeEffects } from "./landscape.ts";
+import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import { TerrainBiomes } from "./terrainBiomes.ts";
 import {
   TerrainChunks,
-  terrainPointFromRay,
   type TerrainLayer,
+  terrainPointFromRay,
+  writeTerrainTile,
 } from "./terrainChunks.ts";
-import { LandscapeEffects } from "./landscape.ts";
-import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import {
   footprintDiscovered,
   objectDisplayName,
@@ -980,6 +981,8 @@ export class WorldView {
       this.#tileIndicators.setTile(kind, undefined);
     }
     this.#terrainChunks.resetKnowledge();
+    for (const layer of this.#terrainChunks.layers.values())
+      layer.mesh.material.userData.accent.value.set(SCHOOLS[slot]!.accent);
     this.#chunkLayers.clear();
     this.#shared = new Map();
     this.#replica = undefined;
@@ -1153,6 +1156,14 @@ export class WorldView {
       this.#paintLocal(layer.pixels, id, local, replica);
     }
     layer.texture.needsUpdate = true;
+    // Only the four neighboring chunk borders can change their edge flags.
+    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+    for (let i = 0; i < 64; i++) {
+      this.#refreshTerrainTile(chunkX * 64 - 1, chunkZ * 64 + i, replica);
+      this.#refreshTerrainTile(chunkX * 64 + 64, chunkZ * 64 + i, replica);
+      this.#refreshTerrainTile(chunkX * 64 + i, chunkZ * 64 - 1, replica);
+      this.#refreshTerrainTile(chunkX * 64 + i, chunkZ * 64 + 64, replica);
+    }
     this.#landscape.rebuild(id, replica);
     this.#render();
   }
@@ -1162,13 +1173,23 @@ export class WorldView {
     const layer = this.#layer(id);
     this.#paintLocal(layer.pixels, id, local, replica);
     layer.texture.needsUpdate = true;
+    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+    const x = chunkX * 64 + (local % 64),
+      z = chunkZ * 64 + Math.floor(local / 64);
+    for (const [dx, dz] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ])
+      this.#refreshTerrainTile(x + dx!, z + dz!, replica);
     this.#landscape.rebuildSoon(id, replica);
     this.#render();
   }
 
   /**
    * Private party view of Shared Knowledge tiles (tile index -> school pair).
-   * Painted as a two-colour weave so the overlap with the rival is obvious.
+   * Equal school-color blend, then the same terrain tint as owned knowledge.
    */
   setSharedTiles(tiles: ReadonlyMap<number, readonly number[]>): void {
     const digest = JSON.stringify([...tiles]);
@@ -1206,32 +1227,24 @@ export class WorldView {
     local: number,
     replica: ProjectionReplica,
   ): void {
-    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
-    const x = chunkX * 64 + (local % 64);
-    const z = chunkZ * 64 + Math.floor(local / 64);
-    const offset = (63 - Math.floor(local / 64)) * 64 * 4 + (local % 64) * 4;
-    if (x >= WORLD_WIDTH || z >= WORLD_HEIGHT) {
-      pixels[offset + 3] = 0;
-      return;
-    }
+    writeTerrainTile(
+      pixels,
+      id,
+      local,
+      replica,
+      this.#terrain,
+      this.#schoolSlot,
+      this.#shared,
+    );
+  }
 
-    const pair = this.#shared.get(z * WORLD_WIDTH + x);
-    if (!replica.isDiscovered(id, local) && !pair) {
-      pixels[offset + 3] = 0;
-      return;
-    }
-    const owned = !!(replica.maskAt(id, local) & (1 << this.#schoolSlot));
-    if (owned || pair?.length === 2) {
-      const slot =
-        pair?.length === 2
-          ? pair[Math.floor((x + z) / 3) % 2]!
-          : this.#schoolSlot;
-      const hex = parseInt(SCHOOLS[slot]!.color.slice(1), 16);
-      pixels[offset] = (hex >> 16) & 255;
-      pixels[offset + 1] = (hex >> 8) & 255;
-      pixels[offset + 2] = hex & 255;
-      pixels[offset + 3] = 127;
-    } else pixels[offset + 3] = 1;
+  #refreshTerrainTile(x: number, z: number, replica: ProjectionReplica): void {
+    if (x < 0 || z < 0 || x >= WORLD_WIDTH || z >= WORLD_HEIGHT) return;
+    const id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
+    const layer = this.#chunkLayers.get(id);
+    if (!layer || !replica.hasChunk(id)) return;
+    this.#paintLocal(layer.pixels, id, (z % 64) * 64 + (x % 64), replica);
+    layer.texture.needsUpdate = true;
   }
 
   #layer(id: number): TerrainLayer {

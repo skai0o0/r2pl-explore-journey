@@ -228,13 +228,8 @@ export class TerrainBiomes {
     for (let i = 0; i < C.hillThresholds.length; i++)
       if (n > C.hillThresholds[i]!) height = C.hillHeights[i]!;
     if (getTerrainMoisture(x, z) > C.meadowMoisture && height <= 0.4) {
-      const fleck = terrainHash(x, z, 4);
-      const color =
-        fleck > 0.96
-          ? [0xef4444, 0xfacc15, 0x3b82f6][
-              Math.floor(terrainHash(x, z, 9) * 3)
-            ]!
-          : 0x6da33b;
+      // Flowers belong to revealed 3D instances, never to an entire ground tile.
+      const color = terrainHash(x, z, 4) > 0.5 ? 0x5b8c32 : 0x689f38;
       return { height, biome: "flower_meadow", color };
     }
     return {

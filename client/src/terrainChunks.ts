@@ -1,6 +1,10 @@
 import * as THREE from "three";
-import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
-import { chunkCoordinatesForId } from "../../shared/world/coordinates.ts";
+import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import {
+  chunkCoordinatesForId,
+  chunkId,
+} from "../../shared/world/coordinates.ts";
 import type { TerrainBiomes, TerrainSample } from "./terrainBiomes.ts";
 
 const C = GAME_CONFIG.terrain;
@@ -46,7 +50,24 @@ export function* terrainGeometrySteps(
     color.setHex(hex);
     for (let i = 0; i < 4; i++) {
       colors.push(color.r, color.g, color.b);
-      uvs.push(u, v);
+      // Continuous top UVs preserve single-tile fog/ownership at every LOD.
+      // Side samples stay just inside their owning column, including seams.
+      uvs.push(
+        Math.max(
+          u - (0.5 * step) / 64 + 1e-6,
+          Math.min(
+            u + (0.5 * step) / 64 - 1e-6,
+            (vertices[i * 3]! + 500 - baseX) / 64,
+          ),
+        ),
+        Math.max(
+          v - (0.5 * step) / 64 + 1e-6,
+          Math.min(
+            v + (0.5 * step) / 64 - 1e-6,
+            (vertices[i * 3 + 1]! - 500 + baseZ + 64) / 64,
+          ),
+        ),
+      );
     }
     indices.push(
       offset,
@@ -70,7 +91,7 @@ export function* terrainGeometrySteps(
       const u = (col + Math.min(step, width - col) / 2) / 64,
         v = 1 - (row + Math.min(step, depth - row) / 2) / 64;
       face([l, t, h, l, b, h, r, b, h, r, t, h], s.color, u, v);
-      const side = h >= 0.85 ? 0x737373 : 0x866043;
+      const side = h >= 0.85 ? 0x7c5c3e : 0x3f621f;
       // Full perimeter skirts also seal interfaces between coarse and fine LODs.
       let low =
         col + step >= width ? C.waterHeight : sample(x + step, z).height;
@@ -118,31 +139,128 @@ export function buildTerrainChunkGeometry(
   return result.value;
 }
 
+/** Blend bytes in sRGB, matching the signed 68/32 palette exactly. */
+export function terrainTileColor(
+  terrain: number,
+  slots: readonly number[],
+): number {
+  if (!slots.length) return terrain;
+  let result = 0;
+  for (const shift of [16, 8, 0]) {
+    const school =
+      slots.reduce(
+        (sum, slot) =>
+          sum + ((parseInt(SCHOOLS[slot]!.color.slice(1), 16) >> shift) & 255),
+        0,
+      ) / slots.length;
+    result |=
+      Math.round(
+        ((terrain >> shift) & 255) * (1 - C.schoolTintOpacity) +
+          school * C.schoolTintOpacity,
+      ) << shift;
+  }
+  return result;
+}
+
 export function terrainMaterial(
   texture: THREE.DataTexture,
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,
     map: texture,
+    toneMapped: false,
   });
+  material.userData.accent = { value: new THREE.Color(SCHOOLS[0].accent) };
   material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <map_fragment>",
-      `
-      #ifdef USE_MAP
-        vec4 knowledge = texture2D(map, vMapUv);
-        if (knowledge.a < 0.001) diffuseColor.rgb *= 0.24;
-        else if (knowledge.a < 0.01) diffuseColor.rgb *= 0.62;
-        else diffuseColor.rgb = mix(diffuseColor.rgb, knowledge.rgb, 0.30);
-      #endif
+    shader.uniforms.territoryAccent = material.userData.accent;
+    shader.vertexShader =
+      "varying float terrainTop;\n" +
+      shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\n terrainTop = step(0.5, normal.z);",
+      );
+    shader.fragmentShader =
+      "varying float terrainTop;\nuniform vec3 territoryAccent;\n" +
+      shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <map_fragment>",
+        `
+      vec4 knowledge = texture2D(map, vMapUv);
+      if (knowledge.a < 0.001) discard;
+      float state = floor(knowledge.a * 255.0 + 0.5);
     `,
-    );
+      )
+      .replace(
+        "#include <color_fragment>",
+        `
+      #include <color_fragment>
+      if (terrainTop > 0.5) diffuseColor.rgb = knowledge.rgb;
+      float edges = max(0.0, state - 128.0);
+      vec2 cell = fract(vMapUv * 64.0);
+      bool border = (mod(edges, 2.0) >= 1.0 && cell.x < ${C.territoryEdgeWidth})
+        || (mod(floor(edges / 2.0), 2.0) >= 1.0 && cell.x > ${1 - C.territoryEdgeWidth})
+        || (mod(floor(edges / 4.0), 2.0) >= 1.0 && cell.y > ${1 - C.territoryEdgeWidth})
+        || (mod(floor(edges / 8.0), 2.0) >= 1.0 && cell.y < ${C.territoryEdgeWidth});
+      if (terrainTop > 0.5 && state >= 128.0 && border) diffuseColor.rgb = territoryAccent;
+    `,
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `
+      // Exact top palette; directional lighting remains on softened cliff faces.
+      if (terrainTop > 0.5) outgoingLight = diffuseColor.rgb;
+      #include <opaque_fragment>
+    `,
+      );
   };
-  material.customProgramCacheKey = () => "fixed-biome-knowledge-v1";
+  material.customProgramCacheKey = () => "fixed-biome-knowledge-v2";
   return material;
 }
 
+/** Static opaque clouds conceal unknown elevations as well as their colors. */
+export function terrainMist(texture: THREE.DataTexture, id: number) {
+  const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+  const width = Math.min(64, 1000 - chunkX * 64),
+    depth = Math.min(64, 1000 - chunkZ * 64);
+  const geometry = new THREE.PlaneGeometry(width, depth);
+  const uv = geometry.getAttribute("uv");
+  for (let i = 0; i < uv.count; i++)
+    uv.setXY(
+      i,
+      (uv.getX(i) * width) / 64,
+      1 - depth / 64 + (uv.getY(i) * depth) / 64,
+    );
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      knowledge: { value: texture },
+      mistA: { value: new THREE.Color(C.mistColors[0]) },
+      mistB: { value: new THREE.Color(C.mistColors[1]) },
+    },
+    vertexShader:
+      "varying vec2 tileUv; varying vec2 worldXY; void main() { tileUv = uv; worldXY = (modelMatrix * vec4(position, 1.0)).xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform sampler2D knowledge; uniform vec3 mistA; uniform vec3 mistB; varying vec2 tileUv; varying vec2 worldXY;
+      void main() {
+        if (texture2D(knowledge, tileUv).a > 0.001) discard;
+        float clouds = clamp(0.5 + 0.24 * sin(worldXY.x * 0.11 + sin(worldXY.y * 0.09)) + 0.26 * cos(worldXY.y * 0.13 + sin(worldXY.x * 0.07)), 0.0, 1.0);
+        gl_FragColor = vec4(mix(mistA, mistB, clouds), 1.0);
+        #include <colorspace_fragment>
+      }
+    `,
+    toneMapped: false,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `mist-${id}`;
+  mesh.position.set(
+    chunkX * 64 + width / 2 - 500,
+    500 - chunkZ * 64 - depth / 2,
+    C.hillHeights[2] + 0.01,
+  );
+  return mesh;
+}
+
 export interface TerrainLayer {
+  readonly mist: ReturnType<typeof terrainMist>;
   readonly pixels: Uint8Array;
   readonly texture: THREE.DataTexture;
   readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshLambertMaterial>;
@@ -180,8 +298,10 @@ export class TerrainChunks {
       mesh.name = `terrain-${id}`;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
-      this.group.add(mesh);
+      const mist = terrainMist(texture, id);
+      this.group.add(mesh, mist);
       this.layers.set(id, {
+        mist,
         pixels,
         texture,
         mesh,
@@ -202,6 +322,7 @@ export class TerrainChunks {
       layer.mesh.visible = this.#frustum.intersectsBox(
         layer.coarse.boundingBox!,
       );
+      layer.mist.visible = layer.mesh.visible;
       layer.wanted = false;
       if (layer.mesh.visible && span <= C.detailSpan) {
         layer.coarse.boundingBox!.getCenter(this.#point).project(camera);
@@ -284,6 +405,8 @@ export class TerrainChunks {
       layer.detail?.dispose();
       layer.coarse.dispose();
       layer.mesh.material.dispose();
+      layer.mist.geometry.dispose();
+      layer.mist.material.dispose();
       layer.texture.dispose();
     }
     this.group.clear();
@@ -334,4 +457,66 @@ export function terrainPointFromRay(
       }
     }
   return distance < Infinity ? target : undefined;
+}
+
+/** Paint one authoritative projected tile; never requests rival masks. */
+export function writeTerrainTile(
+  pixels: Uint8Array,
+  id: number,
+  local: number,
+  replica: ProjectionReplica,
+  field: TerrainBiomes,
+  schoolSlot: number,
+  shared: ReadonlyMap<number, readonly number[]>,
+): void {
+  const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+  const x = chunkX * 64 + (local % 64);
+  const z = chunkZ * 64 + Math.floor(local / 64);
+  const offset = (63 - Math.floor(local / 64)) * 64 * 4 + (local % 64) * 4;
+  if (x >= 1000 || z >= 1000) {
+    pixels[offset + 3] = 0;
+    return;
+  }
+
+  if (!replica.isDiscovered(id, local)) {
+    pixels[offset + 3] = 0;
+    return;
+  }
+  const pair = shared.get(z * 1000 + x);
+  const mask = replica.maskAt(id, local);
+  const slots =
+    pair?.length === 2
+      ? pair
+      : SCHOOLS.flatMap((_, slot) => (mask & (1 << slot) ? [slot] : []));
+  const hex = terrainTileColor(field.sample(x, z).color, slots);
+  pixels[offset] = (hex >> 16) & 255;
+  pixels[offset + 1] = (hex >> 8) & 255;
+  pixels[offset + 2] = hex & 255;
+  let edges = 0;
+  if (mask & (1 << schoolSlot)) {
+    for (const [dx, dz, flag] of [
+      [-1, 0, 1],
+      [1, 0, 2],
+      [0, -1, 4],
+      [0, 1, 8],
+    ]) {
+      if (!ownsTerrainTile(x + dx!, z + dz!, replica, schoolSlot))
+        edges |= flag!;
+    }
+  }
+  pixels[offset + 3] = slots.length ? 128 + edges : 1;
+}
+
+function ownsTerrainTile(
+  x: number,
+  z: number,
+  replica: ProjectionReplica,
+  schoolSlot: number,
+): boolean {
+  if (x < 0 || z < 0 || x >= 1000 || z >= 1000) return false;
+  const id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
+  return (
+    replica.hasChunk(id) &&
+    !!(replica.maskAt(id, (z % 64) * 64 + (x % 64)) & (1 << schoolSlot))
+  );
 }

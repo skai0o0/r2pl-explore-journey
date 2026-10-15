@@ -216,9 +216,18 @@ export class LandscapeEffects {
     this.#syncEmblemFor();
   }
   rebuildSoon(id: number, replica: ProjectionReplica): void {
-    this.rebuild(id, replica);
+    this.#queueRebuild(id, replica);
   }
   rebuild(id: number, replica: ProjectionReplica): void {
+    // A replacement snapshot may revoke discovery. Remove stale trees immediately,
+    // including tall crowns that could otherwise protrude above the opaque mist.
+    const previous = this.#chunks.get(id);
+    if (previous) this.#dispose(previous.group);
+    this.#chunks.delete(id);
+    if (this.#active?.id === id) this.#active = undefined;
+    this.#queueRebuild(id, replica);
+  }
+  #queueRebuild(id: number, replica: ProjectionReplica): void {
     if (this.#disposed) return;
     this.#sources.set(id, replica);
     this.#pending.set(id, replica);

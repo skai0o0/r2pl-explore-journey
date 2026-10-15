@@ -319,6 +319,9 @@ export const GAME_CONFIG = {
     lakeRadius: 26,
     riverHalfWidth: 5,
     meadowMoisture: 0.58,
+    schoolTintOpacity: 0.68,
+    territoryEdgeWidth: 0.07,
+    mistColors: [0x0b1620, 0x132330],
     foundations: {
       hqRadius: 13,
       landmark: [44, 44],
