@@ -50,7 +50,8 @@ export async function createDummyPortal(
   const root = resolve(
     fileURLToPath(new URL("../../dist/portal/", import.meta.url)),
   );
-  let origin = new URL(config.portalLoginUrl).origin,
+  const portalOrigin = new URL(config.portalLoginUrl).origin;
+  let origin = portalOrigin,
     busy = false,
     stopped = false;
   const sync = async () => {
@@ -122,8 +123,9 @@ export async function createDummyPortal(
       if (request.method !== "POST")
         throw new PortalError(405, "METHOD_NOT_ALLOWED");
       const provided = request.headers["x-csrf-token"];
+      const allowedOrigins = [origin, portalOrigin];
       if (
-        request.headers.origin !== origin ||
+        !allowedOrigins.includes(request.headers.origin ?? "") ||
         typeof provided !== "string" ||
         !/^[a-f0-9]{64}$/.test(provided) ||
         !timingSafeEqual(

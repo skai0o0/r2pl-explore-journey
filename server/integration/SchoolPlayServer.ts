@@ -677,10 +677,12 @@ async function startSchoolPlayServer(
           });
           return;
         }
+        const publicWs = process.env.PUBLIC_WEBSOCKET_URL;
         json({
           fixtureOnly: true,
           version: 1,
           websocketPort: address.port,
+          ...(publicWs ? { websocketUrl: publicWs } : {}),
           players: fixture.players,
           campaignId: fixture.campaignId,
           adjacentOnly: true,

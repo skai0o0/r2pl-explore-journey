@@ -22,6 +22,7 @@ export async function createDurableSyntheticServer(
   devExplore?: EvaluateDevExplore,
   boundary?: ExploreBoundary,
   authenticatedGateway?: GatewayAuth,
+  transport?: WebSocketTransport,
 ): Promise<{
   readonly server: Server;
   readonly transport: WebSocketTransport;
@@ -41,13 +42,13 @@ export async function createDurableSyntheticServer(
     ...(traceCorrelationIds ? { traceCorrelationIds } : {}),
   });
   const auth = authenticatedGateway ?? new SyntheticAuth(registry, fixtures);
-  const transport = new WebSocketTransport();
+  const wsTransport = transport ?? new WebSocketTransport();
   const server = new Server({
-    transport,
+    transport: wsTransport,
     greet: false,
     gracefullyShutdown: false,
   });
   server.define("m2", createGatewayRoom(core, auth));
   core.startRelay();
-  return { server, transport, core, authority };
+  return { server, transport: wsTransport, core, authority };
 }

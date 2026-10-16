@@ -163,9 +163,9 @@ const ui = {
 };
 
 const sdk = new ColyseusSDK(
-  "websocketUrl" in session
+  "websocketUrl" in session && session.websocketUrl
     ? session.websocketUrl
-    : `ws://${location.hostname}:${session.websocketPort}`,
+    : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`,
 );
 let player: Player =
   players.find(
