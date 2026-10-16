@@ -487,8 +487,8 @@ test("coarse terrain UVs retain individual tile sampling; mist covers all undisc
   const mist = terrainMist(texture, 255);
   assert(mist.position.z > GAME_CONFIG.terrain.hillHeights[2]);
   assert.equal(mist.material.uniforms.knowledge!.value, texture);
-  assert.equal(mist.material.depthWrite, false);
-  assert.equal(mist.material.transparent, true);
+  assert.equal(mist.material.toneMapped, false);
+  assert.equal(mist.material.depthWrite, true);
   assert.deepEqual(Object.keys(mist.material.uniforms).sort(), [
     "knowledge",
     "mistA",
@@ -511,12 +511,10 @@ test("coarse terrain UVs retain individual tile sampling; mist covers all undisc
     shader as THREE.WebGLProgramParametersWithUniforms,
     {} as THREE.WebGLRenderer,
   );
-  assert(
-    shader.fragmentShader.includes("float isDiscovered = step(0.001, knowledge.a);"),
-  );
+  assert(shader.fragmentShader.includes("if (knowledge.a < 0.001) discard;"));
   assert(
     shader.fragmentShader.includes(
-      "if (terrainTop > 0.5 && isDiscovered > 0.5) outgoingLight = diffuseColor.rgb;",
+      "if (terrainTop > 0.5) outgoingLight = diffuseColor.rgb;",
     ),
   );
   assert.equal(material.toneMapped, false);

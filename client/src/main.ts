@@ -377,16 +377,16 @@ function updateTile(): void {
   }
   if (owned) {
     ui.knowledge.textContent =
-      "Ô này đã mở. Chọn ô mới chung cạnh với Tri thức trường mình.";
+      "Ô này đã mở. Bấm Tìm ô để mở hoặc chọn ô mới chung cạnh với Tri thức trường mình.";
     ui.explore.disabled = true;
-    ui.explore.textContent = "ĐÃ MỞ";
+    ui.explore.textContent = "Đã mở · 0 Points";
     return;
   }
   if (expansionBlocked(selected)) {
     ui.knowledge.textContent =
-      "Cần chọn ô chung cạnh với vùng Tri thức trường mình.";
+      "Chọn ô chung cạnh với vùng Tri thức. HQ trường khác được bảo vệ.";
     ui.explore.disabled = true;
-    ui.explore.textContent = "CẦN Ô KỀ CẠNH";
+    ui.explore.textContent = "Cần ô kề 4 cạnh";
     return;
   }
   requestTileContext(selected);
@@ -405,12 +405,12 @@ function updateTile(): void {
         ? "Mở rộng vùng Tri thức của trường bạn."
         : "Ô này chưa thể mở.";
   ui.explore.textContent = !context
-    ? "ĐANG KIỂM TRA…"
+    ? "Đang kiểm tra…"
     : context.action === "study"
-      ? `>> GIAO LƯU (${context.points} ĐIỂM)`
+      ? `Giao Lưu Tri Thức · ${context.points} Points`
       : context.action === "explore"
-        ? `>> KHÁM PHÁ NGAY (${context.points} ĐIỂM)`
-        : "CHƯA THỂ MỞ";
+        ? `Khám Phá Ô Này · ${context.points} Point`
+        : "Không thể mở ô";
   if (
     context &&
     profileBalance !== undefined &&

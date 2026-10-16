@@ -39,7 +39,6 @@ import {
   terrainPointFromRay,
   writeTerrainTile,
 } from "./terrainChunks.ts";
-import { TileAnimationLayer } from "./tileAnimationLayer.ts";
 import {
   footprintDiscovered,
   objectDisplayName,
@@ -345,7 +344,6 @@ export class WorldView {
   readonly #onViewChange: () => void;
   readonly #onHover: ((tile: PickedTile | undefined) => void) | undefined;
   readonly #onPickObject: ((object: WorldObject) => void) | undefined;
-  readonly #tileAnimations = new TileAnimationLayer();
 
   #schoolSlot = 0;
   #cameraMode: CameraMode = "isometric";
@@ -399,7 +397,7 @@ export class WorldView {
     this.#renderer.shadowMap.enabled = false;
     this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.append(this.#renderer.domElement);
-    this.#scene.background = new THREE.Color(0x050b16);
+    this.#scene.background = new THREE.Color(0x0b1a20);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
     this.#scene.add(ambientLight);
@@ -429,7 +427,6 @@ export class WorldView {
       this.#terrain,
     );
     this.#scene.add(this.#landscape.group);
-    this.#scene.add(this.#tileAnimations.group);
     this.#scene.add(this.#privateObjects);
     this.#scene.add(this.#beacons);
     this.#scene.add(this.#editorPreview);
@@ -656,8 +653,6 @@ export class WorldView {
     if (this.#animId !== undefined) cancelAnimationFrame(this.#animId);
     this.#scene.remove(this.#tileIndicators.object);
     this.#tileIndicators.dispose();
-    this.#scene.remove(this.#tileAnimations.group);
-    this.#tileAnimations.dispose();
     for (const mount of this.#assetMounts) mount.dispose();
     for (const mount of this.#privateMounts.values()) mount.dispose();
     this.#privateMounts.clear();
@@ -1170,11 +1165,6 @@ export class WorldView {
 
   playReveal(x: number, z: number, slot: number): void {
     window.clearTimeout(this.#revealTimer);
-    const groundZ = this.#terrain.getTerrainHeight(x, z);
-    const startColor = this.#terrain.sample(x, z).color;
-    this.#tileAnimations.playTileFlip(x, z, groundZ, startColor, slot);
-    this.#tileAnimations.playFogDissipate(x, z, groundZ);
-
     this.#revealElement.hidden = false;
     this.#revealElement.dataset.school = slot === 0 ? "dawn" : "dusk";
     const pos = this.#position(x + 0.5, z + 0.5);
@@ -1781,10 +1771,6 @@ export class WorldView {
       this.#renderer.setSize(width, height, false);
     }
     this.#syncCamera(width, height);
-    const hasAnimations = this.#tileAnimations.update();
-    const time = performance.now() * 0.001;
-    this.#terrainChunks.updateTime(time);
-    this.#landscape.updateTime(time);
     this.#terrainChunks.updateView(this.#camera, this.#span);
     this.#landscape.updateView(this.#camera, this.#span);
     this.#updateReticles();
@@ -1826,8 +1812,5 @@ export class WorldView {
       mesh.visible = this.#isDev || this.#privateObjectIds.has(id);
     }
     this.#renderer.render(this.#scene, this.#camera);
-    if (hasAnimations) {
-      this.#render();
-    }
   };
 }
