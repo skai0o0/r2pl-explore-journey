@@ -158,6 +158,7 @@ export class LandscapeEffects {
     flag: flagGeometry(),
   };
   readonly #material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  readonly #timeUniform = { value: 0 };
   readonly #flagMaterial = new THREE.MeshBasicMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
@@ -186,7 +187,23 @@ export class LandscapeEffects {
     this.#field = field;
     this.#onChange = onChange;
     this.group.name = "VoxelNatureChunks";
+    this.#material.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = this.#timeUniform;
+      shader.vertexShader =
+        "uniform float uTime;\n" +
+        shader.vertexShader.replace(
+          "#include <begin_vertex>",
+          `#include <begin_vertex>
+          float sway = max(0.0, position.z - 0.2);
+          float wind = sin(uTime * 2.4 + (modelMatrix * vec4(position, 1.0)).x * 0.4 + (modelMatrix * vec4(position, 1.0)).y * 0.4);
+          transformed.x += wind * sway * 0.07;
+          `,
+        );
+    };
     this.#setHeadquarters();
+  }
+  updateTime(time: number): void {
+    this.#timeUniform.value = time;
   }
   #setHeadquarters(): void {
     this.#hqRects.clear();

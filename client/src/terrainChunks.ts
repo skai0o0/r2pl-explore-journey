@@ -171,23 +171,25 @@ export function terrainMaterial(
     toneMapped: false,
   });
   material.userData.accent = { value: new THREE.Color(SCHOOLS[0].accent) };
+  material.userData.time = { value: 0 };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.territoryAccent = material.userData.accent;
+    shader.uniforms.uTime = material.userData.time;
     shader.vertexShader =
-      "varying float terrainTop;\n" +
+      "varying float terrainTop;\nvarying vec3 vWorldPosition;\n" +
       shader.vertexShader.replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\n terrainTop = step(0.5, normal.z);",
+        "#include <begin_vertex>\n terrainTop = step(0.5, normal.z);\n vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;",
       );
     shader.fragmentShader =
-      "varying float terrainTop;\nuniform vec3 territoryAccent;\n" +
+      "varying float terrainTop;\nvarying vec3 vWorldPosition;\nuniform vec3 territoryAccent;\nuniform float uTime;\n" +
       shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <map_fragment>",
         `
       vec4 knowledge = texture2D(map, vMapUv);
-      if (knowledge.a < 0.001) discard;
+      float isDiscovered = step(0.001, knowledge.a);
       float state = floor(knowledge.a * 255.0 + 0.5);
     `,
       )
@@ -195,7 +197,23 @@ export function terrainMaterial(
         "#include <color_fragment>",
         `
       #include <color_fragment>
-      if (terrainTop > 0.5) diffuseColor.rgb = knowledge.rgb;
+      if (terrainTop > 0.5) {
+        if (isDiscovered > 0.5) {
+          diffuseColor.rgb = knowledge.rgb;
+          // Animated specular water ripple for river and lake biomes
+          if (diffuseColor.b > diffuseColor.r + 0.22 && diffuseColor.b > 0.45) {
+            float ripple = sin(vWorldPosition.x * 0.45 + uTime * 2.5) * cos(vWorldPosition.y * 0.45 + uTime * 2.0);
+            diffuseColor.rgb += vec3(0.08, 0.16, 0.28) * clamp(ripple, 0.0, 1.0);
+          }
+        } else {
+          // Dim and tint under-fog terrain slightly so revealed terrain pops
+          diffuseColor.rgb = mix(diffuseColor.rgb * 0.48, vec3(0.08, 0.14, 0.24), 0.36);
+        }
+      } else {
+        if (isDiscovered < 0.5) {
+          diffuseColor.rgb = mix(diffuseColor.rgb * 0.45, vec3(0.05, 0.10, 0.18), 0.38);
+        }
+      }
       float edges = max(0.0, state - 128.0);
       vec2 cell = fract(vMapUv * 64.0);
       bool border = (mod(edges, 2.0) >= 1.0 && cell.x < ${C.territoryEdgeWidth})
@@ -209,16 +227,16 @@ export function terrainMaterial(
         "#include <opaque_fragment>",
         `
       // Exact top palette; directional lighting remains on softened cliff faces.
-      if (terrainTop > 0.5) outgoingLight = diffuseColor.rgb;
+      if (terrainTop > 0.5 && isDiscovered > 0.5) outgoingLight = diffuseColor.rgb;
       #include <opaque_fragment>
     `,
       );
   };
-  material.customProgramCacheKey = () => "fixed-biome-knowledge-v2";
+  material.customProgramCacheKey = () => "fixed-biome-knowledge-v3";
   return material;
 }
 
-/** Static opaque clouds conceal unknown elevations as well as their colors. */
+/** Semi-transparent clouds reveal terrain elevations with soft feathered boundaries. */
 export function terrainMist(texture: THREE.DataTexture, id: number) {
   const { chunkX, chunkZ } = chunkCoordinatesForId(id);
   const width = Math.min(64, 1000 - chunkX * 64),
@@ -237,13 +255,32 @@ export function terrainMist(texture: THREE.DataTexture, id: number) {
       mistA: { value: new THREE.Color(C.mistColors[0]) },
       mistB: { value: new THREE.Color(C.mistColors[1]) },
     },
+    transparent: true,
+    depthWrite: false,
     vertexShader:
       "varying vec2 tileUv; varying vec2 worldXY; void main() { tileUv = uv; worldXY = (modelMatrix * vec4(position, 1.0)).xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: `uniform sampler2D knowledge; uniform vec3 mistA; uniform vec3 mistB; varying vec2 tileUv; varying vec2 worldXY;
       void main() {
-        if (texture2D(knowledge, tileUv).a > 0.001) discard;
+        vec2 texel = vec2(1.0 / 64.0);
+        float a00 = step(0.001, texture2D(knowledge, tileUv + vec2(-texel.x, -texel.y)).a);
+        float a10 = step(0.001, texture2D(knowledge, tileUv + vec2(0.0, -texel.y)).a);
+        float a20 = step(0.001, texture2D(knowledge, tileUv + vec2(texel.x, -texel.y)).a);
+        float a01 = step(0.001, texture2D(knowledge, tileUv + vec2(-texel.x, 0.0)).a);
+        float a11 = step(0.001, texture2D(knowledge, tileUv).a);
+        float a21 = step(0.001, texture2D(knowledge, tileUv + vec2(texel.x, 0.0)).a);
+        float a02 = step(0.001, texture2D(knowledge, tileUv + vec2(-texel.x, texel.y)).a);
+        float a12 = step(0.001, texture2D(knowledge, tileUv + vec2(0.0, texel.y)).a);
+        float a22 = step(0.001, texture2D(knowledge, tileUv + vec2(texel.x, texel.y)).a);
+
+        float discovered = (a11 * 4.0 + (a10 + a01 + a21 + a12) * 2.0 + (a00 + a20 + a02 + a22)) / 16.0;
+        if (discovered >= 0.999) discard;
+
+        float fogFactor = 1.0 - discovered;
+        float alpha = clamp(fogFactor * 0.58, 0.0, 0.58);
+        if (alpha < 0.005) discard;
+
         float clouds = clamp(0.5 + 0.24 * sin(worldXY.x * 0.11 + sin(worldXY.y * 0.09)) + 0.26 * cos(worldXY.y * 0.13 + sin(worldXY.x * 0.07)), 0.0, 1.0);
-        gl_FragColor = vec4(mix(mistA, mistB, clouds), 1.0);
+        gl_FragColor = vec4(mix(mistA, mistB, clouds), alpha);
         #include <colorspace_fragment>
       }
     `,
@@ -382,6 +419,11 @@ export class TerrainChunks {
     for (const layer of this.layers.values()) {
       layer.pixels.fill(0);
       layer.texture.needsUpdate = true;
+    }
+  }
+  updateTime(time: number): void {
+    for (const layer of this.layers.values()) {
+      layer.mesh.material.userData.time.value = time;
     }
   }
   invalidate(): void {
