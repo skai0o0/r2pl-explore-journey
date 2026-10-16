@@ -28,9 +28,14 @@ console.log(
   "Local play: loading screen -> game. No portal login or dummy portal service. Open the URL above.",
 );
 console.log(
-  "16 students + 24 WebSocket bots; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
+  "16 students; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
 );
-void play.startBots();
+if (process.env.ENABLE_BOTS === "1") {
+  console.log("Starting 24 WebSocket simulation bots...");
+  void play.startBots();
+} else {
+  console.log("Bots are disabled (ENABLE_BOTS!=1) for high-performance direct player testing.");
+}
 let stopping = false;
 async function stop(): Promise<void> {
   if (stopping) return;
