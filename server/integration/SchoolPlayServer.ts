@@ -623,6 +623,12 @@ async function startSchoolPlayServer(
         });
         return;
       }
+      // Disabled/unknown APIs must not fall through to static files and look
+      // like a database outage. The client uses 404 to detect local play.
+      if (path.startsWith("/api/")) {
+        response.writeHead(404).end();
+        return;
+      }
       const file = resolve(
         clientRoot,
         path === "/" ? "index.html" : `.${decodeURIComponent(path)}`,

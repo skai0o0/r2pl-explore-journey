@@ -8,7 +8,7 @@ Dự án game khám phá bản đồ 1.000 × 1.000 ô cho giải chạy **Road 
 
 ## 1. Hướng dẫn Chạy Dev Server & Trải nghiệm
 
-Dự án cung cấp 2 chế độ chạy tùy theo mục đích phát triển:
+Dùng chế độ A để chỉnh UI/đồ họa, chế độ B để chơi gameplay đầy đủ. Portal giả lập ở chế độ C chỉ bật khi cần kiểm thử tích hợp đăng nhập và điểm chạy.
 
 ### Chế độ A: Dev Server (Hot-reload UI, Shader & Đồ họa 3D không cần PostgreSQL)
 Dùng khi cần phát triển, tinh chỉnh giao diện, camera Three.js, shader viền ô, ánh sáng, hiệu ứng đổi màu tile và Colyseus WebSocket in-memory cực nhanh:
@@ -32,16 +32,37 @@ Dùng để trải nghiệm trọn vẹn vòng lặp gameplay: kết nối WebSo
 
 #### Chạy nhanh với PowerShell (Local Fixture)
 ```powershell
-$env:R2PL_BOT_SIMULATION = '1'
-$env:R2PL_BOT_DATABASE_URL = 'postgresql://prep_fixture@127.0.0.1:55439/r2pl_prep_test_current'
-npm run play:schools
+# Lần đầu, nếu chưa có .env:
+Copy-Item .env.example .env
+# Sửa .env để trỏ tới PostgreSQL test đang chạy trên máy.
+npm run play:school
 ```
 
-* 🌐 **Web Client:** [**`http://127.0.0.1:4176/`**](http://127.0.0.1:4176/)
+**Luồng mặc định: màn hình tải → vào game bằng tài khoản local, không qua màn hình đăng nhập Portal.** `play:schools` vẫn là lệnh tương đương. Launcher đọc `.env`, không đọc `.env.portal` và không khởi động Portal giả lập.
+
+* 🌐 **Web Client:** Mở URL `Eight-school playable fixture` được in ra trong terminal; mặc định [**`http://127.0.0.1:4176/`**](http://127.0.0.1:4176/).
 * 🔌 **Colyseus WebSocket:** Cổng `2568`
 * 🛠️ **Admin Map Editor:** Bấm nút **Admin Map Editor** ở góc trái, nhập mật khẩu mặc định local: `dev-map-admin`
 
-*(Xem thêm chi tiết thiết lập database riêng, cấu hình biến môi trường và chạy test tải tại [`README_PLAY.md`](README_PLAY.md)).*
+Nếu server cũ còn chạy, dừng bằng **Ctrl+C** rồi chạy lại để nhận thay đổi. Xem cách thiết lập database test và biến môi trường tại [`README_PLAY.md`](README_PLAY.md).
+
+### Chế độ C: Portal giả lập — chỉ bật khi cần kiểm thử tích hợp
+
+Dùng để tự tạo tài khoản sinh viên, thêm hoạt động chạy giả lập, đồng bộ Điểm và kiểm tra nút **Chơi game**. Chuẩn bị `.env.portal`, database test và khóa tích hợp theo [hướng dẫn sandbox](README_PLAY.md#chạy-sandbox-để-webdev-thử-ngay).
+
+```powershell
+# Terminal 1: server game tích hợp Portal
+npm run migrate:portal
+npm run build:all
+npm run start:portal
+
+# Terminal 2: Portal giả lập
+npm run demo:portal
+```
+
+Mở URL do Portal in ra (theo cấu hình mẫu: `http://127.0.0.1:4188/login`; game ở `4186`). Campaign và số dư Portal tách riêng với phiên chơi local ở `4176`.
+
+Khi liên kết web giải chạy thật, sinh viên đăng nhập trên web tổng rồi bấm **Chơi game** mở `<PUBLIC_ORIGIN>/?entry=portal`. Game tự thực hiện handoff để nhận danh tính, hiện màn hình tải và vào game, không yêu cầu bấm đăng nhập thêm. Nút **Về giải chạy** kết thúc phiên game và trở về Portal. Hợp đồng API/handoff nằm trong [`README_PLAY.md`](README_PLAY.md#đăng-nhập-từ-landing-page-sang-game).
 
 ---
 
@@ -90,6 +111,13 @@ npm test
 
 # Build client production vào thư mục dist/client
 npm run build:client
+
+# Typecheck và build game (không build Portal giả lập)
+npm run build
+
+# Chỉ build giao diện Portal giả lập / build cả game và Portal
+npm run build:portal
+npm run build:all
 
 # Kiểm tra kích thước bundle
 npm run report:size

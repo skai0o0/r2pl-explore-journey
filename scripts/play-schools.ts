@@ -23,6 +23,9 @@ const play = await createSchoolPlayServer(pool, {
 });
 console.log(`Eight-school playable fixture: http://127.0.0.1:${port}`);
 console.log(
+  "Local play: loading screen -> game. No portal login or dummy portal service. Open the URL above.",
+);
+console.log(
   "16 students + 24 WebSocket bots; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
 );
 void play.startBots();

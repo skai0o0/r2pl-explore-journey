@@ -14,7 +14,7 @@ import {
   loadingStage,
   loginScreen,
 } from "./bootScreen.ts";
-import { configureGameHttp } from "./gameHttp.ts";
+import { configureGameHttp, gameFetch } from "./gameHttp.ts";
 
 const b64 = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -101,16 +101,10 @@ export async function loadGameSession(): Promise<
     }
     const bootstrap = await request("/api/fixture/bootstrap");
     if (bootstrap.status === 401 || bootstrap.status === 403) {
-      if (new URLSearchParams(location.search).get("entry") === "portal") {
-        history.replaceState(null, "", location.pathname);
-        await login();
-        return new Promise<never>(() => {});
-      }
-      return loginScreen(
-        "Dùng tài khoản sinh viên của bạn để tích lũy Điểm và cùng trường mở rộng bản đồ.",
-        login,
-        config.portalLoginUrl,
-      );
+      // The event portal owns login. Reuse its existing student session through
+      // a browser-bound handoff instead of asking for a second login in game.
+      await login();
+      return new Promise<never>(() => {});
     }
     if (!bootstrap.ok) throw new Error("Bootstrap unavailable");
     const session = parsePortalSession(await bootstrap.json());
@@ -124,4 +118,21 @@ export async function loadGameSession(): Promise<
     );
     return new Promise<never>(() => {});
   }
+}
+
+/** Leave the game session without immediately auto-signing back in on reload. */
+export async function returnToEventPortal(): Promise<void> {
+  const response = await request("/api/portal/config");
+  if (!response.ok) throw new Error("Portal unavailable");
+  const config = (await response.json()) as { portalLoginUrl: string };
+  const logout = await gameFetch("/api/portal/logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!logout.ok && logout.status !== 401)
+    throw new Error("Logout unavailable");
+  sessionStorage.removeItem("r2pl-portal-verifier");
+  sessionStorage.removeItem("r2pl-portal-session");
+  location.assign(config.portalLoginUrl);
 }

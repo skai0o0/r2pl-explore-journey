@@ -102,7 +102,9 @@ test("self-service dummy persists accounts, queues offline runs, isolates studen
     let dashboard = await call("me");
     for (
       let n = 0;
-      n < 20 && dashboard.body.account?.spendablePoints !== "15";
+      n < 20 &&
+      (dashboard.body.account?.spendablePoints !== "15" ||
+        dashboard.body.jobs[0]?.state !== "synced");
       n++
     ) {
       await new Promise((resolve) => setTimeout(resolve, 100));

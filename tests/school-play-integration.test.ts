@@ -55,6 +55,9 @@ test("eight-school playable server shares durable bot/student world with actor-p
       /already has a local writer/,
     );
     const base = `http://127.0.0.1:${server.webPort}`;
+    // Local play never advertises the external login flow or mounts dummy auth.
+    assert.equal((await fetch(`${base}/api/portal/config`)).status, 404);
+    assert.equal((await fetch(`${base}/api/dummy/v1/me`)).status, 404);
     const config = parseDevSession(
       await (await fetch(`${base}/api/fixture/bootstrap`)).json(),
     );

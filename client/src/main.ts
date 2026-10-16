@@ -61,7 +61,7 @@ import {
   finishBoot,
   loadingStage,
 } from "./bootScreen.ts";
-import { loadGameSession } from "./portalSession.ts";
+import { loadGameSession, returnToEventPortal } from "./portalSession.ts";
 
 // Codex-owned transport bootstrap contract; existing presentation stays intact.
 const session = await loadGameSession();
@@ -1043,20 +1043,17 @@ ui.select.value = player.token;
 if (!session.fixtureOnly) {
   ui.select.disabled = true;
   const logout = document.createElement("button");
-  logout.textContent = "Đăng xuất";
+  logout.textContent = "Về giải chạy";
   logout.style.cssText =
     "margin-left:12px;padding:8px 12px;border:1px solid #ffffff30;border-radius:8px;background:#ffffff10;color:inherit;cursor:pointer";
   logout.onclick = async () => {
-    await gameFetch("/api/portal/logout", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${player.token}`,
-      },
-      body: "{}",
-    });
-    sessionStorage.removeItem("r2pl-portal-session");
-    location.reload();
+    logout.disabled = true;
+    try {
+      await returnToEventPortal();
+    } catch {
+      logout.disabled = false;
+      activity("Chưa thể trở về web giải chạy. Vui lòng thử lại.", "error");
+    }
   };
   document.querySelector(".top-bar .connection")!.append(logout);
 }

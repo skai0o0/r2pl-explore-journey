@@ -1,5 +1,17 @@
 # Chạy R2PL G-V1 đầy đủ — ruleVersion = 1
 
+## Chơi local mặc định — vào thẳng game
+
+```powershell
+# Lần đầu, nếu chưa có .env: Copy-Item .env.example .env
+npm run play:school
+# play:schools là tên tương đương, vẫn dùng được.
+```
+
+Mở URL **Eight-school playable fixture** do lệnh in ra (mặc định **http://127.0.0.1:4176/**). Luồng này hiện màn hình tải rồi vào game bằng tài khoản local, không yêu cầu portal. `.env` dùng database test local; launcher không đọc `.env.portal` và không khởi động portal giả lập. Cổng `4186` của lần thử portal trước là server riêng.
+
+Portal giả lập chỉ mở khi chủ động chạy `npm run build:portal` và `npm run demo:portal` cùng server tích hợp `npm run start:portal`, theo phần sandbox bên dưới. `npm run build` chỉ dựng game; `npm run build:all` dựng thêm giao diện portal giả lập.
+
 ## Bàn giao tích hợp web giải chạy — Partner API v1
 
 Game cung cấp sẵn cổng tích hợp. Web tổng đăng nhập sinh viên bằng email edu, xác minh trường và nhận các hoạt động **được chấp nhận** từ vRace. Web tổng gửi danh tính và snapshot tổng quãng đường hợp lệ **trong chiến dịch** vào game; không gửi mật khẩu/email, số điểm tùy ý hoặc quyền quản trị. Không cần game gọi trực tiếp vRace. Bộ kết nối HTTP pull cũ vẫn phục vụ dev; luồng portal mới dùng API push bên dưới và không bật tài khoản giả lập.
@@ -76,8 +88,8 @@ const receipt = await game.request('running', durableSnapshot);
 
 ### Đăng nhập từ landing page sang game
 
-1. Nút **Chơi game** trên landing page mở `<PUBLIC_ORIGIN>/?entry=portal` trong cùng tab. Game luôn bắt đầu handoff mới từ phiên portal hiện tại để đổi tài khoản đúng; mở game trực tiếp khi chưa có phiên sẽ hiện màn hình **Đăng nhập qua web giải chạy**.
-2. Khi bấm nút, game sinh verifier ngẫu nhiên trong sessionStorage và chuyển trình duyệt đến `PORTAL_LOGIN_URL` kèm `game_campaign`, `game_challenge` (base64url SHA256 verifier, không padding) và `game_return`.
+1. Sinh viên đăng nhập trên portal giải chạy của web tổng, rồi bấm **Chơi game** mở `<PUBLIC_ORIGIN>/?entry=portal` trong cùng tab. Game hiện màn hình tải và bắt đầu handoff mới từ phiên portal hiện tại; không có bước bấm đăng nhập thêm trong game.
+2. Game tự sinh verifier ngẫu nhiên trong sessionStorage và chuyển trình duyệt đến `PORTAL_LOGIN_URL` kèm `game_campaign`, `game_challenge` (base64url SHA256 verifier, không padding) và `game_return`. Portal dùng phiên sinh viên đã đăng nhập để cấp lượt chơi; chỉ yêu cầu đăng nhập trên web tổng khi phiên đó chưa có/hết hạn. Mở game trực tiếp khi chưa có phiên cũng tự bắt đầu handoff này.
 3. Portal đăng nhập/kiểm tra phiên sinh viên; kiểm tra campaign và `game_return` khớp **chính xác URL game đã đăng ký**, không redirect tới URL tùy ý. Gọi `members` nếu cần, rồi gọi `launches` từ backend với sinh viên của phiên hiện tại và challenge nhận được. Không nhận ID sinh viên từ query làm danh tính.
 4. Portal trả HTTP **303** tới `launchUrl` do game trả về, trên cùng tab. Không chuyển ticket qua query string, iframe hoặc postMessage.
 5. Game xóa fragment khỏi thanh địa chỉ và POST ticket + verifier đến `/api/portal/session` từ đúng Origin. Ticket được tiêu một lần, lưu hash server-side. Session game hạn 1 giờ trong cookie HttpOnly, SameSite=Lax, Path=/; Production dùng Secure và tên `__Host-r2pl_game`. Response chỉ có thời hạn, không trả session token cho JavaScript. sessionStorage chỉ giữ verifier tạm trong lúc handoff.
@@ -101,7 +113,7 @@ Sửa `.env.portal`: đặt DATABASE_URL đúng database **test** của máy; t�
 
 ```powershell
 npm run migrate:portal
-npm run build
+npm run build:all
 npm run start:portal
 ```
 
@@ -117,7 +129,7 @@ Trong dashboard, **Thêm hoạt động & đồng bộ**, ví dụ 1,5 km → 15
 
 Trong game, **Tìm ô để mở** chọn một ô chưa sở hữu chung cạnh với Tri thức trường mình, ưu tiên hướng công trình tiếp theo; bấm **Khám Phá Ô Này** để xác nhận tiêu Điểm. Bấm HQ/ô đã sở hữu sẽ hiện **Đã mở · 0 Points** và không tiêu thêm. Game tự làm mới ví mỗi 5 giây khi đang xem, khi quay lại tab hoặc khi bấm **Cập nhật Điểm**. Cổng synthetic `4176` và campaign portal là hai thế giới/tài khoản riêng; số dư giả lập không chuyển vào tài khoản portal.
 
-Dummy portal dùng schema `r2pl_dummy`, cookie HttpOnly, password hash scrypt có salt và hàng đợi có lease/retry; mọi đồng bộ game đi qua Partner API v1 có chữ ký, không ghi trực tiếp ví game. `npm run build` build cả game lẫn portal. Demo từ chối chạy ở Production hoặc host ngoài loopback; không dùng thay hệ thống edu/vRace thật. `play:schools` vẫn chạy độc lập cho test gameplay.
+Dummy portal dùng schema `r2pl_dummy`, cookie HttpOnly, password hash scrypt có salt và hàng đợi có lease/retry; mọi đồng bộ game đi qua Partner API v1 có chữ ký, không ghi trực tiếp ví game. `npm run build:all` build cả game lẫn portal; `npm run build` chỉ build game. Demo từ chối chạy ở Production hoặc host ngoài loopback; không dùng thay hệ thống edu/vRace thật. `play:school`/`play:schools` chạy độc lập cho test gameplay. Nút **Về giải chạy** thu hồi phiên game và đưa về web tổng; không reload game để đăng nhập lại ngay.
 
 Nghiệm thu portal/student entry: **172/172 test PASS, 0 fail, 0 skip** khi đặt cả hai biến PostgreSQL test ở phần kiểm thử; strict TypeScript và build game/portal PASS. Các test mới bao phủ tài khoản riêng, giữ dữ liệu qua restart, đồng bộ khi game offline, chống cộng trùng, PKCE, HttpOnly/CSRF, socket ticket một lần và ví sau khi tiêu Điểm. [Portal desktop](artifacts/portal/student-portal-desktop.jpg), [mobile](artifacts/portal/student-portal-mobile.jpg), [đăng nhập game](artifacts/portal/game-login.jpg).
 
