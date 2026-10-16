@@ -39,9 +39,10 @@ export async function createDummyPortal(
 ) {
   if (
     config.mode !== "staging" ||
-    ![config.publicOrigin, config.portalLoginUrl].every((value) =>
-      ["127.0.0.1", "localhost"].includes(new URL(value).hostname),
-    )
+    (!process.env.ALLOW_REMOTE_STAGING &&
+      ![config.publicOrigin, config.portalLoginUrl].every((value) =>
+        ["127.0.0.1", "localhost"].includes(new URL(value).hostname),
+      ))
   )
     throw new Error("Dummy portal only runs on loopback staging");
   const store = new DummyStore(pool, config);
