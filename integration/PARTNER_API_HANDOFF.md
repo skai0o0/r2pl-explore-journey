@@ -18,7 +18,6 @@ Tài liệu kỹ thuật kết nối giữa **Backend Web Giải Chạy (Portal)
   2. Đối với nhân sự vận hành / BTC (**Đại học AMTECH**): xác minh email và gửi kèm `email` + `emailVerified: true` để nhận quyền `admin` (vào thẳng **Live Editor**, không tham gia thi đấu).
   3. Nhận dữ liệu chạy từ vRace, lọc hoạt động hợp lệ trong thời gian giải.
   4. Gọi API đồng bộ hồ sơ (`members`) và tổng quãng đường hợp lệ (`running`) sang Game.
-  5. Hiển thị BXH Chạy (dùng `earnedRunningPoints` do Game trả về hoặc tự tính theo cùng công thức).
 - **Game R2PL phụ trách:**
   1. Quy đổi quãng đường thành Điểm (`1 km = 10 Points`, tính trên tổng mét tích lũy `floor(cumulativeMeters * 10 / 1000)` để không mất mét lẻ).
   2. Quản lý 2 số dư tách biệt cho mỗi sinh viên:
@@ -44,12 +43,10 @@ Mã `schoolId` thống nhất trên toàn bộ API v1.1 và Database:
 | `6` | **`ntu`** | `NTU` | Đại Học Nha Trang | `ntu.edu.vn` |
 | `7` | **`hcmiu`** | `HCMIU` | Đại Học Quốc Tế | `student.hcmiu.edu.vn` |
 
-> **Lưu ý về mã trường:** Hệ thống đã chuẩn hóa hoàn toàn sang `ou` (thay cho `hcmcou` cũ) và `hpuni` (thay cho `dhhp` cũ) ở cả API và Database (qua migration `008`). Portal chỉ gửi 8 mã chuẩn ở cột `schoolId` bên trên.
-
 ### 2.2. Tổ chức Quản trị Đại học AMTECH (`role = "admin"`, `playable = false`)
-- Mã định danh: `schoolId: "amtech"` (kèm `email` đã xác thực và `emailVerified: true`).
-- Điều kiện cấp quyền `admin`: Email thuộc domain `@amtech.vn`, `@amtech-vn.com` hoặc nằm trong danh sách 12 email nhân sự được duyệt sẵn (`minhchau.nguyen@acer.com`, `acer@amtech.vn`, `test003@amtech.vn`, `test002@amtech.vn`, `test001@amtech.vn`, `predator@amtech.vn`, `leanhtuan@amtech.vn`, `predator@dava.vn`, `khang70121@gmail.com`, `dieplt.sg@gmail.com`, `vrace@amtech.vn`, `dieplt@dava.vn`).
-- **Quyền hạn:** Tài khoản `admin` không có HQ, không có ví, không đồng bộ chạy bộ và không xuất hiện trên BXH. Khi đăng nhập qua luồng `launches`, trình duyệt tự động mở thẳng **AMTECH Live Editor** (chế độ xây dựng bản đồ 3D, phát quà, thông báo).
+- Mã định danh: `schoolId: "amtech"` (truyền kèm `email` đã xác thực và `emailVerified: true`).
+- Điều kiện cấp quyền `admin`: Email thuộc domain công ty hoặc nằm trong danh sách email nhân sự/BTC đã được thống nhất giữa 2 bên.
+- **Quyền hạn:** Tài khoản `admin` không có HQ, không có ví, không đồng bộ chạy bộ và không xuất hiện trên BXH. Khi đăng nhập qua luồng `launches`, trình duyệt tự động mở thẳng **AMTECH Live Editor** (chế độ quản trị bản đồ 3D, phát quà, thông báo).
 
 ---
 
@@ -143,7 +140,7 @@ Gọi khi người dùng xác thực xong, đổi tên hiển thị, hoặc khi 
   "active": true
 }
 ```
-*(Nếu `email` nằm trong 12 email nhân sự được duyệt sẵn và `emailVerified: true`, hệ thống tự động cấp quyền `admin` của AMTECH bất kể giá trị `schoolId` gửi kèm).*
+*(Nếu `email` được duyệt và `emailVerified: true`, hệ thống tự động cấp quyền `admin` của AMTECH bất kể giá trị `schoolId` gửi kèm).*
 
 **Response `200 OK`:**
 ```json
@@ -261,23 +258,36 @@ Sinh viên (hoặc Admin AMTECH) đang đăng nhập ở Portal bấm nút **"Ch
 
 ---
 
-## 5. Bảng mã lỗi chuẩn
+## 5. Bảng mã lỗi chuẩn & Cách xử lý chi tiết
 
-Mọi lỗi đều trả về JSON `{"error": "<CODE>", "requestId": "<UUID>"}`:
+Mọi lỗi trả về đều có định dạng chuẩn JSON: `{"error": "<CODE>", "requestId": "<UUID>"}`.
+`requestId` dùng để đối soát log giữa hai hệ thống.
 
-| HTTP | Mã lỗi (`error`) | Ý nghĩa & Cách xử lý bên Portal |
-| :--- | :--- | :--- |
-| `400` | `INVALID_BODY` / `INVALID_VERIFIED_MEMBER` / `INVALID_SNAPSHOT_TIME_OR_DISTANCE` / `INVALID_CODE_CHALLENGE` | Sai định dạng trường, `observedAtMs` lệch quá 5 phút, hoặc `weeklyMeters > cumulativeMeters`. Không tự retry, kiểm tra lại dữ liệu. |
-| `401` | `INVALID_SIGNATURE` | Sai HMAC signature, sai `X-R2PL-Campaign`, hoặc đồng hồ server lệch quá 5 phút. |
-| `403` | `MEMBER_SUSPENDED` | Tài khoản đang bị khóa (`active: false`). |
-| `403` | `VERIFIED_ADMIN_IDENTITY_REQUIRED` | Truyền `schoolId: "amtech"` nhưng thiếu `emailVerified: true` hoặc email không thuộc AMTECH/danh sách duyệt. |
-| `403` | `ADMIN_CANNOT_PLAY` | Gọi `running` hoặc `accounts` cho tài khoản Admin AMTECH. |
-| `404` | `MEMBER_NOT_FOUND` | Chưa gọi `/api/partner/v1/members` cho `externalStudentId` này trước khi gọi `running`/`accounts`/`launches`. |
-| `409` | `REQUEST_REPLAY` | Trùng `X-R2PL-Nonce` đã gửi trước đó. Khi retry bắt buộc tạo `nonce` và `timestamp` mới. |
-| `409` | `STALE_REVISION` | `revision` gửi sang nhỏ hơn hoặc bằng `revision` hiện tại (hoặc `observedAtMs` lùi về quá khứ). |
-| `409` | `REVISION_CONFLICT` | Cùng `revision` nhưng nội dung mét chạy khác với lần gọi thành công trước đó. |
-| `409` | `CORRECTION_REQUIRES_REVIEW` | Giảm km chạy nhưng sinh viên đã tiêu hết điểm trong game (không cho phép âm ví tự động). |
-| `409` | `SCHOOL_CHANGE_REQUIRES_REVIEW` | Đổi `schoolId` của sinh viên đã tồn tại. |
-| `409` | `IDENTITY_ALREADY_BOUND` | Email AMTECH này đã được gắn với một `externalStudentId` khác. |
-| `429` | `RATE_LIMITED` | Vượt quá 300 req/phút/key. Đợi theo header `Retry-After: 60` rồi retry. |
-| `503` | `TEMPORARILY_UNAVAILABLE` | DB/Server bận tạm thời. Retry với exponential backoff (giữ nguyên payload, tạo nonce mới). |
+| HTTP Status | Mã lỗi (`error`) | Nguyên nhân kích hoạt | Cách xử lý phía Webdev Tổng |
+| :---: | :--- | :--- | :--- |
+| **`400`** | `INVALID_JSON` | Body gửi lên không phải JSON hợp lệ. | Kiểm tra cú pháp JSON của request body. |
+| **`400`** | `INVALID_BODY` | Body chứa trường thừa hoặc thiếu các trường bắt buộc theo schema. | Đối chiếu payload với mục 4 của tài liệu này hoặc OpenAPI schema. |
+| **`400`** | `INVALID_VERIFIED_MEMBER` | `displayName` rỗng/dài hơn 100 ký tự, chứa ký tự điều khiển, hoặc `eduVerified !== true`. | Kiểm tra dữ liệu sinh viên trước khi gọi `/members`. |
+| **`400`** | `INVALID_SNAPSHOT_TIME_OR_DISTANCE` | `observedAtMs` lệch quá ±5 phút so với giờ máy chủ Game, hoặc `weeklyMeters > cumulativeMeters`. | Kiểm tra đồng bộ NTP giờ hệ thống; đảm bảo số mét tuần không lớn hơn tổng mét tích lũy. |
+| **`400`** | `INVALID_CODE_CHALLENGE` | `codeChallenge` không đúng chuẩn regex `^[A-Za-z0-9_-]{43}$`. | Truyền nguyên vẹn `game_challenge` nhận được từ URL query của Game. |
+| **`400`** | `POINTS_OVERFLOW` | Tổng mét vượt quá giới hạn tính toán an toàn của hệ thống. | Kiểm tra lại giá trị mét chạy gửi lên từ vRace. |
+| **`400`** | `QUERY_NOT_SUPPORTED` | Endpoint partner bị gọi kèm query string trên URL. | Bỏ query param trên URL; truyền dữ liệu hoàn toàn qua JSON body. |
+| **`401`** | `INVALID_SIGNATURE` | Chữ ký HMAC sai, sai secret, sai `keyId`, hoặc `X-R2PL-Campaign` không khớp. | Kiểm tra lại công thức ký canonical string (7 dòng LF) và cặp Key/Secret. |
+| **`403`** | `ORIGIN_REJECTED` | Header `Origin` gửi lên không khớp với cấu hình `PUBLIC_ORIGIN` của game. | Server-to-server call không cần gửi header `Origin` của browser. |
+| **`403`** | `MEMBER_SUSPENDED` | Tài khoản đang có trạng thái `active: false`. | Sinh viên đang bị khóa quyền; cần kích hoạt lại (`active: true`) qua `/members` nếu muốn mở lại. |
+| **`403`** | `VERIFIED_ADMIN_IDENTITY_REQUIRED` | Gửi `schoolId: "amtech"` nhưng thiếu `emailVerified: true` hoặc email không hợp lệ. | Đảm bảo portal đã xác minh email nhân sự trước khi gửi flag `emailVerified: true`. |
+| **`403`** | `ADMIN_CANNOT_PLAY` | Gọi `/running` hoặc `/accounts` cho tài khoản Admin AMTECH. | Admin AMTECH không có ví/chạy bộ; web tổng không đẩy dữ liệu chạy cho role admin. |
+| **`404`** | `NOT_FOUND` | Sai đường dẫn endpoint hoặc method. | Kiểm tra lại URL (phải là `POST /api/partner/v1/<operation>`). |
+| **`404`** | `MEMBER_NOT_FOUND` | `externalStudentId` chưa từng được tạo qua `/api/partner/v1/members`. | Bắt buộc gọi `/members` để tạo hồ sơ trước khi gọi `/running`, `/accounts` hoặc `/launches`. |
+| **`405`** | `METHOD_NOT_ALLOWED` | Gọi HTTP method khác `POST` (ví dụ `GET`). | Tất cả endpoint thao tác dữ liệu đều dùng method `POST`. |
+| **`409`** | `REQUEST_REPLAY` | `X-R2PL-Nonce` đã từng được ghi nhận trong cửa sổ chống phát lại. | Khi retry request, bắt buộc tạo `nonce` ngẫu nhiên mới và `timestamp` hiện tại. |
+| **`409`** | `STALE_REVISION` | `revision` gửi sang nhỏ hơn hoặc bằng revision đã lưu, hoặc `observedAtMs` lùi về quá khứ. | Tăng `revision` (dạng chuỗi số nguyên tăng dần) cho mỗi lần đồng bộ mới. |
+| **`409`** | `REVISION_CONFLICT` | Cùng 1 số `revision` nhưng nội dung mét chạy khác với lần gọi thành công trước đó. | Nếu muốn cập nhật số liệu mới, phải tăng số `revision` tiếp theo. |
+| **`409`** | `SCHOOL_CHANGE_REQUIRES_REVIEW` | Gọi `/members` với `schoolId` khác với trường sinh viên đã được gắn ban đầu. | Hệ thống không cho phép tự ý chuyển trường thi đấu giữa chừng. |
+| **`409`** | `IDENTITY_ALREADY_BOUND` | Email nhân sự AMTECH này đã gắn với một `externalStudentId` khác trước đó. | Kiểm tra và giữ nguyên mapping `externalStudentId` ổn định cho từng người dùng. |
+| **`409`** | `CONVERSION_CHANGE_REQUIRES_REVIEW` | Tỷ lệ quy đổi điểm chạy bị thay đổi giữa chiến dịch. | Liên hệ đội ngũ Game để đối soát rebase điểm. |
+| **`409`** | `CORRECTION_REQUIRES_REVIEW` | vRace hủy km gian lận nhưng sinh viên đã lỡ tiêu hết số điểm đó trong game (ví không đủ trừ). | Không tự retry; giữ nguyên và phối hợp BTC đối soát thủ công. |
+| **`413`** | `BODY_TOO_LARGE` | JSON body vượt quá giới hạn 16.384 bytes. | Giảm dung lượng payload (các endpoint đối tác chỉ gửi object đơn lẻ). |
+| **`415`** | `JSON_REQUIRED` | Thiếu hoặc sai header `Content-Type: application/json`. | Bắt buộc set header `Content-Type: application/json; charset=utf-8`. |
+| **`429`** | `RATE_LIMITED` | Vượt ngưỡng 300 requests/phút/key. | Đọc header `Retry-After: 60`, tạm dừng và retry sau thời gian quy định. |
+| **`503`** | `TEMPORARILY_UNAVAILABLE` | Database hoặc máy chủ Game bận/bảo trì tạm thời. | Giữ nguyên payload ban đầu, sinh `nonce` mới và retry với thuật toán exponential backoff. |
