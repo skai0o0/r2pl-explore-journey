@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
+import { migratePortalDatabase } from "../server/persistence/PortalMigrations.ts";
 import { botDatabase } from "./simulation/config.ts";
 import { migrateBotFixture } from "./simulation/fixture.ts";
 
@@ -11,6 +12,7 @@ const database = botDatabase(
 const workspace = fileURLToPath(new URL("../", import.meta.url));
 migrateBotFixture(database, workspace);
 const pool = new Pool({ connectionString: database, max: 16 });
+await migratePortalDatabase(pool);
 const port = Number(process.env.PORT ?? 4176);
 const wsPort = Number(process.env.WS_PORT ?? 2568);
 if (!Number.isInteger(wsPort) || wsPort < 1 || wsPort > 65535)

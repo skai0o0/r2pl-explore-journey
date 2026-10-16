@@ -20,6 +20,8 @@ export async function migratePortalDatabase(pool: Pool): Promise<void> {
       "004_gift_checkin.sql",
       "005_portal_integration.sql",
       "006_browser_sessions.sql",
+      "007_admin_editor.sql",
+      "008_canonical_school_ids.sql",
     ];
     for (const [index, file] of files.entries()) {
       const sql = await readFile(

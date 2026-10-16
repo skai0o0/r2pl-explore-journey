@@ -2,6 +2,10 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
 import {
+  type AdminPrincipal,
+  isAmtechIdentity,
+} from "../../shared/integration/identity.ts";
+import {
   assertIdentifier,
   parseRunningSnapshot,
   snapshotWire,
@@ -101,6 +105,15 @@ export class PortalStore {
   }
   private async member(db: PoolClient, id: unknown): Promise<Member> {
     assertIdentifier(id);
+    if (
+      (
+        await db.query(
+          "SELECT 1 FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND external_student_id=$2",
+          [this.config.campaignId, id],
+        )
+      ).rowCount
+    )
+      throw new PortalError(403, "ADMIN_CANNOT_PLAY");
     const row = (
       await db.query<Member>(
         "SELECT * FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
@@ -118,8 +131,14 @@ export class PortalStore {
       "displayName",
       "eduVerified",
       "active",
+      "email",
+      "emailVerified",
     ]);
     assertIdentifier(value.externalStudentId);
+    if (isAmtechIdentity(value.email, value.emailVerified))
+      return this.upsertAdmin(value);
+    if (value.schoolId === "amtech")
+      throw new PortalError(403, "VERIFIED_ADMIN_IDENTITY_REQUIRED");
     const school = SCHOOLS.find((school) => school.id === value.schoolId);
     if (
       !school ||
@@ -133,6 +152,15 @@ export class PortalStore {
       throw new PortalError(400, "INVALID_VERIFIED_MEMBER");
     const displayName = value.displayName.trim();
     return this.transaction(async (db) => {
+      if (
+        (
+          await db.query(
+            "SELECT 1 FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND external_student_id=$2",
+            [this.config.campaignId, value.externalStudentId],
+          )
+        ).rowCount
+      )
+        throw new PortalError(403, "ADMIN_CANNOT_PLAY");
       const old = (
         await db.query<Member>(
           "SELECT * FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
@@ -194,8 +222,105 @@ export class PortalStore {
         externalStudentId: value.externalStudentId,
         schoolId: school.id,
         active: value.active,
+        role: "user",
+        playable: true,
       };
     });
+  }
+  private async upsertAdmin(value: Record<string, unknown>): Promise<unknown> {
+    if (
+      typeof value.active !== "boolean" ||
+      typeof value.displayName !== "string" ||
+      !value.displayName.trim() ||
+      value.displayName.length > 100 ||
+      [...value.displayName].some((char) => char.charCodeAt(0) < 32)
+    )
+      throw new PortalError(400, "INVALID_VERIFIED_MEMBER");
+    return this.transaction(async (db) => {
+      const email = (value.email as string).trim().toLowerCase();
+      const old = (
+        await db.query<{ actor_id: string; external_student_id: string }>(
+          "SELECT actor_id,external_student_id FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND (external_student_id=$2 OR email=$3) FOR UPDATE",
+          [this.config.campaignId, value.externalStudentId, email],
+        )
+      ).rows;
+      if (old.some((a) => a.external_student_id !== value.externalStudentId))
+        throw new PortalError(409, "IDENTITY_ALREADY_BOUND");
+      const player = (
+        await db.query<Member>(
+          "SELECT * FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
+          [this.config.campaignId, value.externalStudentId],
+        )
+      ).rows[0];
+      const actorId = old[0]?.actor_id ?? player?.actor_id ?? randomUUID();
+      if (player) {
+        // Preserve historical wallets; revoke all play authority when staff is identified.
+        await db.query(
+          "UPDATE r2pl_v2.portal_members SET active=false WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, player.actor_id],
+        );
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_sessions WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, player.actor_id],
+        );
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_launches WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, player.actor_id],
+        );
+        await db.query(
+          "DELETE FROM r2pl_prep.running_bindings WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, player.actor_id],
+        );
+      }
+      await db.query(
+        "INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active) VALUES($1,$2,$3,'amtech',$4,$5,$6) ON CONFLICT(campaign_id,external_student_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=EXCLUDED.active",
+        [
+          this.config.campaignId,
+          value.externalStudentId,
+          actorId,
+          email,
+          (value.displayName as string).trim(),
+          value.active,
+        ],
+      );
+      if (!value.active) {
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_admin_sessions WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, actorId],
+        );
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_admin_launches WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, actorId],
+        );
+      }
+      return {
+        externalStudentId: value.externalStudentId,
+        organizationId: "amtech",
+        schoolId: null,
+        role: "admin",
+        playable: false,
+        active: value.active,
+      };
+    });
+  }
+  async authenticateAdmin(token: unknown): Promise<AdminPrincipal | undefined> {
+    if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token))
+      return undefined;
+    const row = (
+      await this.pool.query<{ actor_id: string; display_name: string }>(
+        "SELECT a.actor_id,a.display_name FROM r2pl_v2.portal_admin_sessions s JOIN r2pl_v2.portal_admins a USING(campaign_id,actor_id) WHERE s.campaign_id=$1 AND s.token_hash=$2 AND s.expires_at>clock_timestamp() AND a.active",
+        [this.config.campaignId, digest(token)],
+      )
+    ).rows[0];
+    return row
+      ? {
+          actorId: row.actor_id,
+          name: row.display_name,
+          organizationId: "amtech",
+          role: "admin",
+          playable: false,
+        }
+      : undefined;
   }
   async running(input: unknown): Promise<unknown> {
     const value = portalObject(input, [
@@ -340,6 +465,35 @@ export class PortalStore {
     )
       throw new PortalError(400, "INVALID_CODE_CHALLENGE");
     return this.transaction(async (db) => {
+      assertIdentifier(value.externalStudentId);
+      const admin = (
+        await db.query<{ actor_id: string; active: boolean }>(
+          "SELECT actor_id,active FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
+          [this.config.campaignId, value.externalStudentId],
+        )
+      ).rows[0];
+      if (admin) {
+        if (!admin.active) throw new PortalError(403, "MEMBER_SUSPENDED");
+        const ticket = randomBytes(32).toString("hex");
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_admin_launches WHERE campaign_id=$1 AND expires_at<=clock_timestamp()",
+          [this.config.campaignId],
+        );
+        await db.query(
+          "INSERT INTO r2pl_v2.portal_admin_launches(campaign_id,ticket_hash,actor_id,challenge,expires_at) VALUES($1,$2,$3,$4,clock_timestamp()+($5::bigint*interval '1 millisecond'))",
+          [
+            this.config.campaignId,
+            digest(ticket),
+            admin.actor_id,
+            value.codeChallenge,
+            GAME_CONFIG.integration.launchTtlMs,
+          ],
+        );
+        return {
+          launchUrl: `${this.config.publicOrigin}/#launch=${ticket}`,
+          expiresInSeconds: GAME_CONFIG.integration.launchTtlMs / 1000,
+        };
+      }
       const member = await this.member(db, value.externalStudentId),
         ticket = randomBytes(32).toString("hex");
       await db.query(
@@ -374,6 +528,41 @@ export class PortalStore {
     )
       throw new PortalError(401, "INVALID_LAUNCH");
     return this.transaction(async (db) => {
+      const adminLaunch = (
+        await db.query<{ actor_id: string; challenge: string }>(
+          "SELECT l.actor_id,l.challenge FROM r2pl_v2.portal_admin_launches l JOIN r2pl_v2.portal_admins a USING(campaign_id,actor_id) WHERE l.campaign_id=$1 AND l.ticket_hash=$2 AND l.expires_at>clock_timestamp() AND a.active FOR UPDATE OF l,a",
+          [this.config.campaignId, digest(value.ticket as string)],
+        )
+      ).rows[0];
+      if (adminLaunch) {
+        if (
+          adminLaunch.challenge !==
+          digest(value.codeVerifier as string).toString("base64url")
+        )
+          throw new PortalError(401, "INVALID_LAUNCH");
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_admin_launches WHERE campaign_id=$1 AND ticket_hash=$2",
+          [this.config.campaignId, digest(value.ticket as string)],
+        );
+        await db.query(
+          "DELETE FROM r2pl_v2.portal_admin_sessions WHERE campaign_id=$1 AND expires_at<=clock_timestamp()",
+          [this.config.campaignId],
+        );
+        const token = randomBytes(32).toString("hex");
+        await db.query(
+          "INSERT INTO r2pl_v2.portal_admin_sessions(campaign_id,token_hash,actor_id,expires_at) VALUES($1,$2,$3,clock_timestamp()+($4::bigint*interval '1 millisecond'))",
+          [
+            this.config.campaignId,
+            digest(token),
+            adminLaunch.actor_id,
+            GAME_CONFIG.integration.sessionTtlMs,
+          ],
+        );
+        return {
+          token,
+          expiresInSeconds: GAME_CONFIG.integration.sessionTtlMs / 1000,
+        };
+      }
       const row = (
         await db.query<{ actor_id: string; challenge: string }>(
           "SELECT l.actor_id,l.challenge FROM r2pl_v2.portal_launches l JOIN r2pl_v2.portal_members m USING(campaign_id,actor_id) WHERE l.campaign_id=$1 AND l.ticket_hash=$2 AND l.expires_at>clock_timestamp() AND m.active FOR UPDATE OF l,m",
@@ -439,11 +628,17 @@ export class PortalStore {
   }
   async logout(token: string): Promise<void> {
     await this.pool.query(
+      "DELETE FROM r2pl_v2.portal_admin_sessions WHERE campaign_id=$1 AND token_hash=$2",
+      [this.config.campaignId, digest(token)],
+    );
+    await this.pool.query(
       "DELETE FROM r2pl_v2.portal_sessions WHERE campaign_id=$1 AND token_hash=$2",
       [this.config.campaignId, digest(token)],
     );
   }
   async socketTicket(token: string): Promise<string> {
+    if (await this.authenticateAdmin(token))
+      throw new PortalError(403, "ADMIN_CANNOT_PLAY");
     return this.transaction(async (db) => {
       const sessionHash = digest(token);
       const session = await db.query(

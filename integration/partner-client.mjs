@@ -2,6 +2,9 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 
 /** Server-side only. Never bundle a partner key in a browser or mobile app. */
 export class R2plPartnerClient {
+  async provisionMember(payload) {
+    return this.request("members", payload);
+  }
   constructor({ origin, campaignId, keyId, secret, timeoutMs = 10000 }) {
     const url = new URL(origin);
     if (url.origin !== origin || !(url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))) throw new Error("An HTTPS origin is required (loopback HTTP for sandbox)");

@@ -1,14 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Pool } from "pg";
-import {
-  GAME_CONFIG,
-  LANDMARKS,
-  SCHOOLS,
-  type WorldObject,
-} from "../../shared/gameplay/gameConfig.ts";
+import { validateEditorLayout } from "../../shared/gameplay/editor.ts";
+import { SCHOOLS, type WorldObject } from "../../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import { chunkId, localIndex } from "../../shared/world/coordinates.ts";
 import { adjustKnowledgeScore } from "./KnowledgeScore.ts";
+import { PortalError } from "./PortalSignature.ts";
 import type { SchoolPlayFixture } from "./SchoolPlayFixture.ts";
 export class SignedOperator {
   private pool: Pool;
@@ -40,7 +37,11 @@ export class SignedOperator {
       )
     ).rows.map((r) => r.data);
   }
-  async apply(input: unknown): Promise<void> {
+  async apply(
+    input: unknown,
+    actorId?: string,
+    sessionToken?: string,
+  ): Promise<void> {
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new TypeError("Invalid admin command");
     const c = input as {
@@ -50,6 +51,8 @@ export class SignedOperator {
       body?: unknown;
       tier?: unknown;
       amount?: unknown;
+      baseRevision?: unknown;
+      targetRevision?: unknown;
     };
     const db = await this.pool.connect();
     let committed = false;
@@ -58,6 +61,50 @@ export class SignedOperator {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
         `signed-game:${this.fixture.campaignId}`,
       ]);
+      let revision = 0;
+      if (actorId) {
+        if (
+          !(
+            await db.query(
+              "SELECT 1 FROM r2pl_v2.portal_admins a JOIN r2pl_v2.portal_admin_sessions s USING(campaign_id,actor_id) WHERE a.campaign_id=$1 AND a.actor_id=$2 AND a.active AND s.token_hash=$3 AND s.expires_at>clock_timestamp() FOR SHARE OF a,s",
+              [
+                this.fixture.campaignId,
+                actorId,
+                createHash("sha256")
+                  .update(sessionToken ?? "")
+                  .digest(),
+              ],
+            )
+          ).rowCount
+        )
+          throw new PortalError(403, "ADMIN_REQUIRED");
+        revision = (
+          await db.query<{ revision: number }>(
+            "SELECT COALESCE(max(revision),0)::integer AS revision FROM r2pl_v2.editor_versions WHERE campaign_id=$1",
+            [this.fixture.campaignId],
+          )
+        ).rows[0]!.revision;
+        if (
+          ["publish", "rollback"].includes(String(c.action)) &&
+          (!Number.isSafeInteger(c.baseRevision) || c.baseRevision !== revision)
+        )
+          throw new PortalError(409, "LAYOUT_VERSION_CONFLICT");
+        await db.query(
+          "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,$3,$4)",
+          [
+            this.fixture.campaignId,
+            actorId,
+            String(c.action),
+            JSON.stringify({
+              baseRevision: c.baseRevision,
+              targetRevision: c.targetRevision,
+              title: c.title,
+              tier: c.tier,
+              amount: c.amount,
+            }),
+          ],
+        );
+      }
       if (c.action === "gift-stock") {
         if (
           typeof c.tier !== "string" ||
@@ -111,91 +158,38 @@ export class SignedOperator {
       ).rows.map((r) => r.data);
       let objects: WorldObject[];
       if (c.action === "rollback") {
-        const saved = (
-          await db.query<{ data: WorldObject[] }>(
-            "SELECT data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='layout-backup' AND id='previous'",
-            [this.fixture.campaignId],
-          )
-        ).rows[0];
-        if (!saved) throw new TypeError("No previous layout");
-        objects = saved.data;
+        if (actorId && Number.isSafeInteger(c.targetRevision)) {
+          const version = (
+            await db.query<{ objects: WorldObject[] }>(
+              "SELECT objects FROM r2pl_v2.editor_versions WHERE campaign_id=$1 AND revision=$2",
+              [this.fixture.campaignId, c.targetRevision],
+            )
+          ).rows[0];
+          if (!version) throw new TypeError("Unknown layout version");
+          objects = version.objects;
+        } else {
+          const saved = (
+            await db.query<{ data: WorldObject[] }>(
+              "SELECT data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='layout-backup' AND id='previous'",
+              [this.fixture.campaignId],
+            )
+          ).rows[0];
+          if (!saved) throw new TypeError("No previous layout");
+          objects = saved.data;
+        }
       } else if (c.action === "publish" && Array.isArray(c.objects))
         objects = c.objects as WorldObject[];
       else throw new TypeError("Invalid admin action");
-      if (objects.length > 200 || objects.length < 18)
-        throw new RangeError("Invalid object count");
-      const ids = new Set<string>();
-      for (const o of objects) {
-        if (
-          !o ||
-          typeof o !== "object" ||
-          !/^[a-z0-9_-]{1,100}$/.test(o.id) ||
-          ids.has(o.id) ||
-          !["hq", "landmark", "unistop", "chest"].includes(o.kind) ||
-          typeof o.name !== "string" ||
-          o.name.length > 100 ||
-          ![o.x, o.z, o.width, o.height].every(Number.isInteger)
-        )
-          throw new TypeError("Invalid world object");
-        if (
-          Object.keys(o).some(
-            (k) =>
-              ![
-                "id",
-                "kind",
-                "name",
-                "x",
-                "z",
-                "width",
-                "height",
-                "schoolSlot",
-                "tier",
-                "ownerSchoolSlot",
-                "ownerSchoolId",
-              ].includes(k),
-          )
-        )
-          throw new TypeError("Unknown world object field");
-        if (/[<>]/.test(o.name)) throw new TypeError("Invalid object name");
-        ids.add(o.id);
-        const f = GAME_CONFIG.footprints[o.kind];
-        if (
-          o.width !== f.width ||
-          o.height !== f.height ||
-          o.x - o.width / 2 < 0 ||
-          o.z - o.height / 2 < 0 ||
-          o.x + o.width / 2 > 1000 ||
-          o.z + o.height / 2 > 1000
-        )
-          throw new RangeError("Invalid footprint");
-        if (
-          o.kind === "hq" &&
-          !SCHOOLS.some((s) => s.slot === o.schoolSlot && o.id === `hq-${s.id}`)
-        )
-          throw new TypeError("Invalid HQ");
-        if (o.kind === "landmark" && !LANDMARKS.some((l) => l.id === o.id))
-          throw new TypeError("Invalid landmark");
-        if (
-          (o.kind === "unistop" || o.kind === "chest") &&
-          !["aspire", "nitro", "predator"].includes(o.tier ?? "")
-        )
-          throw new TypeError("Invalid tier");
-      }
+      validateEditorLayout(objects);
       if (
-        objects.filter((o) => o.kind === "hq").length !== 8 ||
-        objects.filter((o) => o.kind === "landmark").length !== 10
+        objects.some((o) =>
+          previous.some((p) => p.id === o.id && p.kind !== o.kind),
+        )
       )
-        throw new TypeError("Roster incomplete");
-      for (let i = 0; i < objects.length; i++)
-        for (let j = i + 1; j < objects.length; j++) {
-          const a = objects[i]!,
-            b = objects[j]!;
-          if (
-            Math.abs(a.x - b.x) < (a.width + b.width) / 2 &&
-            Math.abs(a.z - b.z) < (a.height + b.height) / 2
-          )
-            throw new RangeError("Overlapping objects");
-        }
+        throw new TypeError(
+          "Object kind is immutable; create a new object instead",
+        );
+      const ids = new Set(objects.map((o) => o.id));
       await db.query(
         "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'layout-backup','previous',$2) ON CONFLICT(campaign_id,scope,id) DO UPDATE SET data=EXCLUDED.data",
         [this.fixture.campaignId, JSON.stringify(previous)],
@@ -309,6 +303,33 @@ export class SignedOperator {
         await db.query(
           "INSERT INTO r2pl_v2.school_chunk_views(campaign_id,chunk_id,school_slot) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
           [this.fixture.campaignId, v.id, v.slot],
+        );
+      }
+      // Ownership is runtime state, never editable or restorable from a layout draft.
+      objects = objects.map((o) =>
+        o.kind === "unistop"
+          ? {
+              ...o,
+              ownerSchoolSlot:
+                previous.find((p) => p.id === o.id)?.ownerSchoolSlot ?? null,
+              ownerSchoolId:
+                previous.find((p) => p.id === o.id)?.ownerSchoolId ?? null,
+            }
+          : o,
+      );
+      if (actorId) {
+        await db.query(
+          "INSERT INTO r2pl_v2.editor_versions(campaign_id,revision,objects) VALUES($1,0,$2) ON CONFLICT DO NOTHING",
+          [this.fixture.campaignId, JSON.stringify(previous)],
+        );
+        await db.query(
+          "INSERT INTO r2pl_v2.editor_versions(campaign_id,revision,actor_id,objects) VALUES($1,$2,$3,$4)",
+          [
+            this.fixture.campaignId,
+            revision + 1,
+            actorId,
+            JSON.stringify(objects),
+          ],
         );
       }
       for (const o of objects)

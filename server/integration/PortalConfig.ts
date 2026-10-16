@@ -1,4 +1,5 @@
 import { SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import { AMTECH } from "../../shared/integration/identity.ts";
 
 export interface PortalConfig {
   readonly campaignId: string;
@@ -80,4 +81,14 @@ export function portalConfigFromEnv(): PortalConfig {
   });
 }
 export const portalSchools = () =>
-  SCHOOLS.map(({ id, slot, shortName }) => ({ id, slot, name: shortName }));
+  SCHOOLS.map(({ id, slot, shortName, fullName, emailDomains }) => ({
+    id,
+    slot,
+    name: shortName,
+    shortName,
+    fullName,
+    emailDomains,
+    role: "user",
+    playable: true,
+  }));
+export const portalOrganizations = () => [AMTECH];

@@ -24,7 +24,7 @@ test("signed config publishes exact roster, footprints, costs and unnormalized r
   assert.equal(GAME_CONFIG.ruleVersion, 1);
   assert.deepEqual(
     SCHOOLS.map((s) => s.id),
-    ["hcmut", "hcmcou", "dtu", "dhhp", "hsu", "huce", "ntu", "hcmiu"],
+    ["hcmut", "ou", "dtu", "hpuni", "hsu", "huce", "ntu", "hcmiu"],
   );
   assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "hq").length, 8);
   assert.equal(STAGING_OBJECTS.filter((o) => o.kind === "landmark").length, 10);

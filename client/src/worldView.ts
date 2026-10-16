@@ -760,9 +760,13 @@ export class WorldView {
     this.#render();
   }
   updateObjects(objects: readonly WorldObject[]): void {
+    const signature = (list: readonly WorldObject[]) =>
+      JSON.stringify(list.map((o) => [o.id, o.kind, o.name, o.tier]));
+    const rebuild = signature(objects) !== signature(this.#baseCatalog);
     this.#baseCatalog = objects;
     this.#catalog = [...objects, ...this.#privateCatalog];
     this.#objectById = new Map(this.#catalog.map((o) => [o.id, o]));
+    if (rebuild) this.#replacePublicMeshes(objects);
     this.#moveObjectRoots();
     for (const o of objects) {
       if (o.kind === "unistop") {
@@ -790,6 +794,91 @@ export class WorldView {
       }
     }
     this.#render();
+  }
+  /** Reconcile published additions/deletions without resetting player or fog state. */
+  #replacePublicMeshes(objects: readonly WorldObject[]): void {
+    for (const mount of this.#assetMounts) mount.dispose();
+    this.#assetMounts.length = 0;
+    for (const root of this.#assetRoots) this.#scene.remove(root);
+    this.#assetRoots.length = 0;
+    for (let i = this.#interactiveObjects.length - 1; i >= 0; i--)
+      if (!this.#privateObjectIds.has(this.#interactiveObjects[i]!.id))
+        this.#interactiveObjects.splice(i, 1);
+    this.#unistopMeshes.clear();
+    for (let i = this.#markers.length - 1; i >= 0; i--)
+      if (this.#markers[i]!.kind !== "chest") {
+        this.#markerElements[i]!.remove();
+        this.#markerElements.splice(i, 1);
+        this.#markers.splice(i, 1);
+      }
+    for (const o of objects) {
+      if (o.kind === "chest") continue;
+      const school =
+        o.schoolSlot === undefined ? undefined : SCHOOLS[o.schoolSlot];
+      const color =
+        school?.color ?? (o.kind === "landmark" ? "#c3a5eb" : "#72d8ca");
+      const url =
+        o.kind === "hq"
+          ? getHqModelUrl(school!.id)
+          : o.kind === "landmark"
+            ? getLandmarkModelUrl(o.id)
+            : getUniStopModelUrl(o.tier!);
+      const mount = mountModelAsset(
+        this.#scene,
+        this.#assetLoader,
+        url,
+        {
+          id: o.id,
+          asset: o.kind === "landmark" ? "landmark" : "hq",
+          worldX: o.x,
+          worldZ: o.z,
+          scale: 1,
+          rotationZ: 0,
+        },
+        createProceduralBuilding(o.kind, color, o, o.tier),
+        this.#render,
+        {
+          skipIfUnavailable: true,
+          colorHex: color,
+          targetSpan: Math.max(o.width, o.height),
+          onRootChanged: (root) => this.#cacheObject(o, root),
+        },
+      );
+      this.#assetMounts.push(mount);
+      const marker: WorldMarker = {
+        id: o.id,
+        kind: o.kind,
+        x: o.x,
+        z: o.z,
+        title: objectDisplayName(o, false),
+        detail: "",
+        ...(school ? { color: school.color, schoolSlot: school.slot } : {}),
+      };
+      const element = document.createElement("div"),
+        glyph = document.createElement("span"),
+        copy = document.createElement("span"),
+        title = document.createElement("b");
+      element.className = `map-marker ${o.kind}`;
+      element.dataset.markerId = o.id;
+      if (school) element.style.color = school.color;
+      glyph.className = "marker-glyph";
+      glyph.textContent =
+        o.kind === "hq" ? "⌂" : o.kind === "landmark" ? "◆" : "◉";
+      copy.className = "marker-copy";
+      title.textContent = marker.title;
+      copy.append(title);
+      element.append(glyph, copy);
+      element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const current = this.#displayObject(o.id);
+        if (current) this.#pickObject(current);
+      });
+      this.#markers.push(marker);
+      this.#markerElements.push(element);
+      this.#host.append(element);
+    }
+    if (this.#selectedObject && !this.#objectById.has(this.#selectedObject))
+      this.#selectedObject = undefined;
   }
   setChestOpen(id: string, open = true): void {
     const mesh = this.#chestMeshes.get(id);

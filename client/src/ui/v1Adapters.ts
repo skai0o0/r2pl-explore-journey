@@ -19,7 +19,7 @@ export const SCHOOL_ROSTER: Record<
     s.id,
     {
       id: s.id,
-      name: s.shortName,
+      name: s.fullName,
       shortName: s.shortName,
       colorHex: s.color,
       accentHex: s.accent,

@@ -4,7 +4,8 @@ interface Student {
   id: string;
   displayName: string;
   email: string;
-  schoolId: string;
+  schoolId: string | null;
+  role?: "user" | "admin";
 }
 interface Dashboard {
   csrfToken: string;
@@ -103,10 +104,24 @@ function auth(): void {
   };
 }
 function dashboard(): void {
+  if (data.student?.role === "admin") {
+    app.innerHTML = `<div class="dashboard"><aside class="sidebar">${brand()}<div class="campaign-tag">AMTECH · ADMIN</div><nav><a class="active" href="#overview">◈ Live Editor</a></nav><div class="sidebar-bottom"><button id="logout">Đăng xuất portal ↗</button></div></aside><main class="dashboard-main"><header class="dashboard-header">KHÔNG GIAN QUẢN TRỊ · SANDBOX</header><section id="overview"><p class="eyebrow">R2PL STUDIO</p><h1>Chào <span id="admin-name"></span></h1><p class="muted">Tài khoản công ty / đối tác AMTECH</p><div class="hero-banner"><div><span class="eyebrow">THIẾT KẾ HÀNH TRÌNH</span><h2>Sáng tạo bản đồ.<br>Vận hành campaign.</h2><p>Chỉnh sửa trực quan, lưu bản nháp và xuất bản cho 8 trường.</p><button class="primary" id="play">Mở Live Editor ↗</button></div><div class="hero-number" aria-hidden="true">R<span>2</span><i>CAMPAIGN<br>STUDIO</i></div></div><p id="message" role="status"></p></section></main></div>`;
+    get("admin-name").textContent = data.student.displayName;
+    get("play").onclick = () => void play();
+    get("logout").onclick = async () => {
+      try {
+        await api("logout");
+        location.assign("/");
+      } catch (error) {
+        message(String(error), true);
+      }
+    };
+    return;
+  }
   app.innerHTML = `<div class="dashboard"><aside class="sidebar">${brand()}<div class="campaign-tag">SANDBOX CAMPAIGN</div><nav><a class="active" href="#overview">◈ Tổng quan</a><a href="#activities">↗ Hoạt động chạy</a><a href="#ranking">♜ Bảng xếp hạng</a></nav><div class="sidebar-bottom"><p>Xác minh edu được mô phỏng.<br>Mọi hoạt động trên portal này là dữ liệu kiểm thử.</p><button id="logout">Đăng xuất portal ↗</button></div></aside><main class="dashboard-main"><header class="dashboard-header"><span>PORTAL SINH VIÊN <b class="sandbox-inline">KIỂM THỬ</b></span><span id="student-school"></span></header><section id="overview"><p class="eyebrow">HÀNH TRÌNH CỦA BẠN</p><h1>Chào <span id="student-name"></span><span class="wave"> ✳</span></h1><p class="muted" id="student-email"></p><div class="hero-banner"><div><span class="eyebrow">CHẠY THÊM MỘT CHÚT. ĐI XA THÊM MỘT CHÚT.</span><h2>Bản đồ đang chờ<br>bước chân của bạn.</h2><p>Tiêu Điểm trong game không làm giảm thành tích BXH chạy.</p><button class="primary" id="play">Chơi game ↗</button></div><div class="hero-number" aria-hidden="true">R<span>2</span><i>EXPLORE<br>TOGETHER</i></div></div><div class="metrics"><article><span>QUÃNG ĐƯỜNG TÍCH LŨY</span><strong><b id="total-km">—</b><small>km</small></strong><p>Hoạt động đã được đồng bộ</p></article><article><span>ĐIỂM CHẠY · BXH</span><strong id="earned">—</strong><p>Tổng điểm từ thành tích chạy</p></article><article class="wallet"><span>ĐIỂM CÒN LẠI · GAME</span><strong id="balance">—</strong><p>Số dư có thể dùng để khám phá</p></article></div></section><div class="columns"><section class="panel" id="activities"><div class="panel-heading"><div><p class="eyebrow">THỬ NGHIỆM ĐỒNG BỘ</p><h2>Thêm một chặng chạy</h2></div><span class="tag">GIẢ LẬP</span></div><form id="activity-form"><div class="form-row"><label>Quãng đường (km)<input id="distance" name="distance" type="number" min="0.001" max="100" step="0.001" value="1.5" required></label><label>Thời gian chạy<input id="run-date" type="datetime-local" required></label></div><button class="primary" id="add-run" type="submit">Thêm hoạt động & đồng bộ +</button></form><p id="message" role="status"></p><div class="sync-line"><span id="sync-state">Đang tải trạng thái</span><button id="retry" class="text-button">Thử đồng bộ lại ↻</button></div><h3>Lịch sử hoạt động</h3><div id="activity-list" class="activity-list"></div></section><section class="panel" id="ranking"><p class="eyebrow">CÙNG NHAU TIẾN LÊN</p><h2>Bảng xếp hạng chạy</h2><p class="muted">Thành tích của sinh viên trong sandbox.</p><div id="ranking-list"></div></section></div></main></div>`;
   get("student-name").textContent = data.student!.displayName;
   get("student-email").textContent = data.student!.email;
-  get("student-school").textContent = school(data.student!.schoolId);
+  get("student-school").textContent = school(data.student!.schoolId!);
   const now = new Date();
   get<HTMLInputElement>("run-date").value = new Date(
     now.getTime() - now.getTimezoneOffset() * 60000,

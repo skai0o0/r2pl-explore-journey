@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
-import { portalSchools } from "./PortalConfig.ts";
+import { portalOrganizations, portalSchools } from "./PortalConfig.ts";
 import { gameCookie, validGameCsrf } from "./PortalCookies.ts";
 import { PortalError, verifyPortalSignature } from "./PortalSignature.ts";
 import type { PortalStore } from "./PortalStore.ts";
@@ -44,6 +44,7 @@ export class PortalHttp {
             portalLoginUrl: this.store.config.portalLoginUrl,
             returnUrl: `${this.store.config.publicOrigin}/`,
             schools: portalSchools(),
+            organizations: portalOrganizations(),
           }),
         );
         return true;
@@ -128,7 +129,11 @@ export class PortalHttp {
           break;
         }
         case "/api/portal/logout": {
-          if (!token || !(await this.store.authenticate(token)))
+          if (
+            !token ||
+            (!(await this.store.authenticate(token)) &&
+              !(await this.store.authenticateAdmin(token)))
+          )
             throw new PortalError(401, "UNAUTHORIZED");
           await this.store.logout(token);
           response.setHeader(

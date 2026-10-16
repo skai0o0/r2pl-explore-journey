@@ -10,6 +10,10 @@ import { promisify } from "node:util";
 import type { Pool, PoolClient } from "pg";
 import { R2plPartnerClient } from "../../integration/partner-client.mjs";
 import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import {
+  AMTECH_ACCOUNTS,
+  isAmtechIdentity,
+} from "../../shared/integration/identity.ts";
 import { campaignWeekStart } from "../../shared/integration/running.ts";
 import type { PortalConfig } from "../integration/PortalConfig.ts";
 import { PortalError } from "../integration/PortalSignature.ts";
@@ -53,6 +57,32 @@ export class DummyStore {
         ),
       );
     });
+  }
+  /** Explicit local CLI setup only; self-service registration can never call this. */
+  async seedAdminAccounts(password: string): Promise<void> {
+    if (password.length < 10 || password.length > 128)
+      throw new TypeError("Invalid local test password");
+    const target = new URL(this.pool.options.connectionString!);
+    if (
+      !["localhost", "127.0.0.1", "[::1]"].includes(target.hostname) ||
+      !/^r2pl_(prep|bot)_test_/.test(target.pathname.slice(1))
+    )
+      throw new Error("Admin seeding requires a disposable local database");
+    for (const account of AMTECH_ACCOUNTS) {
+      const salt = randomBytes(32),
+        encoded = (await derive(password, salt, 64)) as Buffer;
+      await this.pool.query(
+        "INSERT INTO r2pl_dummy.students(campaign_id,id,email,display_name,school_id,password_hash,password_salt) VALUES($1,$2,$3,$4,'amtech',$5,$6) ON CONFLICT(campaign_id,email) DO UPDATE SET school_id='amtech',display_name=EXCLUDED.display_name",
+        [
+          this.config.campaignId,
+          randomUUID(),
+          account.email,
+          account.name,
+          encoded,
+          salt,
+        ],
+      );
+    }
   }
   private async transaction<T>(
     work: (db: PoolClient) => Promise<T>,
@@ -116,6 +146,11 @@ export class DummyStore {
   }
   async register(input: unknown): Promise<DummyStudent> {
     const { email, password, value } = this.credentials(input);
+    if (isAmtechIdentity(email, true))
+      throw new PortalError(
+        403,
+        "Tài khoản AMTECH cần được xác thực bởi Portal đối tác, không đăng ký qua tài khoản sinh viên thử nghiệm.",
+      );
     if (
       typeof value.displayName !== "string" ||
       value.displayName.trim().length < 2 ||
@@ -210,6 +245,9 @@ export class DummyStore {
       displayName: student.display_name,
       eduVerified: true,
       active: true,
+      ...(student.school_id === "amtech"
+        ? { email: student.email, emailVerified: true }
+        : {}),
     });
   }
   private async enqueue(db: PoolClient, student: DummyStudent): Promise<void> {
@@ -241,6 +279,8 @@ export class DummyStore {
     );
   }
   async addActivity(student: DummyStudent, input: unknown): Promise<void> {
+    if (student.school_id === "amtech")
+      throw new PortalError(403, "ADMIN_CANNOT_PLAY");
     const value = portalObject(input, ["meters", "occurredAtMs", "id"]);
     if (
       typeof value.meters !== "number" ||
@@ -373,6 +413,24 @@ export class DummyStore {
     return true;
   }
   async dashboard(student: DummyStudent): Promise<unknown> {
+    if (student.school_id === "amtech") {
+      await this.provision(student);
+      return {
+        student: {
+          id: student.id,
+          email: student.email,
+          displayName: student.display_name,
+          schoolId: null,
+          organizationId: "amtech",
+          role: "admin",
+          playable: false,
+        },
+        activities: [],
+        jobs: [],
+        account: null,
+        ranking: [],
+      };
+    }
     const scope = [this.config.campaignId, student.id];
     const activities = (
       await this.pool.query(
@@ -397,7 +455,7 @@ export class DummyStore {
     }
     const ranking = (
       await this.pool.query(
-        "SELECT u.display_name,u.school_id,COALESCE(sum(a.meters),0)::text AS meters FROM r2pl_dummy.students u LEFT JOIN r2pl_dummy.activities a ON a.campaign_id=u.campaign_id AND a.student_id=u.id WHERE u.campaign_id=$1 GROUP BY u.id,u.display_name,u.school_id ORDER BY COALESCE(sum(a.meters),0) DESC,u.id LIMIT 20",
+        "SELECT u.display_name,u.school_id,COALESCE(sum(a.meters),0)::text AS meters FROM r2pl_dummy.students u LEFT JOIN r2pl_dummy.activities a ON a.campaign_id=u.campaign_id AND a.student_id=u.id WHERE u.campaign_id=$1 AND u.school_id <> 'amtech' GROUP BY u.id,u.display_name,u.school_id ORDER BY COALESCE(sum(a.meters),0) DESC,u.id LIMIT 20",
         [this.config.campaignId],
       )
     ).rows;

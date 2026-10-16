@@ -107,7 +107,37 @@ export async function loadGameSession(): Promise<
       return new Promise<never>(() => {});
     }
     if (!bootstrap.ok) throw new Error("Bootstrap unavailable");
-    const session = parsePortalSession(await bootstrap.json());
+    const raw = (await bootstrap.json()) as Record<string, unknown>;
+    if (raw.mode === "admin") {
+      const p = raw.principal as Record<string, unknown> | undefined;
+      if (
+        raw.version !== 1 ||
+        !p ||
+        p.role !== "admin" ||
+        p.organizationId !== "amtech" ||
+        p.playable !== false ||
+        typeof p.actorId !== "string" ||
+        typeof p.name !== "string" ||
+        typeof raw.csrfToken !== "string" ||
+        !/^[a-f0-9]{64}$/.test(raw.csrfToken) ||
+        !["staging", "production"].includes(String(raw.environment))
+      )
+        throw new Error("Invalid admin bootstrap");
+      configureGameHttp(raw.csrfToken);
+      const { mountLiveEditor } = await import("./liveEditor.ts");
+      await mountLiveEditor(
+        {
+          actorId: p.actorId,
+          name: p.name,
+          organizationId: "amtech",
+          role: "admin",
+          playable: false,
+        },
+        raw.environment as "staging" | "production",
+      );
+      return new Promise<never>(() => {});
+    }
+    const session = parsePortalSession(raw);
     configureGameHttp(session.csrfToken);
     completeStage(0);
     loadingStage(1);

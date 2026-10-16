@@ -1008,7 +1008,11 @@ export class SignedGameplay {
     });
   }
 
-  async redeemGift(giftCode: string): Promise<{
+  async redeemGift(
+    giftCode: string,
+    adminId?: string,
+    sessionToken?: string,
+  ): Promise<{
     success: boolean;
     alreadyRedeemed?: boolean;
     gift?: Record<string, unknown>;
@@ -1018,6 +1022,34 @@ export class SignedGameplay {
     const db = await this.pool.connect();
     try {
       await db.query("BEGIN");
+      if (adminId) {
+        await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+          `signed-game:${this.fixture.campaignId}`,
+        ]);
+        if (
+          !(
+            await db.query(
+              "SELECT 1 FROM r2pl_v2.portal_admins a JOIN r2pl_v2.portal_admin_sessions s USING(campaign_id,actor_id) WHERE a.campaign_id=$1 AND a.actor_id=$2 AND a.active AND s.token_hash=$3 AND s.expires_at>clock_timestamp() FOR SHARE OF a,s",
+              [
+                this.fixture.campaignId,
+                adminId,
+                createHash("sha256")
+                  .update(sessionToken ?? "")
+                  .digest(),
+              ],
+            )
+          ).rowCount
+        )
+          throw new TypeError("ADMIN_REQUIRED");
+        await db.query(
+          "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,'gift-redeem',$3)",
+          [
+            this.fixture.campaignId,
+            adminId,
+            JSON.stringify({ giftCode: normalized }),
+          ],
+        );
+      }
       const res = await db.query<{ id: string; data: Record<string, unknown> }>(
         "SELECT id, data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-entitlement' AND (UPPER(data->>'giftCode')=$2 OR UPPER(id)=$2) FOR UPDATE",
         [this.fixture.campaignId, normalized],

@@ -23,9 +23,9 @@ export interface BotSchool {
 }
 const labels = [
   "HCMUT",
-  "HCMCOU",
+  "OU",
   "DTU",
-  "DHHP",
+  "HPUNI",
   "HSU",
   "HUCE",
   "NTU",

@@ -5,7 +5,7 @@ if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 try {
   await migratePortalDatabase(pool);
-  console.log("Portal migrations 1–6 verified");
+  console.log("Portal migrations 1–8 verified");
 } finally {
   await pool.end();
 }

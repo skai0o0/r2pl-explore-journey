@@ -22,9 +22,9 @@ const gap = (a: WorldObject, b: WorldObject): number =>
 test("8 HQs form the signed concentric ring around (500,500)", () => {
   const expected: Record<string, [number, number]> = {
     hcmut: [500, 280],
-    hcmcou: [655, 345],
+    ou: [655, 345],
     dtu: [720, 500],
-    dhhp: [655, 655],
+    hpuni: [655, 655],
     hsu: [500, 720],
     huce: [345, 655],
     ntu: [280, 500],

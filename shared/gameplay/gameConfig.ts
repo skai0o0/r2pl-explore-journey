@@ -107,6 +107,7 @@ export interface SchoolConfig {
   readonly slot: number;
   readonly shortName: string;
   readonly fullName: string;
+  readonly emailDomains: readonly string[];
   readonly color: string;
   readonly accent: string;
   readonly hq: { readonly x: number; readonly z: number };
@@ -116,7 +117,8 @@ export const SCHOOLS = [
     id: "hcmut",
     slot: 0,
     shortName: "HCMUT",
-    fullName: "Trường Đại học Bách khoa – ĐHQG TP.HCM",
+    fullName: "Đại Học Bách Khoa_Hồ Chí Minh",
+    emailDomains: ["hcmut.edu.vn"],
     color: "#0062FF",
     accent: "#00E5FF",
     hq: {
@@ -125,10 +127,11 @@ export const SCHOOLS = [
     },
   },
   {
-    id: "hcmcou",
+    id: "ou",
     slot: 1,
-    shortName: "HCMCOU",
-    fullName: "Trường Đại học Mở TP.HCM",
+    shortName: "OU",
+    fullName: "Đại Học Mở_Hồ Chí Minh",
+    emailDomains: ["ou.edu.vn"],
     color: "#FF8C00",
     accent: "#FFD700",
     hq: {
@@ -140,7 +143,8 @@ export const SCHOOLS = [
     id: "dtu",
     slot: 2,
     shortName: "DTU",
-    fullName: "Đại học Duy Tân",
+    fullName: "Đại Học Duy Tân_Đà Nẵng",
+    emailDomains: ["dtu.edu.vn"],
     color: "#E60026",
     accent: "#FF4D6D",
     hq: {
@@ -149,10 +153,11 @@ export const SCHOOLS = [
     },
   },
   {
-    id: "dhhp",
+    id: "hpuni",
     slot: 3,
-    shortName: "DHHP",
-    fullName: "Trường Đại học Hải Phòng",
+    shortName: "HPUNI",
+    fullName: "Đại Học Hải Phòng",
+    emailDomains: ["hpuni.edu.vn"],
     color: "#00A86B",
     accent: "#00FF9D",
     hq: {
@@ -164,7 +169,8 @@ export const SCHOOLS = [
     id: "hsu",
     slot: 4,
     shortName: "HSU",
-    fullName: "Trường Đại học Hoa Sen",
+    fullName: "Đại Học Hoa Sen_Hồ Chí Minh",
+    emailDomains: ["sinhvien.hoasen.edu.vn"],
     color: "#7928CA",
     accent: "#FF0080",
     hq: {
@@ -176,7 +182,8 @@ export const SCHOOLS = [
     id: "huce",
     slot: 5,
     shortName: "HUCE",
-    fullName: "Đại học Xây dựng Hà Nội",
+    fullName: "Đại Học Xây Dựng_Hà Nội",
+    emailDomains: ["st.huce.edu.vn"],
     color: "#E7C547",
     accent: "#FFF0A0",
     hq: {
@@ -188,7 +195,8 @@ export const SCHOOLS = [
     id: "ntu",
     slot: 6,
     shortName: "NTU",
-    fullName: "Đại học Nha Trang",
+    fullName: "Đại Học Nha Trang",
+    emailDomains: ["ntu.edu.vn"],
     color: "#00B8D9",
     accent: "#80FFFF",
     hq: {
@@ -200,7 +208,8 @@ export const SCHOOLS = [
     id: "hcmiu",
     slot: 7,
     shortName: "HCMIU",
-    fullName: "Đại học Quốc tế – ĐHQG TP.HCM",
+    fullName: "Đại Học Quốc Tế",
+    emailDomains: ["student.hcmiu.edu.vn"],
     color: "#E85D9E",
     accent: "#FFB8DD",
     hq: {
@@ -303,6 +312,13 @@ export const LANDMARKS = [
   },
 ] as const;
 export const GAME_CONFIG = {
+  editor: {
+    maxObjects: 200,
+    maxUndo: 60,
+    pollMs: 3000,
+    maxHistory: 30,
+    maxBodyBytes: 131072,
+  },
   integration: {
     contractVersion: 1,
     requestSkewMs: 300_000,

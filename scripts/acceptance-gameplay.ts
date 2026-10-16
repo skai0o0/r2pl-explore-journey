@@ -36,7 +36,7 @@ async function explore(actor: typeof a, x: number, z: number) {
 // HCMUT (500, 280) moves east to 575 then south to 330 (Ha Long).
 for (let x = 510; x <= 575; x++) await explore(a, x, 280);
 for (let z = 281; z <= 330; z++) await explore(a, 575, z);
-// HCMCOU (655, 345) moves west to 576 then up to 330.
+// OU (655, 345) moves west to 576 then up to 330.
 for (let x = 644; x >= 576; x--) await explore(b, x, 345);
 for (let z = 344; z >= 330; z--) await explore(b, 576, z);
 // Join at Ha Long (575, 330)

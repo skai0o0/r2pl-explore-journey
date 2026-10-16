@@ -19,7 +19,7 @@ export async function seedPortalCampaign(
   try {
     await db.query("BEGIN");
     const migrated = await db.query(
-      "SELECT 1 FROM r2pl_v2.schema_migrations WHERE version=6",
+      "SELECT 1 FROM r2pl_v2.schema_migrations WHERE version=8",
     );
     if (!migrated.rowCount)
       throw new Error(

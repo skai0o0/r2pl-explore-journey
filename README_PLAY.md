@@ -12,9 +12,17 @@ Mở URL **Eight-school playable fixture** do lệnh in ra (mặc định **http
 
 Portal giả lập chỉ mở khi chủ động chạy `npm run build:portal` và `npm run demo:portal` cùng server tích hợp `npm run start:portal`, theo phần sandbox bên dưới. `npm run build` chỉ dựng game; `npm run build:all` dựng thêm giao diện portal giả lập.
 
-## Bàn giao tích hợp web giải chạy — Partner API v1
+## AMTECH Live Editor — local/staging
 
-Game cung cấp sẵn cổng tích hợp. Web tổng đăng nhập sinh viên bằng email edu, xác minh trường và nhận các hoạt động **được chấp nhận** từ vRace. Web tổng gửi danh tính và snapshot tổng quãng đường hợp lệ **trong chiến dịch** vào game; không gửi mật khẩu/email, số điểm tùy ý hoặc quyền quản trị. Không cần game gọi trực tiếp vRace. Bộ kết nối HTTP pull cũ vẫn phục vụ dev; luồng portal mới dùng API push bên dưới và không bật tài khoản giả lập.
+Chạy `npm run play:editor`, mở **http://127.0.0.1:4177/** và đăng nhập tài khoản local `acer@amtech.vn` với mật khẩu `Amtech-local-test-only`. Lệnh này build game/Portal, kiểm tra migration 1–8 và khởi chạy campaign thử nghiệm riêng cho thao tác editor. Migration chuẩn hóa mã trường áp dụng chung database, giữ nguyên tiến trình các campaign. Có thể cấu hình `EDITOR_PORT`, `EDITOR_WS_PORT`, `EDITOR_LOGIN_PORT`, `EDITOR_CAMPAIGN_ID`, `EDITOR_TEST_PASSWORD`. Mật khẩu chỉ được dùng lúc tạo tài khoản thử nghiệm lần đầu; chạy lại không reset mật khẩu cũ.
+
+Danh sách 12 tài khoản AMTECH được seed vào Portal giả lập qua CLI, không qua đăng ký sinh viên. Người dùng chọn AMTECH hoặc nhập email công ty qua form đăng ký tự do sẽ không được cấp admin. Production nhận danh tính có chữ ký và email đã xác thực từ backend Portal theo `integration/openapi.json`; các vRace ID có trong ảnh được giữ làm dữ liệu đối chiếu trong `shared/integration/identity.ts`, không thay thế externalStudentId của Portal.
+
+AMTECH chỉ có role `admin`, không có school slot/HQ, ví, thành tích chạy hoặc quyền chơi. Tám trường thi đấu có role `user`; schoolId thống nhất là `hcmut`, `ou`, `dtu`, `hpuni`, `hsu`, `huce`, `ntu`, `hcmiu`, giữ slots 0–7. Migration 008 chuyển mã cũ trong tài khoản, running binding, HQ, bản nháp và lịch sử editor, giữ nguyên ví/fog/tiến trình. API chỉ nhận mã mới; backend Portal phải cập nhật mapping cùng đợt triển khai. Editor có kéo thả 3D, bám lưới/kiểm tra chồng lấn, chỉnh thuộc tính, hoàn tác/làm lại, lưu và mở lại bản nháp, xuất bản có kiểm tra phiên bản, khôi phục lịch sử, thông báo và xác nhận phát quà. Kho quà thử nghiệm chỉ mở ở staging. Bản nháp không ảnh hưởng người chơi; sau xuất bản, bản đồ đang mở tự nhận thay đổi trong khoảng 3 giây.
+
+## Hợp đồng Partner API v1
+
+Game cung cấp sẵn cổng tích hợp. Web tổng đăng nhập sinh viên bằng email edu, xác minh trường và nhận các hoạt động **được chấp nhận** từ vRace. Web tổng gửi danh tính và snapshot tổng quãng đường hợp lệ **trong chiến dịch** vào game; không gửi mật khẩu, số điểm tùy ý hoặc role. Danh tính quản trị AMTECH cần thêm email đã xác thực và `emailVerified: true`; game tự xác định quyền theo danh sách/domain được duyệt. Không cần game gọi trực tiếp vRace. Bộ kết nối HTTP pull cũ vẫn phục vụ dev; luồng portal mới dùng API push bên dưới và không bật tài khoản giả lập.
 
 **File gửi webdev:** `integration/openapi.json` (OpenAPI 3.1, import vào Postman/Swagger), `integration/partner-client.mjs` (SDK Node server độc lập, không cần dependencies), và phần hướng dẫn này. Khi server chạy, tải contract tại `/api/partner/v1/openapi.json`. Webdev dùng ngôn ngữ khác có thể triển khai theo JSON contract và thuật toán ký bên dưới.
 
@@ -24,7 +32,7 @@ vRace -> backend web giải chạy -> API game -> PostgreSQL / ví / gameplay
           email edu + BXH       đăng nhập game + Three.js
 ```
 
-Trách nhiệm web tổng: xác thực email edu và quyền tham dự; map mã trường sang `hcmut`, `hcmcou`, `dtu`, `dhhp`, `hsu`, `huce`, `ntu`, `hcmiu`; loại hoạt động gian lận/ngoài giải; duy trì stable `externalStudentId`; xếp hạng chạy. Game không đoán trường từ email và không tự công nhận số km do trình duyệt gửi. Portal phải chỉ provision sinh viên đủ điều kiện; `eduVerified: true` là lời xác nhận có chữ ký từ backend đối tác, không phải cơ chế tự kiểm chứng email của game.
+Trách nhiệm web tổng: xác thực email edu và quyền tham dự; map mã trường sang `hcmut`, `ou`, `dtu`, `hpuni`, `hsu`, `huce`, `ntu`, `hcmiu`; loại hoạt động gian lận/ngoài giải; duy trì stable `externalStudentId`; xếp hạng chạy. Game không đoán trường từ email và không tự công nhận số km do trình duyệt gửi. Portal phải chỉ provision sinh viên đủ điều kiện; `eduVerified: true` là lời xác nhận có chữ ký từ backend đối tác, không phải cơ chế tự kiểm chứng email của game.
 
 Trách nhiệm game: tài khoản/phiên chơi, mapping trường bất biến, quy đổi ruleVersion 1 **1 km = 10 Points**, số dư có thể tiêu, ledger, thưởng, bản đồ và BXH Knowledge. Hai trường điểm được tách rõ:
 
@@ -141,7 +149,7 @@ Chạy `migrate:portal` bằng tài khoản triển khai trên database dành ri
 
 Webdev chỉ cần chốt với mình: domain game/portal và endpoint đăng nhập; stable student/campaign IDs; mapping 8 trường; tiêu chí km hợp lệ và phạm vi thời gian giải; lịch push/retry; dữ liệu BXH tổng/trường; quy trình khóa sinh viên và sửa km sau đối soát. Không cần chờ tài liệu vRace để bắt đầu nối sandbox. Khi có tài liệu thật, giữ API v1 này và viết adapter ở backend web tổng. Các điều khoản campaign/anti-cheat, hệ thống edu thật, credential vRace và hosting/TLS chưa được xác minh bằng sandbox này.
 
-Bản G-V1 local/dev đã nghiệm thu **PV01–PV18: 18/18 FULL**, với 8 trường HCMUT, HCMCOU, DTU, DHHP, HSU, HUCE, NTU, HCMIU. Gameplay gồm Shared Knowledge/upkeep/consolidation, Landmark/puzzle/Beacon, UniStop 3 cấp, Treasure Map/Chest/Key/carousel, Running/Gift staging, leaderboard, notifications và Admin Map Editor.
+Bản G-V1 local/dev đã nghiệm thu **PV01–PV18: 18/18 FULL**, với 8 trường HCMUT, OU, DTU, HPUNI, HSU, HUCE, NTU, HCMIU. Gameplay gồm Shared Knowledge/upkeep/consolidation, Landmark/puzzle/Beacon, UniStop 3 cấp, Treasure Map/Chest/Key/carousel, Running/Gift staging, leaderboard, notifications và Admin Map Editor.
 
 Commit mã nguồn nghiệm thu Phase 3: **`b05e456`**; sửa GLB/procedural Z-Up: **`b743257`**. Bộ test đầy đủ: **142/142 PASS, 0 fail, 0 skip** khi bật PostgreSQL fixtures; build PASS. Commit cập nhật tài liệu xem `git log -1 --oneline`.
 
@@ -204,7 +212,7 @@ Game hỗ trợ nạp tự động model 3D `.glb` theo quy ước đường d�
 
 ### Nạp thêm GLB mới
 
-1. Copy file vào đúng thư mục trong `client/public/models/` theo quy ước trên. School ID viết thường: hcmut, hcmcou, dtu, dhhp, hsu, huce, ntu, hcmiu. Landmark ID lấy từ `shared/gameplay/gameConfig.ts`; thanglong dùng `hoangthanhthanglong.glb`, cairang dùng `chonoicairang.glb`.
+1. Copy file vào đúng thư mục trong `client/public/models/` theo quy ước trên. School ID viết thường: hcmut, ou, dtu, hpuni, hsu, huce, ntu, hcmiu. Landmark ID lấy từ `shared/gameplay/gameConfig.ts`; thanglong dùng `hoangthanhthanglong.glb`, cairang dùng `chonoicairang.glb`.
 2. Thêm URL public vào mảng `models` trong `client/public/models/manifest.json`, ví dụ `/models/hqs/dtu_hq.glb`.
 3. Chạy `npm run build:client` rồi reload trình duyệt; launcher đang chạy phục vụ `dist/client`.
 
@@ -265,7 +273,7 @@ npm run build:client
 node --experimental-strip-types scripts/acceptance-gameplay.ts
 ```
 
-Giữ hai biến `R2PL_BOT_SIMULATION`/`R2PL_BOT_DATABASE_URL` như trên. Script tạo campaign UUID mới, dùng port tự cấp và in JSON có `url` để mở; nó đã xây đường Knowledge thật bằng cùng transaction cho HCMUT/HCMCOU tới Fansipan và ô giao lưu **(350, 200)**.
+Giữ hai biến `R2PL_BOT_SIMULATION`/`R2PL_BOT_DATABASE_URL` như trên. Script tạo campaign UUID mới, dùng port tự cấp và in JSON có `url` để mở; nó đã xây đường Knowledge thật bằng cùng transaction cho HCMUT/OU tới Fansipan và ô giao lưu **(350, 200)**.
 
 Campaign này dùng RNG nghiệm thu do server giữ: draw đầu Aspire là Treasure Map, draw tiếp theo Predator là Gift slot (fallback nếu chưa đủ điều kiện), draw thứ ba là Gift slot. Có thể thử theo thứ tự Aspire UniStop → Predator UniStop khi chưa sync Running → sync 1 km, cấp stock Predator → mở Chest Predator. Launcher chơi chính `play:schools` dùng RNG bình thường.
 

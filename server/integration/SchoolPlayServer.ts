@@ -6,11 +6,14 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
+import { EDITOR_CONFIG } from "../../shared/gameplay/editor.ts";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { DevAccountService } from "./DevAccountService.ts";
+import { EditorStore } from "./EditorStore.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
 import { seedPortalCampaign } from "./PortalCampaign.ts";
 import { type PortalConfig, validatePortalConfig } from "./PortalConfig.ts";
@@ -21,6 +24,7 @@ import {
   validGameCsrf,
 } from "./PortalCookies.ts";
 import { PortalHttp } from "./PortalHttp.ts";
+import { PortalError } from "./PortalSignature.ts";
 import { PortalStore } from "./PortalStore.ts";
 import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
 import { provisionSchoolRewards } from "./SchoolRewardFixture.ts";
@@ -171,6 +175,7 @@ async function startSchoolPlayServer(
     options.portal?.adminKey ?? process.env.ADMIN_KEY ?? "dev-map-admin",
     () => realtime.core.resyncViews(),
   );
+  const editor = new EditorStore(pool, fixture.campaignId);
   const clientRoot = resolve(
     fileURLToPath(new URL("../../dist/client/", import.meta.url)),
   );
@@ -206,15 +211,41 @@ async function startSchoolPlayServer(
     if (portalHttp && (await portalHttp.handle(request, response, url, token)))
       return;
     let portalActor: Awaited<ReturnType<PortalStore["authenticate"]>>;
+    let admin: AdminPrincipal | undefined;
     if (portal) {
       try {
         portalActor = await portal.authenticate(token);
+        admin = await portal.authenticateAdmin(token);
       } catch {
         response.writeHead(503).end();
         return;
       }
       if (path === "/api/fixture/bots") {
         response.writeHead(404).end();
+        return;
+      }
+      if (
+        admin &&
+        (path === "/api/game" ||
+          path.startsWith("/api/game/") ||
+          [
+            "/api/fixture/me",
+            "/api/fixture/chests",
+            "/api/fixture/receipts",
+            "/api/fixture/rewards",
+          ].includes(path))
+      ) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "ADMIN_CANNOT_PLAY" }));
+        return;
+      }
+      if (
+        path.startsWith("/api/admin") &&
+        request.method !== "GET" &&
+        !validGameCsrf(request, options.portal!, token)
+      ) {
+        response.writeHead(403).end(JSON.stringify({ error: "CSRF_REJECTED" }));
         return;
       }
       if (
@@ -230,6 +261,67 @@ async function startSchoolPlayServer(
       portal ? portalActor : gameplay.actor(token);
     const expectedOrigin =
       options.portal?.publicOrigin ?? `http://${request.headers.host}`;
+    if (path === "/api/admin/editor" || path === "/api/admin/editor/draft") {
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      if (!admin) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "ADMIN_REQUIRED" }));
+        return;
+      }
+      try {
+        if (path === "/api/admin/editor" && request.method === "GET") {
+          response.end(
+            JSON.stringify(await editor.snapshot(admin.actorId, token!)),
+          );
+          return;
+        }
+        if (path !== "/api/admin/editor/draft" || request.method !== "POST") {
+          response
+            .writeHead(405)
+            .end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
+          return;
+        }
+        let size = 0;
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) {
+          const bytes = Buffer.from(chunk);
+          size += bytes.length;
+          if (size > EDITOR_CONFIG.maxBodyBytes)
+            throw new PortalError(413, "BODY_TOO_LARGE");
+          chunks.push(bytes);
+        }
+        response.end(
+          JSON.stringify(
+            await editor.save(
+              admin.actorId,
+              JSON.parse(Buffer.concat(chunks).toString("utf8")),
+              token!,
+            ),
+          ),
+        );
+      } catch (error) {
+        const status =
+          error instanceof PortalError
+            ? error.status
+            : error instanceof TypeError ||
+                error instanceof RangeError ||
+                error instanceof SyntaxError
+              ? 400
+              : 503;
+        response.writeHead(status).end(
+          JSON.stringify({
+            error:
+              error instanceof PortalError
+                ? error.code
+                : status === 400
+                  ? (error as Error).message
+                  : "TEMPORARILY_UNAVAILABLE",
+          }),
+        );
+      }
+      return;
+    }
     if (
       path === "/api/fixture/rewards" ||
       path === "/api/fixture/rewards/events"
@@ -243,11 +335,13 @@ async function startSchoolPlayServer(
     }
     if (path === "/api/admin") {
       if (
-        !operator.authorized(
-          typeof request.headers["x-admin-key"] === "string"
-            ? request.headers["x-admin-key"]
-            : undefined,
-        )
+        !(portal
+          ? !!admin
+          : operator.authorized(
+              typeof request.headers["x-admin-key"] === "string"
+                ? request.headers["x-admin-key"]
+                : undefined,
+            ))
       ) {
         response.writeHead(403).end();
         return;
@@ -272,27 +366,39 @@ async function startSchoolPlayServer(
         for await (const chunk of request) {
           const bytes = Buffer.from(chunk);
           size += bytes.length;
-          if (size > 65536) {
+          if (size > EDITOR_CONFIG.maxBodyBytes) {
             response.writeHead(413).end();
             return;
           }
           chunks.push(bytes);
         }
-        await operator.apply(
-          JSON.parse(Buffer.concat(chunks).toString("utf8")),
-        );
+        const command = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+          action?: string;
+        };
+        if (
+          command.action === "gift-stock" &&
+          options.portal?.mode === "production"
+        )
+          throw new PortalError(403, "STAGING_ONLY");
+        await operator.apply(command, admin?.actorId, token);
         response.end(JSON.stringify({ status: "applied" }));
       } catch (e) {
         response
           .writeHead(
-            e instanceof TypeError || e instanceof RangeError ? 400 : 503,
+            e instanceof PortalError
+              ? e.status
+              : e instanceof TypeError || e instanceof RangeError
+                ? 400
+                : 503,
           )
           .end(
             JSON.stringify({
               error:
-                e instanceof TypeError || e instanceof RangeError
-                  ? e.message
-                  : "TEMPORARILY_UNAVAILABLE",
+                e instanceof PortalError
+                  ? e.code
+                  : e instanceof TypeError || e instanceof RangeError
+                    ? e.message
+                    : "TEMPORARILY_UNAVAILABLE",
             }),
           );
       }
@@ -314,11 +420,13 @@ async function startSchoolPlayServer(
     }
     if (path === "/api/admin/gifts") {
       if (
-        !operator.authorized(
-          typeof request.headers["x-admin-key"] === "string"
-            ? request.headers["x-admin-key"]
-            : undefined,
-        )
+        !(portal
+          ? !!admin
+          : operator.authorized(
+              typeof request.headers["x-admin-key"] === "string"
+                ? request.headers["x-admin-key"]
+                : undefined,
+            ))
       ) {
         response.writeHead(403).end();
         return;
@@ -342,11 +450,13 @@ async function startSchoolPlayServer(
     }
     if (path === "/api/admin/gifts/redeem") {
       if (
-        !operator.authorized(
-          typeof request.headers["x-admin-key"] === "string"
-            ? request.headers["x-admin-key"]
-            : undefined,
-        )
+        !(portal
+          ? !!admin
+          : operator.authorized(
+              typeof request.headers["x-admin-key"] === "string"
+                ? request.headers["x-admin-key"]
+                : undefined,
+            ))
       ) {
         response.writeHead(403).end();
         return;
@@ -376,7 +486,11 @@ async function startSchoolPlayServer(
             .end(JSON.stringify({ error: "MISSING_GIFT_CODE" }));
           return;
         }
-        const result = await gameplay.redeemGift(payload.giftCode);
+        const result = await gameplay.redeemGift(
+          payload.giftCode,
+          admin?.actorId,
+          token,
+        );
         response.setHeader("Content-Type", "application/json; charset=utf-8");
         if (!result.success && !result.alreadyRedeemed) {
           response.writeHead(404).end(JSON.stringify(result));
@@ -521,6 +635,17 @@ async function startSchoolPlayServer(
       }
       if (path === "/api/fixture/bootstrap") {
         if (portal) {
+          if (admin) {
+            json({
+              mode: "admin",
+              version: 1,
+              campaignId: fixture.campaignId,
+              principal: admin,
+              csrfToken: gameCsrf(token!),
+              environment: options.portal!.mode,
+            });
+            return;
+          }
           if (!portalActor) {
             response.writeHead(401).end();
             return;
@@ -530,6 +655,8 @@ async function startSchoolPlayServer(
           )!;
           json({
             mode: "portal",
+            role: "user",
+            playable: true,
             fixtureOnly: false,
             version: 1,
             websocketPort: address.port,

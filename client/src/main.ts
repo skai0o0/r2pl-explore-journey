@@ -79,7 +79,10 @@ await fetchModelManifest();
 const miniMap = new MiniMap();
 miniMap.setObjects(publicWorld);
 
-const uiMode = uiModeFromSearch(location.search);
+const uiMode =
+  "mode" in session && session.mode === "portal"
+    ? "player"
+    : uiModeFromSearch(location.search);
 const isDev = uiMode === "dev";
 document.body.dataset.mode = uiMode;
 document.body.dataset.debug = String(isDev);
@@ -638,43 +641,37 @@ function refreshRanking(): void {
 }
 refreshRanking();
 window.setInterval(refreshRanking, 5000);
-const layoutDigest = JSON.stringify(publicWorld.map((o) => o.id));
 window.setInterval(() => {
   void gameFetch("/api/fixture/world", { cache: "no-store" })
-    .then((r) => r.json())
+    .then((r) => {
+      if (!r.ok) throw new Error("Layout unavailable");
+      return r.json();
+    })
     .then((v: { objects: WorldObject[] }) => {
-      let changed = false;
-      for (const obj of v.objects) {
-        const found = publicWorld.find((p) => p.id === obj.id);
-        if (found) {
-          if (
-            found.ownerSchoolSlot !== obj.ownerSchoolSlot ||
-            found.ownerSchoolId !== obj.ownerSchoolId ||
-            found.x !== obj.x ||
-            found.z !== obj.z
-          ) {
-            Object.assign(found, obj);
-            changed = true;
-          }
+      if (JSON.stringify(v.objects) === JSON.stringify(publicWorld)) return;
+      world.updateObjects(v.objects);
+      publicWorld.splice(0, publicWorld.length, ...v.objects);
+      miniMap.setObjects([...publicWorld, ...privateObjects]);
+      if (selectedBuilding)
+        selectedBuilding = publicWorld.find(
+          (o) => o.id === selectedBuilding!.id,
+        );
+      if (session.headquarters)
+        for (const hq of publicWorld.filter((o) => o.kind === "hq")) {
+          const area = session.headquarters.find(
+            (h) => h.schoolSlot === hq.schoolSlot,
+          );
+          if (area)
+            Object.assign(area, {
+              x: hq.x - hq.width / 2,
+              z: hq.z - hq.height / 2,
+            });
+          for (const p of players.filter((p) => p.slot === hq.schoolSlot))
+            Object.assign(p.home, { x: hq.x, z: hq.z });
         }
-      }
-      if (changed) {
-        miniMap.setObjects([...publicWorld, ...privateObjects]);
-        world.updateObjects(publicWorld);
-      }
-      if (
-        JSON.stringify(v.objects.map((o) => o.id)) !== layoutDigest &&
-        !document.querySelector(".layout-update")
-      ) {
-        const update = document.createElement("button");
-        update.className = "layout-update";
-        update.textContent = "Bản đồ có thay đổi · Làm mới";
-        update.onclick = () => location.reload();
-        document.body.append(update);
-      }
     })
     .catch(() => {});
-}, 5000);
+}, GAME_CONFIG.editor.pollMs);
 const gameplay = new GameplayUI(
   publicWorld,
   (x, z) => world.focus(x, z, 100),
