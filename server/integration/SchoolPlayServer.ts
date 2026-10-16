@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { matchMaker } from "@colyseus/core";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
@@ -205,6 +206,45 @@ async function startSchoolPlayServer(
       return;
     }
     const path = url.pathname;
+    if (path.startsWith("/matchmake/")) {
+      const parts = path.split("/").filter(Boolean);
+      const method = parts[1];
+      const roomName = parts[2] ?? "";
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+      );
+      response.setHeader(
+        "Access-Control-Allow-Methods",
+        "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+      );
+      if (request.method === "OPTIONS") {
+        response.writeHead(204).end();
+        return;
+      }
+      if (request.method !== "POST") {
+        response.writeHead(405).end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
+        return;
+      }
+      try {
+        let bodyBytes = "";
+        for await (const chunk of request) bodyBytes += chunk;
+        const options = bodyBytes ? JSON.parse(bodyBytes) : {};
+        const result = await matchMaker.controller.invokeMethod(
+          method as any,
+          roomName,
+          options,
+        );
+        response.writeHead(200).end(JSON.stringify(result));
+      } catch (err: any) {
+        response
+          .writeHead(err.code || 500)
+          .end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
     const token = options.portal
       ? readCookie(request, gameCookieName(options.portal))
       : request.headers.authorization?.replace(/^Bearer /, "");
@@ -791,6 +831,7 @@ async function startSchoolPlayServer(
     }
   });
   web.requestTimeout = 10000;
+  (realtime.transport as any).listenForUpgrade(web);
   try {
     await new Promise<void>((ready, reject) => {
       web.once("error", reject);
