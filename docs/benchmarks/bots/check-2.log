@@ -1,7 +1,0 @@
-{
-  "status": "fulfilled",
-  "value": {
-    "code": 0,
-    "output": "\u001b[36mvite v8.3.4 \u001b[32mbuilding client environment for production...\u001b[36m\u001b[39m\ntransforming...\n✓ 65 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/client/index.html                   3.74 kB │ gzip:   1.56 kB\ndist/client/assets/index-BGAMs02G.css   12.40 kB │ gzip:   3.58 kB\ndist/client/assets/index-xSVvjk8x.js   807.27 kB │ gzip: 215.92 kB\n\n\u001b[32m✓ built in 253ms\u001b[39m\n\u001b[33m[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\u001b[39m\n"
-  }
-}
