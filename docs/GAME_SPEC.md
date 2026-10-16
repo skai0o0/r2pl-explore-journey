@@ -6,14 +6,14 @@
 ## 1. Confirmed School Roster & World Layout (`C-04`, `C-05`, `C-08`)
 
 | **Slot Bit** | **School ID** | **Short Name** | **Full Name** | **Color Hex** | **Accent Hex** | **Staging HQ Center (x, z)** | 
-| `0` | `hcmut` | HCMUT | Trường Đại học Bách khoa – ĐHQG TP.HCM | `#0062FF` | `#00E5FF` | `(200, 200)` | 
-| `1` | `hcmcou` | HCMCOU | Trường Đại học Mở TP.HCM | `#FF8C00` | `#FFD700` | `(500, 160)` | 
-| `2` | `dtu` | DTU | Đại học Duy Tân | `#E60026` | `#FF4D6D` | `(800, 200)` | 
-| `3` | `dhhp` | DHHP | Trường Đại học Hải Phòng | `#00A86B` | `#00FF9D` | `(840, 500)` | 
-| `4` | `hsu` | HSU | Trường Đại học Hoa Sen | `#7928CA` | `#FF0080` | `(800, 800)` | 
-| `5` | `huce` | HUCE | Đại học Xây dựng Hà Nội | `#E7C547` | `#FFF0A0` | `(500, 840)` | 
-| `6` | `ntu` | NTU | Đại học Nha Trang | `#00B8D9` | `#80FFFF` | `(200, 800)` | 
-| `7` | `hcmiu` | HCMIU | Đại học Quốc tế – ĐHQG TP.HCM | `#E85D9E` | `#FFB8DD` | `(160, 500)` | 
+| `0` | `hcmut` | HCMUT | Đại Học Bách Khoa_Hồ Chí Minh | `#0062FF` | `#00E5FF` | `(500, 280)` | 
+| `1` | `ou` | OU | Đại Học Mở_Hồ Chí Minh | `#FF8C00` | `#FFD700` | `(655, 345)` | 
+| `2` | `dtu` | DTU | Đại Học Duy Tân_Đà Nẵng | `#E60026` | `#FF4D6D` | `(720, 500)` | 
+| `3` | `hpuni` | HPUNI | Đại Học Hải Phòng | `#00A86B` | `#00FF9D` | `(655, 655)` | 
+| `4` | `hsu` | HSU | Đại Học Hoa Sen_Hồ Chí Minh | `#7928CA` | `#FF0080` | `(500, 720)` | 
+| `5` | `huce` | HUCE | Đại Học Xây Dựng_Hà Nội | `#E7C547` | `#FFF0A0` | `(345, 655)` | 
+| `6` | `ntu` | NTU | Đại Học Nha Trang | `#00B8D9` | `#80FFFF` | `(280, 500)` | 
+| `7` | `hcmiu` | HCMIU | Đại Học Quốc Tế | `#E85D9E` | `#FFB8DD` | `(345, 345)` | 
 
 * **Slots `8–15`:** Reserved in the 16-bit mask for late-joining universities via Admin onboarding.
 
