@@ -1,0 +1,18 @@
+[Unit]
+Description=R2PL Student Sandbox Portal
+After=network.target r2pl-standalone.service
+Requires=r2pl-standalone.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/r2pl-game
+ExecStart=/usr/bin/node --env-file=.env.sandbox --experimental-strip-types scripts/demo-portal.ts
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+Environment=NODE_ENV=production
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

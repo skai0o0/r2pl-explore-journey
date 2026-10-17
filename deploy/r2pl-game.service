@@ -1,0 +1,18 @@
+[Unit]
+Description=R2PL Production Game and Live Map Editor
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/r2pl-game
+ExecStart=/usr/bin/node --env-file=.env.portal --experimental-strip-types scripts/start-portal.ts
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+Environment=NODE_ENV=production
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

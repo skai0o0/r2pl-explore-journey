@@ -3,18 +3,58 @@
   "info": {
     "title": "R2PL Game Partner Integration",
     "version": "1.1.0",
-    "description": "Server-to-server contract for the student race portal. The portal verifies edu identity and supplies campaign-only ACCEPTED vRace distance. Game owns conversion and spendable wallet. Earned running points never decrease from game spending. Custom HMAC protocol (not OAuth or RFC 9421 wire format): HMAC-SHA256 over UTF-8 lines r2pl-v1, campaignId, POST, exact path, timestamp milliseconds, nonce, lowercase SHA256(raw JSON bytes), joined with LF and no trailing LF. Headers identify campaign, key, timestamp, nonce, lowercase hex signature. Clock skew <=300 seconds; nonce must be unique. Every retry uses a fresh nonce/signature and IDENTICAL business payload. No shared key in browsers. Maximum JSON size 16384 bytes; 300 authenticated requests/minute/key/campaign. Separate credentials per campaign/environment; rotation accepts multiple key IDs. Production requires HTTPS/WSS. See README_PLAY.md for handoff and deployment."
+    "description": "Integration contract for the student race portal backend. Portal verifies student/staff identity and provides accepted campaign distance from vRace. Game converts distance to running points, owns the spendable wallet and issues browser-bound launch tickets. Only partner endpoints and service discovery are included here; game browser sessions and editor APIs are managed by Game. HMAC-SHA256 signs seven UTF-8 lines joined with LF and no trailing LF: r2pl-v1, campaignId, POST, exact path, timestamp milliseconds, nonce, lowercase SHA256(raw JSON body bytes). Clock skew <=300 seconds; fresh nonce/signature per attempt. Retry with the identical running snapshot; use accounts to reconcile if a previously unaccepted snapshot becomes stale. Maximum JSON body 16384 bytes; 300 authenticated requests/minute/key/campaign. Separate credentials for Sandbox and Production. See PARTNER_API_HANDOFF.md in the handoff package."
   },
-  "servers": [{ "url": "https://game.example.edu", "description": "Replace with the assigned game origin" }],
-  "security": [{ "Campaign": [], "KeyId": [], "Timestamp": [], "Nonce": [], "Signature": [] }],
+  "servers": [
+    {
+      "url": "https://skai0o0.id.vn",
+      "description": "Production — separate campaign and credentials"
+    },
+    {
+      "url": "https://play.skai0o0.id.vn",
+      "description": "Sandbox — simulated identity and running data"
+    }
+  ],
+  "security": [
+    {
+      "Campaign": [],
+      "KeyId": [],
+      "Timestamp": [],
+      "Nonce": [],
+      "Signature": []
+    }
+  ],
   "paths": {
     "/api/partner/v1/members": {
       "post": {
         "operationId": "upsertMember",
         "summary": "Provision verified student/staff or suspend access",
         "description": "Only the signed portal backend calls this after verified identity and campaign eligibility checks. Competitive students use the eight existing IDs and receive role=user/playable=true. Company staff use schoolId=amtech plus email/emailVerified=true; approved exact emails override schoolId. Verified staff resolve to organizationId=amtech, schoolId=null, role=admin, playable=false. AMTECH has no competitive slot, HQ, wallet, running conversion, or ranking. Staff launch into Live Editor. Self-service school selection must never provision staff. externalStudentId is a stable opaque portal ID, never an email. schoolId is mapped from the portal school registry, never guessed from an email suffix. Repeated requests do not reset a wallet. Competitive school change returns 409. Upgrading a verified staff identity revokes existing player sessions and running bindings while preserving historical wallets; it never grants a new wallet. active=false invalidates sessions/tickets; open sockets are checked every 5 seconds and before commands. Initial Points/Crystals/Keys are zero.",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Member" } } } },
-        "responses": { "200": { "description": "Member saved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisionedMember" } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Member"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Member saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvisionedMember"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/api/partner/v1/running": {
@@ -22,8 +62,39 @@
         "operationId": "syncRunning",
         "summary": "Reconcile accepted campaign distance into the game wallet",
         "description": "revision increases per student per campaign. Payload is a cumulative campaign snapshot, not an activity delta and not all-time vRace distance. observedAtMs is when the portal took the snapshot, within 5 minutes of game server time. Reuse identical observedAtMs and weekly values on retries. Same revision/same payload returns original receipt with replay=true; different payload returns 409. A newer revision can correct accepted distance: debit the difference if spendable balance permits, otherwise 409 CORRECTION_REQUIRES_REVIEW with NO mutation. No silent clamp or overwrite of a spent wallet. Convert floor(cumulativeMeters*10/1000) under ruleVersion 1; fractional distances accumulate before rounding. Weekly meters use Monday 00:00 UTC+7. Weekly reset requires a new revision. The response balance is at commit time; query accounts for current balance. Business receipts persist across restarts.",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RunningSnapshot" }, "example": { "externalStudentId": "student-123", "revision": "1", "cumulativeMeters": "1500", "weeklyMeters": "1500", "observedAtMs": 1792026000000, "weekStartMs": 1791738000000 } } } },
-        "responses": { "200": { "description": "Committed or replayed receipt", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RunningReceipt" } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunningSnapshot"
+              },
+              "example": {
+                "externalStudentId": "student-123",
+                "revision": "1",
+                "cumulativeMeters": "1500",
+                "weeklyMeters": "1500",
+                "observedAtMs": 1792026000000,
+                "weekStartMs": 1791738000000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed or replayed receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunningReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/api/partner/v1/accounts": {
@@ -31,8 +102,31 @@
         "operationId": "getAccount",
         "summary": "Read one student's earned running score and current spendable wallet",
         "description": "Private server-to-server result. Portal may use earnedRunningPoints on the race leaderboard and spendablePoints as the remaining game budget. Rewards in the game affect spendablePoints only. No public email or cross-student wallet endpoint.",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StudentRef" } } } },
-        "responses": { "200": { "description": "Current account", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Account" } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudentRef"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/api/partner/v1/launches": {
@@ -40,60 +134,391 @@
         "operationId": "createLaunch",
         "summary": "Issue one-use browser-bound game login ticket",
         "description": "Start at game origin. Game generates a verifier in tab sessionStorage, sends its S256 challenge to PORTAL_LOGIN_URL using game_campaign, game_challenge, game_return query parameters. Portal authenticates its current student, verifies exact registered game_return, then calls this endpoint with that student and challenge. Redirect same browser tab using HTTP 303 to the returned launchUrl. Do not put tokens in query strings or iframe postMessage. Ticket lasts 60 seconds; stored hashed; consumed once. This custom partner handoff is not an OAuth implementation.",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["externalStudentId", "codeChallenge"], "properties": { "externalStudentId": { "$ref": "#/components/schemas/Identifier" }, "codeChallenge": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$", "description": "base64url(SHA256(codeVerifier)) without padding" } } } } } },
-        "responses": { "200": { "description": "Redirect the same browser tab", "content": { "application/json": { "schema": { "type": "object", "properties": { "launchUrl": { "type": "string", "format": "uri" }, "expiresInSeconds": { "type": "integer", "const": 60 } } } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "externalStudentId",
+                  "codeChallenge"
+                ],
+                "properties": {
+                  "externalStudentId": {
+                    "$ref": "#/components/schemas/Identifier"
+                  },
+                  "codeChallenge": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{43}$",
+                    "description": "base64url(SHA256(codeVerifier)) without padding"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Redirect the same browser tab",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "launchUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "expiresInSeconds": {
+                      "type": "integer",
+                      "const": 60
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
-    "/api/portal/session": {
-      "post": {
-        "operationId": "exchangeLaunch",
-        "summary": "Game browser only: consume ticket with its verifier",
+    "/api/partner/v1/openapi.json": {
+      "get": {
+        "operationId": "getContract",
+        "summary": "This contract",
         "security": [],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["ticket", "codeVerifier"], "properties": { "ticket": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "codeVerifier": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43,128}$" } } } } } },
-        "description": "Requires the registered game Origin. Returns an HttpOnly SameSite=Lax Path=/ cookie; Production adds Secure and uses __Host-r2pl_game. Session token is never returned in JSON or browser storage. Cookie lifetime is 3600 seconds; stored hashed server-side.",
-        "responses": { "200": { "description": "Game session cookie set", "content": { "application/json": { "schema": { "type": "object", "required": ["expiresInSeconds"], "properties": { "expiresInSeconds": { "type": "integer", "const": 3600 } } } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 JSON"
+          }
+        }
       }
     },
-    "/api/portal/logout": {
-      "post": {
-        "operationId": "logout",
-        "summary": "Game browser: revoke its game session",
-        "description": "Requires exact game Origin and X-CSRF-Token from authenticated bootstrap. Clears the cookie and revokes open sockets within 5 seconds or before the next command. Portal login is a separate session.",
-        "security": [{ "GameSession": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "maxProperties": 0 } } } },
-        "responses": { "200": { "description": "Session revoked" }, "default": { "$ref": "#/components/responses/Error" } }
+    "/health": {
+      "get": {
+        "operationId": "getServiceHealth",
+        "summary": "Check availability and environment",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Game and its database are available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "mode"
+                  ],
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "staging",
+                        "production"
+                      ],
+                      "description": "Sandbox uses staging; Production uses production."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-    },
-    "/api/portal/ws-ticket": { "post": { "operationId": "issueSocketTicket", "summary": "Game browser: issue one-use Colyseus join ticket", "description": "Requires session cookie, exact game Origin and X-CSRF-Token from bootstrap. Admin staff are rejected with 403 ADMIN_CANNOT_PLAY. Pass the ticket as the Colyseus join token; never pass the session cookie. Each reconnect needs a fresh ticket. Ticket is hashed server-side, consumed once and expires after 60 seconds.", "security": [{ "GameSession": [] }], "responses": { "200": { "description": "One-use socket ticket", "content": { "application/json": { "schema": { "type": "object", "required": ["ticket"], "properties": { "ticket": { "type": "string" } } } } } }, "default": { "$ref": "#/components/responses/Error" } } } },
-    "/api/portal/config": { "get": { "operationId": "getBrowserConfig", "summary": "Public school catalog and registered portal login URL", "security": [], "responses": { "200": { "description": "Game browser integration configuration; contains no secret" } } } },
-    "/api/admin/editor": {"get": {"operationId": "getEditorSnapshot","summary": "Admin session only: authored objects, own draft and version history","security": [{"GameSession": []}],"responses": {"200": {"description": "Editor result","content": {"application/json": {"schema": {"$ref": "#/components/schemas/EditorSnapshot"}}}},"default": {"description": "400 invalid layout; 403 admin/CSRF required; 409 layout/draft version conflict; 413 size; 503 temporary failure. Draft contents are retained on conflict.","content": {"application/json": {"schema": {"type": "object","required": ["error"],"properties": {"error": {"type": "string"}}}}}}}}},
-    "/api/admin/editor/draft": {"post": {"operationId": "saveEditorDraft","summary": "Save own draft without publishing to players","description": "Requires verified AMTECH admin cookie, exact game Origin and bootstrap X-CSRF-Token. draftRevision must match own last saved draft; baseRevision must be a known published version. Maximum body 131072 bytes.","security": [{"GameSession": [],"Csrf": []}],"requestBody": {"required": true,"content": {"application/json": {"schema": {"$ref": "#/components/schemas/EditorDraftInput"}}}},"responses": {"200": {"description": "Saved draft revision"},"default": {"description": "400 invalid layout; 403 admin/CSRF required; 409 layout/draft version conflict; 413 size; 503 temporary failure. Draft contents are retained on conflict.","content": {"application/json": {"schema": {"type": "object","required": ["error"],"properties": {"error": {"type": "string"}}}}}}}}},
-    "/api/admin": {"post": {"operationId": "applyOperatorCommand","summary": "Publish/restore layout or issue campaign operator commands","description": "Verified AMTECH admin only. Exact Origin and X-CSRF-Token required. publish accepts objects/baseRevision; rollback accepts targetRevision/baseRevision; notify accepts title/body; gift-stock accepts tier/amount on staging only. Publishing revalidates layout, protected HQ/landmarks and current staff membership transactionally. Stale baseRevision returns 409 LAYOUT_VERSION_CONFLICT. Runtime ownership and player wallets/fog are never restored from drafts. Changes are audited.","security": [{"GameSession": [],"Csrf": []}],"requestBody": {"required": true,"content": {"application/json": {"schema": {"type": "object","required": ["action"],"properties": {"action": {"enum": ["publish","rollback","notify","gift-stock"]},"objects": {"type": "array","items": {"$ref": "#/components/schemas/EditorObject"}},"baseRevision": {"type": "integer","minimum": 0},"targetRevision": {"type": "integer","minimum": 0},"title": {"type": "string","maxLength": 100},"body": {"type": "string","maxLength": 500},"tier": {"enum": ["aspire","nitro","predator"]},"amount": {"type": "integer","minimum": 0,"maximum": 100000}}}}}},"responses": {"200": {"description": "Applied atomically"},"default": {"description": "400 invalid layout; 403 admin/CSRF required; 409 layout/draft version conflict; 413 size; 503 temporary failure. Draft contents are retained on conflict.","content": {"application/json": {"schema": {"type": "object","required": ["error"],"properties": {"error": {"type": "string"}}}}}}}}},
-    "/api/partner/v1/openapi.json": { "get": { "operationId": "getContract", "summary": "This contract", "security": [], "responses": { "200": { "description": "OpenAPI 3.1 JSON" } } } }
+    }
   },
   "components": {
     "securitySchemes": {
-      "Campaign": { "type": "apiKey", "in": "header", "name": "X-R2PL-Campaign", "description": "Assigned campaign UUID, part of signed message" },
-      "KeyId": { "type": "apiKey", "in": "header", "name": "X-R2PL-Key-Id" },
-      "Timestamp": { "type": "apiKey", "in": "header", "name": "X-R2PL-Timestamp", "description": "Unix milliseconds as a 13-digit decimal string" },
-      "Nonce": { "type": "apiKey", "in": "header", "name": "X-R2PL-Nonce", "description": "16–128 base64url characters; new cryptographically random value for every request" },
-      "Signature": { "type": "apiKey", "in": "header", "name": "X-R2PL-Signature", "description": "Lowercase hex HMAC-SHA256 signature of canonical message described above" },
-      "Csrf": { "type": "apiKey", "in": "header", "name": "X-CSRF-Token", "description": "From authenticated bootstrap; exact Origin is also required." },
-      "GameSession": { "type": "apiKey", "in": "cookie", "name": "__Host-r2pl_game", "description": "HttpOnly session cookie. Loopback staging uses r2pl_game. Authenticated POST also requires exact Origin and X-CSRF-Token from bootstrap." }
+      "Campaign": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-R2PL-Campaign",
+        "description": "Assigned campaign UUID, part of signed message"
+      },
+      "KeyId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-R2PL-Key-Id"
+      },
+      "Timestamp": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-R2PL-Timestamp",
+        "description": "Unix milliseconds as a 13-digit decimal string"
+      },
+      "Nonce": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-R2PL-Nonce",
+        "description": "16–128 base64url characters; new cryptographically random value for every request"
+      },
+      "Signature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-R2PL-Signature",
+        "description": "Lowercase hex HMAC-SHA256 signature of canonical message described above"
+      }
     },
-    "responses": { "Error": { "description": "400 invalid JSON/body/time; 401 missing/invalid signature or session; 403 suspended/origin rejected, ADMIN_CANNOT_PLAY, VERIFIED_ADMIN_IDENTITY_REQUIRED; 404 unknown member/route; 405 method; 409 REQUEST_REPLAY, REVISION_CONFLICT, STALE_REVISION, CORRECTION_REQUIRES_REVIEW, SCHOOL_CHANGE_REQUIRES_REVIEW, CONVERSION_CHANGE_REQUIRES_REVIEW, IDENTITY_ALREADY_BOUND; 413 size; 415 media type; 429 rate (Retry-After: 60); 503 transient. Retry 429/503/network errors with bounded exponential backoff, new auth headers, unchanged business snapshot. Do not automatically retry other 4xx. Request ID is safe to include in support requests; never send secrets/tokens.", "content": { "application/json": { "schema": { "type": "object", "required": ["error", "requestId"], "properties": { "error": { "type": "string" }, "requestId": { "type": "string", "format": "uuid" } } } } } } },
+    "responses": {
+      "Error": {
+        "description": "400 invalid JSON/body/time; 401 missing/invalid signature; 403 suspended/origin rejected, ADMIN_CANNOT_PLAY, VERIFIED_ADMIN_IDENTITY_REQUIRED; 404 unknown member/route; 405 method; 409 REQUEST_REPLAY, REVISION_CONFLICT, STALE_REVISION, CORRECTION_REQUIRES_REVIEW, SCHOOL_CHANGE_REQUIRES_REVIEW, CONVERSION_CHANGE_REQUIRES_REVIEW, IDENTITY_ALREADY_BOUND; 413 size; 415 media type; 429 rate (Retry-After: 60); 503 transient. Retry 429/503/network errors with bounded exponential backoff, new auth headers, unchanged business snapshot. Do not automatically retry other 4xx. Request ID is safe to include in support requests; never send secrets/tokens.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "error",
+                "requestId"
+              ],
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "schemas": {
-      "ProvisionedMember": {"type": "object","required": ["externalStudentId","schoolId","role","playable","active"],"properties": {"externalStudentId": {"type": "string"},"schoolId": {"type": ["string","null"]},"organizationId": {"const": "amtech"},"role": {"enum": ["user","admin"]},"playable": {"type": "boolean"},"active": {"type": "boolean"}}},
-      "EditorObject": {"type": "object","additionalProperties": false,"required": ["id","kind","name","x","z","width","height"],"properties": {"id": {"type": "string","pattern": "^[a-z0-9_-]{1,100}$"},"kind": {"enum": ["hq","landmark","unistop","chest"]},"name": {"type": "string","minLength": 1,"maxLength": 100},"x": {"type": "integer","minimum": 0,"maximum": 1000},"z": {"type": "integer","minimum": 0,"maximum": 1000},"width": {"type": "integer"},"height": {"type": "integer"},"schoolSlot": {"type": "integer","minimum": 0,"maximum": 7},"tier": {"enum": ["aspire","nitro","predator"]},"ownerSchoolSlot": {"type": ["integer","null"],"readOnly": true},"ownerSchoolId": {"type": ["string","null"],"readOnly": true}}},
-      "EditorDraftInput": {"type": "object","additionalProperties": false,"required": ["objects","baseRevision","draftRevision"],"properties": {"objects": {"type": "array","minItems": 18,"maxItems": 200,"items": {"$ref": "#/components/schemas/EditorObject"}},"baseRevision": {"type": "integer","minimum": 0},"draftRevision": {"type": "integer","minimum": 0}}},
-      "EditorSnapshot": {"type": "object","required": ["objects","revision","draft","history"],"properties": {"objects": {"type": "array","items": {"$ref": "#/components/schemas/EditorObject"}},"revision": {"type": "integer","minimum": 0},"draft": {"type": ["object","null"],"properties": {"objects": {"type": "array","items": {"$ref": "#/components/schemas/EditorObject"}},"revision": {"type": "integer"},"baseRevision": {"type": "integer"}}},"history": {"type": "array","items": {"type": "object","properties": {"revision": {"type": "integer"},"actor": {"type": "string"},"createdAt": {"type": "string"}}}}}},
-      "Identifier": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$" },
-      "Decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,18})$", "description": "Canonical unsigned decimal string; wire strings prevent JSON precision loss. revision <= PostgreSQL bigint max; cumulative meters <= JS safe integer." },
-      "StudentRef": { "type": "object", "additionalProperties": false, "required": ["externalStudentId"], "properties": { "externalStudentId": { "$ref": "#/components/schemas/Identifier" } } },
-      "Member": {"type": "object","additionalProperties": false,"required": ["externalStudentId","schoolId","displayName","active"],"properties": {"externalStudentId": {"$ref": "#/components/schemas/Identifier"},"schoolId": {"type": "string","enum": ["hcmut","ou","dtu","hpuni","hsu","huce","ntu","hcmiu","amtech"]},"displayName": {"type": "string","minLength": 1,"maxLength": 100},"eduVerified": {"type": "boolean","description": "Must be true for competitive student membership. Not required for verified company staff."},"active": {"type": "boolean"},"email": {"type": "string","format": "email","maxLength": 254,"description": "Email verified by the signed Portal backend, never a browser assertion. Required for staff provisioning."},"emailVerified": {"type": "boolean","description": "Must be true for staff. Exact approved staff emails override schoolId; verified amtech.vn/amtech-vn.com domains also resolve to admin."}},"anyOf": [{"required": ["eduVerified"],"properties": {"eduVerified": {"const": true}}},{"required": ["email","emailVerified"],"properties": {"emailVerified": {"const": true}}}]},
-      "RunningSnapshot": { "type": "object", "additionalProperties": false, "required": ["externalStudentId", "revision", "cumulativeMeters", "weeklyMeters", "observedAtMs", "weekStartMs"], "properties": { "externalStudentId": { "$ref": "#/components/schemas/Identifier" }, "revision": { "$ref": "#/components/schemas/Decimal" }, "cumulativeMeters": { "$ref": "#/components/schemas/Decimal" }, "weeklyMeters": { "$ref": "#/components/schemas/Decimal" }, "observedAtMs": { "type": "integer", "minimum": 0 }, "weekStartMs": { "type": "integer", "minimum": 0, "description": "Monday 00:00 Asia/Ho_Chi_Minh for observedAtMs; weeklyMeters cannot exceed cumulativeMeters" } } },
-      "RunningReceipt": { "type": "object", "required": ["externalStudentId", "revision", "earnedRunningPoints", "spendablePoints", "delta", "replay"], "properties": { "externalStudentId": { "type": "string" }, "revision": { "$ref": "#/components/schemas/Decimal" }, "earnedRunningPoints": { "$ref": "#/components/schemas/Decimal" }, "spendablePoints": { "$ref": "#/components/schemas/Decimal" }, "delta": { "type": "string", "pattern": "^-?[0-9]+$" }, "replay": { "type": "boolean" } } },
-      "Account": { "type": "object", "properties": { "externalStudentId": { "type": "string" }, "schoolId": { "type": "string" }, "earnedRunningPoints": { "$ref": "#/components/schemas/Decimal" }, "spendablePoints": { "$ref": "#/components/schemas/Decimal" }, "revision": { "$ref": "#/components/schemas/Decimal" }, "cumulativeMeters": { "$ref": "#/components/schemas/Decimal" }, "weeklyMeters": { "$ref": "#/components/schemas/Decimal" }, "weekStartMs": { "type": ["integer", "null"] } } }
+      "ProvisionedMember": {
+        "type": "object",
+        "required": [
+          "externalStudentId",
+          "schoolId",
+          "role",
+          "playable",
+          "active"
+        ],
+        "properties": {
+          "externalStudentId": {
+            "type": "string"
+          },
+          "schoolId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organizationId": {
+            "const": "amtech"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "admin"
+            ]
+          },
+          "playable": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Identifier": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+      },
+      "Decimal": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]{0,18})$",
+        "description": "Canonical unsigned decimal string; wire strings prevent JSON precision loss. revision <= PostgreSQL bigint max; cumulative meters <= JS safe integer."
+      },
+      "StudentRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalStudentId"
+        ],
+        "properties": {
+          "externalStudentId": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalStudentId",
+          "schoolId",
+          "displayName",
+          "active"
+        ],
+        "properties": {
+          "externalStudentId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "schoolId": {
+            "type": "string",
+            "enum": [
+              "hcmut",
+              "ou",
+              "dtu",
+              "hpuni",
+              "hsu",
+              "huce",
+              "ntu",
+              "hcmiu",
+              "amtech"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "eduVerified": {
+            "type": "boolean",
+            "description": "Must be true for competitive student membership. Not required for verified company staff."
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "description": "Email verified by the signed Portal backend, never a browser assertion. Required for staff provisioning."
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "Must be true for staff. Exact approved staff emails override schoolId; verified amtech.vn/amtech-vn.com domains also resolve to admin."
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "eduVerified"
+            ],
+            "properties": {
+              "eduVerified": {
+                "const": true
+              }
+            }
+          },
+          {
+            "required": [
+              "email",
+              "emailVerified"
+            ],
+            "properties": {
+              "emailVerified": {
+                "const": true
+              }
+            }
+          }
+        ]
+      },
+      "RunningSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalStudentId",
+          "revision",
+          "cumulativeMeters",
+          "weeklyMeters",
+          "observedAtMs",
+          "weekStartMs"
+        ],
+        "properties": {
+          "externalStudentId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "cumulativeMeters": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "weeklyMeters": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "observedAtMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "weekStartMs": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Monday 00:00 Asia/Ho_Chi_Minh for observedAtMs; weeklyMeters cannot exceed cumulativeMeters"
+          }
+        }
+      },
+      "RunningReceipt": {
+        "type": "object",
+        "required": [
+          "externalStudentId",
+          "revision",
+          "earnedRunningPoints",
+          "spendablePoints",
+          "delta",
+          "replay"
+        ],
+        "properties": {
+          "externalStudentId": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "earnedRunningPoints": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "spendablePoints": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "delta": {
+            "type": "string",
+            "pattern": "^-?[0-9]+$"
+          },
+          "replay": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "externalStudentId": {
+            "type": "string"
+          },
+          "schoolId": {
+            "type": "string"
+          },
+          "earnedRunningPoints": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "spendablePoints": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "cumulativeMeters": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "weeklyMeters": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "weekStartMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      }
     }
   }
 }

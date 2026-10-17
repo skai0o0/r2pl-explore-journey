@@ -1,0 +1,25 @@
+[Unit]
+Description=Pgweb - R2PL Production Database (Tailscale only)
+After=network-online.target tailscaled.service postgresql.service
+Wants=network-online.target tailscaled.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=pgweb-production
+WorkingDirectory=/var/lib/pgweb-production
+Environment=HOME=/var/lib/pgweb-production
+EnvironmentFile=/etc/r2pl/pgweb-production.env
+ExecStart=/usr/local/bin/pgweb_linux_amd64 --bind=100.64.161.96 --listen=8083 --skip-open --lock-session --no-ssh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -8,6 +8,12 @@ export const KNOWN_MODELS = new Set<string>([
   "/models/hq.gltf",
   "/models/landmark.gltf",
   "/models/hqs/hcmut_hq.glb",
+  "/models/hqs/ou_hq.glb",
+  "/models/hqs/dtu_hq.glb",
+  "/models/hqs/hpuni_hq.glb",
+  "/models/hqs/hsu_hq.glb",
+  "/models/hqs/huce_hq.glb",
+  "/models/hqs/ntu_hq.glb",
   "/models/hqs/hcmiu_hq.glb",
 ]);
 

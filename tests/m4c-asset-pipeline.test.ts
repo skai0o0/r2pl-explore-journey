@@ -267,6 +267,12 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
 
   // Model URL conventions
   assert.equal(getHqModelUrl("hcmut"), "/models/hqs/hcmut_hq.glb");
+  assert.equal(getHqModelUrl("ou"), "/models/hqs/ou_hq.glb");
+  assert.equal(getHqModelUrl("dtu"), "/models/hqs/dtu_hq.glb");
+  assert.equal(getHqModelUrl("hpuni"), "/models/hqs/hpuni_hq.glb");
+  assert.equal(getHqModelUrl("hsu"), "/models/hqs/hsu_hq.glb");
+  assert.equal(getHqModelUrl("huce"), "/models/hqs/huce_hq.glb");
+  assert.equal(getHqModelUrl("ntu"), "/models/hqs/ntu_hq.glb");
   assert.equal(getHqModelUrl("hcmiu"), "/models/hqs/hcmiu_hq.glb");
   assert.equal(
     getLandmarkModelUrl("fansipan"),
@@ -295,8 +301,18 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
   assert.equal(getChestModelUrl("aspire"), "/models/chests/chest_aspire.glb");
 
   // Manifest availability check
-  assert.equal(isModelAvailable("/models/hqs/hcmut_hq.glb"), true);
-  assert.equal(isModelAvailable("/models/hqs/hcmiu_hq.glb"), true);
+  for (const school of [
+    "hcmut",
+    "ou",
+    "dtu",
+    "hpuni",
+    "hsu",
+    "huce",
+    "ntu",
+    "hcmiu",
+  ]) {
+    assert.equal(isModelAvailable(`/models/hqs/${school}_hq.glb`), true);
+  }
   assert.equal(isModelAvailable("/models/landmarks/nonexistent.glb"), false);
 
   // Skip if unavailable immediately uses fallback without calling loader

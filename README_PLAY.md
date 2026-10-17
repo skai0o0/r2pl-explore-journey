@@ -220,6 +220,21 @@ GLB chuẩn glTF Y-Up được xoay X=π/2, auto-fit Box3 theo span hiện tại
 
 ## CampaignProvider và biến môi trường
 
+### Domain Production và sandbox trên VPS
+
+`https://skai0o0.id.vn` chạy `start-portal.ts` ở mode `production`, database `r2pl_production`, campaign riêng. `https://play.skai0o0.id.vn` chạy cùng server ở mode `staging`, ghép với portal thử nghiệm `https://portal.skai0o0.id.vn`. Dữ liệu cũ trong database test và database standalone được giữ lại; standalone synthetic không còn gắn với domain công khai.
+
+Các template trong `deploy/` mô tả cấu hình đang triển khai:
+
+- `.env.portal`: game Production, HTTP `4190`, WebSocket `2568`, các origin HTTPS/WSS trên domain chính. URL đăng nhập tạm thời là `https://skai0o0.id.vn/integration-login`, chờ portal đối tác thật.
+- `.env.sandbox`: game sandbox HTTP `4191`, WebSocket `2569`, origin `https://play.skai0o0.id.vn`, URL đăng nhập `https://portal.skai0o0.id.vn/login`, `ALLOW_REMOTE_STAGING=1`. Portal demo chỉ đọc file này và chỉ chấp nhận database test.
+- `nginx-r2pl.conf`: đặt tại `/etc/nginx/conf.d/r2pl-game.conf`. Cloudflare Tunnel vẫn chuyển domain chính tới `127.0.0.1:4176`, domain play tới `127.0.0.1:4177`, portal tới `127.0.0.1:4180`. Nginx phân luồng HTTP/WebSocket vào đúng cổng nội bộ; tất cả cổng game chỉ listen loopback.
+- `production-login.html`: sao chép tới `/var/www/r2pl/production-login.html` (thư mục `0755`, file `0644`) để nginx đọc được mà không mở quyền truy cập thư mục ứng dụng và secrets.
+- Ba template systemd thay cho dịch vụ cùng tên tại `/etc/systemd/system/`; `r2pl-standalone.service` hiện là game sandbox có đăng nhập portal. Giới hạn dừng dịch vụ là 15 giây.
+- `pgweb-production.service`: GUI riêng cho `r2pl_production` tại `http://100.64.161.96:8083/`, chỉ bind địa chỉ Tailscale, khóa kết nối vào một database. Connection string nằm trong `/etc/r2pl/pgweb-production.env` (quyền `0600`), được systemd nạp qua `EnvironmentFile`; dịch vụ dùng tài khoản hệ điều hành động riêng và tự khởi động cùng VPS. Pgweb sandbox tại `http://100.64.161.96:8082/` giữ nguyên.
+
+Giữ các file env ở quyền `0600`, dùng secret riêng từng môi trường và chạy migration trước khi start game. Khi đối tác sẵn sàng, đổi `PORTAL_LOGIN_URL` trong `.env.portal`, restart `r2pl-game.service` và nghiệm thu luồng PKCE bằng tài khoản đã được đối tác xác minh. Không bật `demo:portal` với cấu hình Production. Xem `integration/PARTNER_API_HANDOFF.md` để lấy origin/campaign/key ID; secret không được đưa vào Git.
+
 `.env.example` có `DATABASE_URL`, `PORT`, `ADMIN_KEY`, `CAMPAIGN_API_URL`, `CAMPAIGN_SHARED_SECRET` cùng biến local/test. Secret chỉ đặt ở server. Để nạp env trên local/staging:
 
 ```powershell
