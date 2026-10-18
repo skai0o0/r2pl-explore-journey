@@ -1,0 +1,32 @@
+/** Cosmetic settings only. No wallet, discovery, footprints, or terrain-height rules. */
+export const SCENE_PRESENTATION = {
+  exposure: 0.98,
+  background: 0x19343d,
+  // The production orthographic camera sits ~1,700 units away (mockup ~100).
+  distanceFog: { color: 0x24434b, density: 0.00012 },
+  discoveryFog: { density: 0.48, feather: 2.5, color: [0.055, 0.12, 0.15] },
+  homeSpan: 64,
+  territoryTint: 0.08,
+  cliffFill: 0.45,
+  groundCover: { retention: 0.15, scale: 0.6 },
+  borderFlags: { interval: 24, scale: 0.4 },
+  terrain: {
+    foundation: 0x526e5c,
+    lush_grass: 0x4d705b,
+    flower_meadow: 0x58765e,
+    hills: 0x496850,
+    highlands: 0x536556,
+    sand: 0x8c9c89,
+    river: 0x365d65,
+    lake: 0x345861,
+    cliff: 0x617363,
+  },
+  trees: {
+    trunk: 0x656d60,
+    oak: 0x416b55,
+    birch: 0x53795a,
+    retention: 0.58,
+    jitter: 3.6,
+  },
+  beacon: { height: 32, coreOpacity: 0.26, auraOpacity: 0.08 },
+} as const;

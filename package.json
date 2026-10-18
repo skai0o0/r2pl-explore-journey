@@ -54,6 +54,7 @@
     "@types/node": "24.19.1",
     "@types/pg": "8.23.1",
     "@types/three": "0.186.0",
+    "happy-dom": "^21.0.3",
     "typescript": "5.9.3",
     "vite": "8.3.4"
   }

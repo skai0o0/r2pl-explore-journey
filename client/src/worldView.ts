@@ -32,6 +32,7 @@ import {
 } from "./assetRegistry.ts";
 import { LandscapeEffects } from "./landscape.ts";
 import { createProceduralBuilding } from "./proceduralBuildings.ts";
+import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
 import { TerrainBiomes } from "./terrainBiomes.ts";
 import {
   TerrainChunks,
@@ -393,31 +394,40 @@ export class WorldView {
     this.#renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.#renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.#renderer.toneMappingExposure = 1.15;
-    this.#renderer.shadowMap.enabled = false;
-    this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.#renderer.toneMappingExposure = P.exposure;
+    this.#renderer.shadowMap.enabled = true;
+    this.#renderer.shadowMap.type = THREE.PCFShadowMap;
     host.append(this.#renderer.domElement);
-    this.#scene.background = new THREE.Color(0x0b1a20);
+    this.#scene.background = new THREE.Color(P.background);
+    this.#scene.fog = new THREE.FogExp2(
+      P.distanceFog.color,
+      P.distanceFog.density,
+    );
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.35);
     this.#scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x2a3a2e, 0.9);
+    const hemiLight = new THREE.HemisphereLight(0x9bbbd1, 0x183c35, 0.95);
     hemiLight.position.set(0, 0, 300);
     this.#scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfff1d6, 2.4);
+    const dirLight = new THREE.DirectionalLight(0xf5d7ab, 2.35);
     dirLight.position.set(...SUN_OFFSET);
     dirLight.target.position.set(0, 0, 0);
-    dirLight.castShadow = false;
+    dirLight.castShadow = true;
     dirLight.shadow.mapSize.set(2048, 2048);
-    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.near = 10;
     dirLight.shadow.camera.far = 1500;
-    dirLight.shadow.bias = -0.0004;
-    dirLight.shadow.normalBias = 0.2;
+    dirLight.shadow.bias = -0.0003;
+    dirLight.shadow.normalBias = 0.12;
+    dirLight.shadow.radius = 3;
     this.#sun = dirLight;
     this.#scene.add(dirLight);
     this.#scene.add(dirLight.target);
+
+    const fillLight = new THREE.DirectionalLight(0xa2d2eb, 0.85);
+    fillLight.position.set(150, -180, 220);
+    this.#scene.add(fillLight);
 
     this.#terrainChunks = new TerrainChunks(this.#terrain, this.#render);
     this.#scene.add(this.#terrainChunks.group);
@@ -425,6 +435,7 @@ export class WorldView {
       layout.objects ?? [],
       this.#render,
       this.#terrain,
+      this.#terrainChunks.discoveryFog,
     );
     this.#scene.add(this.#landscape.group);
     this.#scene.add(this.#privateObjects);
@@ -491,8 +502,10 @@ export class WorldView {
           : baseColor;
       const fallback = createProceduralBuilding(o.kind, color, o, o.tier);
       if (o.kind === "unistop") {
+        fallback.visible = this.#isDev || this.isObjectDiscovered(o);
         this.#unistopMeshes.set(o.id, fallback);
       } else {
+        fallback.visible = this.#isDev || this.#privateObjectIds.has(o.id);
         this.#chestMeshes.set(o.id, fallback);
       }
 
@@ -527,6 +540,11 @@ export class WorldView {
         );
         mount.ready.then((status) => {
           if (status === "loaded" && mount.model) {
+            const isVis =
+              o.kind === "unistop"
+                ? this.#isDev || this.isObjectDiscovered(o)
+                : this.#isDev || this.#privateObjectIds.has(o.id);
+            mount.model.visible = isVis;
             if (o.kind === "unistop") {
               this.#unistopMeshes.set(o.id, mount.model);
             } else {
@@ -600,7 +618,7 @@ export class WorldView {
     this.#revealElement = document.createElement("div");
     this.#revealElement.className = "tile-reveal";
     this.#revealElement.innerHTML =
-      '<span class="reveal-ring"></span><span class="reveal-spark">âœ¦</span><span class="reveal-tag">KNOWLEDGE REVEALED</span>';
+      '<span class="reveal-ring"></span><span class="reveal-spark">✦</span><span class="reveal-tag">ĐÃ MỞ TRI THỨC</span>';
     this.#revealElement.hidden = true;
     host.append(this.#revealElement);
 
@@ -712,21 +730,21 @@ export class WorldView {
       const color = new THREE.Color(SCHOOLS[beacon.holder]!.color);
       const beam = new THREE.Group();
       const core = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.9, 1.6, 150, 10, 1, true),
+        new THREE.CylinderGeometry(0.35, 0.65, P.beacon.height, 10, 1, true),
         new THREE.MeshBasicMaterial({
           color: color.clone().lerp(new THREE.Color(0xffffff), 0.55),
           transparent: true,
-          opacity: 0.9,
+          opacity: P.beacon.coreOpacity,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         }),
       );
       const aura = new THREE.Mesh(
-        new THREE.CylinderGeometry(3.2, 5.2, 150, 14, 1, true),
+        new THREE.CylinderGeometry(1.2, 2.1, P.beacon.height, 14, 1, true),
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.38,
+          opacity: P.beacon.auraOpacity,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
           side: THREE.DoubleSide,
@@ -744,7 +762,7 @@ export class WorldView {
       );
       for (const part of [core, aura]) {
         part.rotation.x = Math.PI / 2;
-        part.position.z = 75;
+        part.position.z = P.beacon.height / 2;
       }
       halo.position.z = 0.2;
       beam.add(core, aura, halo);
@@ -889,6 +907,9 @@ export class WorldView {
       this.#render();
     }
   }
+  setMistBrightness(mult: number): void {
+    this.#terrainChunks.setMistBrightness(mult);
+  }
   #disposeGroup(group: THREE.Object3D): void {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
@@ -926,7 +947,7 @@ export class WorldView {
           wireframe: true,
           depthTest: false,
           transparent: true,
-          opacity: 0.9,
+          opacity: P.beacon.coreOpacity,
         }),
       );
       mesh.position.set(
@@ -1239,6 +1260,7 @@ export class WorldView {
   }
 
   paintChunk(id: number, replica: ProjectionReplica): void {
+    this.#terrainChunks.discoveryFog.paintChunk(id, replica);
     this.#replica = replica;
     const layer = this.#layer(id);
     for (let local = 0; local < 4096; local++) {
@@ -1258,6 +1280,7 @@ export class WorldView {
   }
 
   paintTile(id: number, local: number, replica: ProjectionReplica): void {
+    this.#terrainChunks.discoveryFog.paintTile(id, local, replica);
     this.#replica = replica;
     const layer = this.#layer(id);
     this.#paintLocal(layer.pixels, id, local, replica);

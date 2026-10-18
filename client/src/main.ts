@@ -36,6 +36,7 @@ import { gameFetch } from "./gameHttp.ts";
 import { GameplayUI } from "./gameplayUI.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
+import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
 import { MiniMap } from "./ui/miniMap.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
 import {
@@ -50,6 +51,7 @@ import {
   WorldView,
 } from "./worldView.ts";
 import "./style.css";
+import "./ui/compactUI.css";
 
 import {
   type DevPlayer,
@@ -65,14 +67,13 @@ import { loadGameSession, returnToEventPortal } from "./portalSession.ts";
 
 // Codex-owned transport bootstrap contract; existing presentation stays intact.
 const session = await loadGameSession();
-const publicWorld =
+const publicWorld: WorldObject[] =
   session === LEGACY_DEV_SESSION
     ? []
-    : (
-        (await (await gameFetch("/api/fixture/world")).json()) as {
-          objects: WorldObject[];
-        }
-      ).objects;
+    : await gameFetch("/api/fixture/world").then(async (response) => {
+        if (!response.ok) throw new Error("World layout unavailable");
+        return ((await response.json()) as { objects: WorldObject[] }).objects;
+      });
 // Preload availability before WorldView synchronously chooses GLB or fallback.
 loadingStage(2);
 await fetchModelManifest();
@@ -86,15 +87,23 @@ const uiMode =
 const isDev = uiMode === "dev";
 document.body.dataset.mode = uiMode;
 document.body.dataset.debug = String(isDev);
+if (uiMode === "player") {
+  miniMap.element.style.display = "none";
+}
 if (isDev) {
   const template = document.getElementById(
     "dev-tools-template",
-  ) as HTMLTemplateElement;
-  document
-    .querySelector(".game-shell")!
-    .append(template.content.cloneNode(true));
+  ) as HTMLTemplateElement | null;
+  if (template) {
+    document
+      .querySelector(".game-shell")!
+      .append(template.content.cloneNode(true));
+  }
+  const devToolsSection = document.getElementById("dev-tools-section");
+  if (devToolsSection) devToolsSection.hidden = false;
 }
-miniMap.element.append(document.querySelector(".map-tools")!);
+const mapTools = document.querySelector(".map-tools");
+if (mapTools) miniMap.element.append(mapTools);
 const players = session.players;
 type Player = DevPlayer;
 
@@ -165,7 +174,7 @@ const ui = {
 const sdk = new ColyseusSDK(
   "websocketUrl" in session && session.websocketUrl
     ? session.websocketUrl
-    : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`,
+    : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${import.meta.env.DEV ? "/colyseus" : ""}`,
 );
 let player: Player =
   players.find(
@@ -233,6 +242,8 @@ function activity(message: string, kind = "normal"): void {
 function status(label: string, online: boolean): void {
   ui.connection.textContent = label;
   ui.connection.dataset.online = String(online);
+  get("hud-online-dot").dataset.online = String(online);
+  get("hud-online-dot").title = label;
   ui.explore.disabled = !online || !selected || lacksTestCredits();
   ui.retry.hidden = online;
 }
@@ -292,7 +303,7 @@ function requestTileContext(tile: PickedTile): void {
     tileContext = {
       tileIndex: tile.index,
       action: "explore",
-      points: Number(profileCost ?? 0),
+      points: Number(profileCost ?? 1),
     };
     return;
   }
@@ -330,8 +341,17 @@ function requestTileContext(tile: PickedTile): void {
 }
 
 function updateTile(): void {
-  get("explore-button").closest<HTMLElement>(".tile-panel")!.hidden = !selected;
-  if (!selected) return;
+  if (!selected) {
+    ui.tile.textContent = "Chạm bản đồ";
+    ui.badge.textContent = "CHƯA CHỌN";
+    ui.badge.className = "tiny-tag";
+    ui.badge.removeAttribute("data-state");
+    ui.knowledge.textContent = "Chạm vào ô kề cạnh trên bản đồ để khám phá";
+    ui.explore.disabled = true;
+    ui.explore.textContent = "Khám Phá Ô Này";
+    ui.action.textContent = "";
+    return;
+  }
   const object = selectedBuilding;
   const owned =
     replica.hasChunk(selected.chunk) &&
@@ -341,25 +361,26 @@ function updateTile(): void {
     replica.isDiscovered(selected.chunk, selected.local);
   ui.tile.textContent = object
     ? gameplay.objectName(object)
-    : owned
-      ? "Tri thức trường mình"
-      : discovered
-        ? "Vùng đã khám phá"
-        : "Vùng sương mù";
-  if (isDev) ui.tile.textContent += " · " + selected.x + ", " + selected.z;
+    : `${selected.x}, ${selected.z}`;
   ui.action.textContent = "";
   ui.badge.textContent = owned
     ? "ĐÃ MỞ"
     : discovered
       ? "ĐÃ KHÁM PHÁ"
       : "CHƯA KHÁM PHÁ";
-  ui.badge.className = "badge-tag " + (owned ? "owned" : "fogged");
+  ui.badge.className = `tiny-tag ${owned ? "owned" : "fogged"}`;
+  if (owned) {
+    ui.badge.setAttribute("data-state", "owned");
+  } else {
+    ui.badge.removeAttribute("data-state");
+  }
   const waiting = [...pending.values()].some(
     (a) => a.tile.index === selected!.index,
   );
   if (waiting) {
     ui.knowledge.textContent = "Đang xác nhận thao tác của bạn…";
     ui.badge.textContent = "ĐANG XỬ LÝ";
+    ui.badge.setAttribute("data-state", "pending");
     ui.explore.disabled = true;
     ui.explore.textContent = "Đang xử lý…";
     return;
@@ -504,6 +525,9 @@ const world = new WorldView(
     autoTarget = !object && autoExplore ? tile.index : undefined;
     updateTile();
     world.setSelectedObject(object?.id);
+    if (!autoExplore) {
+      stats.toggleTools(true);
+    }
     if (
       autoTarget === tile.index &&
       tileContext?.action === "explore" &&
@@ -630,7 +654,7 @@ function homeLandmark(): { x: number; z: number; id: string } {
   return { x: o.x, z: o.z, id };
 }
 stats.onFlyToHQRequested = () =>
-  world.animateFocus(player.home.x, player.home.z, 100);
+  world.animateFocus(player.home.x, player.home.z, P.homeSpan);
 function refreshRanking(): void {
   void gameFetch("/api/game/ranking")
     .then((r) => r.json())
@@ -711,7 +735,7 @@ const gameplay = new GameplayUI(
   session.campaignId ?? "",
   (id) => world.setChestOpen(id, true),
   isDev,
-  () => true,
+  (object) => object.kind !== "unistop" || world.isObjectDiscovered(object),
   (targetX, targetZ) => {
     world.animateFocus(targetX, targetZ, 120);
   },
@@ -727,7 +751,7 @@ miniMap.onPanLive = (x, z) => world.focus(x, z, 100);
 miniMap.onZoomIn = () => world.zoom(0.72);
 miniMap.onZoomOut = () => world.zoom(1.38);
 miniMap.onRecenter = () =>
-  world.animateFocus(player.home.x, player.home.z, 100);
+  world.animateFocus(player.home.x, player.home.z, P.homeSpan);
 const quickLabel = document.createElement("label");
 quickLabel.className = "auto-explore-toggle";
 const quickInput = document.createElement("input");
@@ -977,7 +1001,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   world.focus(
     player.home.x,
     player.home.z,
-    session === LEGACY_DEV_SESSION ? 275 : 72,
+    session === LEGACY_DEV_SESSION ? 275 : P.homeSpan,
   );
   updateTile();
   status("Đang kết nối…", false);
@@ -1039,20 +1063,19 @@ for (const option of players) {
 ui.select.value = player.token;
 if (!session.fixtureOnly) {
   ui.select.disabled = true;
-  const logout = document.createElement("button");
-  logout.textContent = "Về giải chạy";
-  logout.style.cssText =
-    "margin-left:12px;padding:8px 12px;border:1px solid #ffffff30;border-radius:8px;background:#ffffff10;color:inherit;cursor:pointer";
-  logout.onclick = async () => {
-    logout.disabled = true;
-    try {
-      await returnToEventPortal();
-    } catch {
-      logout.disabled = false;
-      activity("Chưa thể trở về web giải chạy. Vui lòng thử lại.", "error");
-    }
-  };
-  document.querySelector(".top-bar .connection")!.append(logout);
+  const portalReturn = document.getElementById("tool-portal-return");
+  if (portalReturn) {
+    portalReturn.hidden = false;
+    portalReturn.addEventListener("click", async () => {
+      (portalReturn as HTMLButtonElement).disabled = true;
+      try {
+        await returnToEventPortal();
+      } catch {
+        (portalReturn as HTMLButtonElement).disabled = false;
+        activity("Chưa thể trở về web giải chạy. Vui lòng thử lại.", "error");
+      }
+    });
+  }
 }
 ui.select.addEventListener("change", () => {
   const next = players.find((item) => item.token === ui.select.value);
@@ -1061,6 +1084,29 @@ ui.select.addEventListener("change", () => {
 
 ui.explore.addEventListener("click", explore);
 ui.retry.addEventListener("click", () => void connect(player));
+
+document.getElementById("tool-zoom-in")?.addEventListener("click", () => {
+  world.zoom(0.72);
+});
+document.getElementById("tool-zoom-out")?.addEventListener("click", () => {
+  world.zoom(1.38);
+});
+document.getElementById("tool-rotate")?.addEventListener("click", () => {
+  world.toggleCameraMode();
+  announceCameraMode(false);
+});
+
+const fogSlider = document.getElementById(
+  "fog-density-slider",
+) as HTMLInputElement | null;
+const fogVal = document.getElementById("fog-density-val");
+if (fogSlider && fogVal) {
+  fogSlider.addEventListener("input", () => {
+    const val = Number(fogSlider.value);
+    fogVal.textContent = `${val}%`;
+    world.setMistBrightness(val / 48);
+  });
+}
 
 get("landmark-button").addEventListener("click", () => {
   const first = homeLandmark();
@@ -1103,6 +1149,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (
     gameplay.open ||
+    stats.dialogOpen ||
     event.target instanceof HTMLButtonElement ||
     event.target instanceof HTMLSelectElement ||
     event.target instanceof HTMLInputElement
@@ -1111,7 +1158,7 @@ window.addEventListener("keydown", (event) => {
   switch (event.key) {
     case "h":
     case "H":
-      world.animateFocus(player.home.x, player.home.z, 200);
+      world.animateFocus(player.home.x, player.home.z, P.homeSpan);
       break;
     case "l":
     case "L": {

@@ -103,7 +103,11 @@ export class TerrainBiomes {
 
   /** Public layout overrides the fixed defaults; no wallet or rival fog is read. */
   setObjects(objects: readonly WorldObject[]): boolean {
-    const catalog = new Map(STAGING_OBJECTS.map((o) => [o.id, o]));
+    const catalog = new Map(
+      STAGING_OBJECTS.filter(
+        (o) => o.kind === "hq" || o.kind === "landmark",
+      ).map((o) => [o.id, o]),
+    );
     for (const object of objects) catalog.set(object.id, object);
     const ordered = [...catalog.values()].sort((a, b) =>
       a.id < b.id ? -1 : a.id > b.id ? 1 : 0,

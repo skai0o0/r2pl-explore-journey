@@ -2,36 +2,147 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b1a20" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b151d" />
     <title>R2PL 2027 — Hành trình Khám phá</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230d1d25' d='M0 0h32v26l-6 6H0z'/%3E%3Cpath fill='%2388d4db' d='M8 7h13l3 3v6l-5 3 5 7h-7l-5-8v8H8zm4 4v4h7v-4z'/%3E%3C/svg%3E">
   </head>
-  <body data-school="dawn" data-debug="false">
+  <body data-school="dawn" data-debug="false" data-mode="player">
     <main class="game-shell">
-      <div id="world-view" role="application" aria-label="Bản đồ Hành trình Khám phá"></div>
-      <header class="top-bar glass">
-        <div class="brand"><div class="brand-mark">R<span>2</span></div><div><strong>R2PL 2027</strong><small>HÀNH TRÌNH KHÁM PHÁ</small></div></div>
-        <div class="connection"><span id="connection-status" data-online="false" role="status">Đang kết nối…</span><button id="retry-button" type="button" hidden>Kết nối lại</button></div>
+      <div id="world-view" role="application" aria-label="Bản đồ Hành trình Khám phá. Kéo để di chuyển, cuộn để thu phóng."></div>
+      <div class="vignette"></div>
+
+      <!-- COMPACT HUD (Top Left) -->
+      <header class="hud" aria-label="Chiến dịch, sinh viên và tiến trình">
+        <img class="brand" src="/Headline.png" alt="ROAD TO · Predator League 2027">
+        <span class="divider"></span>
+        <button class="student" id="hud-student" type="button" aria-label="Xem thông tin sinh viên">
+          <span class="avatar" id="hud-avatar">SV</span>
+          <span class="student-copy">
+            <strong id="hud-student-name">Sinh viên</strong>
+            <small><span class="online" id="hud-online-dot"></span><span id="hud-school-name">HCMUT</span></small>
+          </span>
+        </button>
+        <span class="divider"></span>
+        <button class="progress-chip" id="hud-progress" type="button" aria-label="Xem tiến trình và số dư">
+          <strong id="hud-tile-count">0 <span>ô</span></strong>
+          <small>Tri thức</small>
+        </button>
+        <button class="tools-toggle" id="hud-tools-toggle" type="button" aria-expanded="false" aria-controls="tools-panel" aria-label="Mở công cụ">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4m8 1v4m-6 1v4"/></svg>
+        </button>
       </header>
-      <section class="tile-panel glass" aria-label="Ô tri thức đang chọn" hidden>
-        <div class="tile-panel-header"><p class="eyebrow">Ô TRI THỨC</p><button id="tile-close" class="context-close" aria-label="Đóng thông tin ô">×</button></div>
-        <h2 id="tile-coordinates">Ô tri thức</h2><span id="tile-badge" class="badge-tag"></span>
-        <p id="tile-knowledge"></p>
-        <button id="explore-button" type="button" disabled>Khám phá</button>
-        <p id="action-status" role="status" data-kind="normal"></p>
+
+      <!-- COMPACT TOOLS PANEL -->
+      <section class="panel" id="tools-panel" hidden aria-label="Công cụ bản đồ">
+        <div class="panel-head">
+          <strong>Công cụ</strong>
+          <button class="icon-button" id="close-tools" type="button" aria-label="Đóng công cụ">
+            <svg viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></svg>
+          </button>
+        </div>
+
+        <p class="eyebrow">Bản đồ</p>
+        <div class="tools-grid">
+          <button class="tool" id="tool-home" type="button" title="Về trụ sở (H)"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg>Về HQ</button>
+          <button class="tool" id="tool-zoom-in" type="button" title="Phóng to (+)"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6m-3-3v6"/></svg>Phóng to</button>
+          <button class="tool" id="tool-zoom-out" type="button" title="Thu nhỏ (-)"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6"/></svg>Thu nhỏ</button>
+          <button class="tool" id="tool-rotate" type="button" title="Đổi góc nhìn (I)"><svg viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/></svg>Góc nhìn</button>
+        </div>
+
+        <div class="section">
+          <p class="eyebrow">Hành trình</p>
+          <div class="tools-grid">
+            <button class="tool tool-wide" id="tool-inventory" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14v14H5zM8 7V3h8v4M5 12h14m-8-2h2v4h-2z"/></svg>Hành trang</button>
+            <button class="tool tool-wide" id="tool-ranking" type="button"><svg viewBox="0 0 24 24"><path d="M8 3h8v6a4 4 0 0 1-8 0V3Zm0 2H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 1v6m-4 2h8"/></svg>Xếp hạng</button>
+            <button class="tool tool-wide" id="tool-find-expansion" type="button" title="Chọn ô sát tri thức trường mình"><svg viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 5v14"/></svg>Tìm ô để mở</button>
+            <button class="tool tool-wide" id="tool-portal-return" type="button" hidden><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Về giải chạy</button>
+          </div>
+        </div>
+
+        <div class="section tile-action-section tile-panel">
+          <div class="row">
+            <span>Ô đang chọn</span>
+            <span class="coordinate" id="tile-coordinates">Chạm bản đồ</span>
+          </div>
+          <div class="row" style="margin-top: 6px;">
+            <span id="tile-badge" class="tiny-tag">CHƯA CHỌN</span>
+            <span id="tile-close" class="icon-button" style="width:22px; height:22px; font-size:15px; cursor:pointer;" title="Bỏ chọn">×</span>
+          </div>
+          <p id="tile-knowledge" class="caption">Chạm vào ô kề cạnh trên bản đồ để khám phá</p>
+          <button class="primary" id="explore-button" type="button" disabled>
+            <span id="explore-label">Khám Phá Ô Này</span>
+            <span id="explore-cost">1 Point</span>
+          </button>
+          <p id="action-status" role="status" class="caption" data-kind="normal" style="margin-top: 6px;"></p>
+        </div>
+
+        <div class="section" id="dev-tools-section" hidden>
+          <p class="eyebrow">CÔNG CỤ THỬ NGHIỆM</p>
+          <div class="row">
+            <span>Tài khoản</span>
+            <select id="player-select" aria-label="Chọn tài khoản thử nghiệm" style="background:#162732; color:#cbe3ed; border:1px solid #ffffff20; border-radius:4px; padding:3px 6px; font-size:11px; max-width: 170px;"></select>
+          </div>
+          <div class="row" style="margin-top: 6px;">
+            <span>Số dư</span>
+            <strong id="balance" style="font-size:12px; color:var(--cyan)">—</strong>
+          </div>
+          <div class="row" style="margin-top: 6px;">
+            <span>Sương mù</span>
+            <span class="tiny-tag" id="fog-density-val">48%</span>
+          </div>
+          <input type="range" id="fog-density-slider" min="15" max="75" value="48" aria-label="Mật độ sương mù">
+
+        </div>
+          <div class="row" style="margin-top: 8px;">
+            <span id="connection-status" data-online="false">Đang kết nối…</span>
+            <button id="retry-button" class="secondary" type="button" style="width:auto; padding:3px 8px; margin:0;" hidden>Kết nối lại</button>
+          </div>
       </section>
+
+      <!-- REUSABLE COMPACT DIALOG / SCRIM -->
+      <div class="scrim" id="scrim" hidden>
+        <section class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow" id="dialog-kicker">HÀNH TRÌNH CỦA BẠN</p>
+              <h2 id="dialog-title">Tiêu đề</h2>
+              <p id="dialog-subtitle">Mô tả</p>
+            </div>
+            <button class="icon-button" id="close-dialog" type="button" aria-label="Đóng cửa sổ">
+              <svg viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></svg>
+            </button>
+          </div>
+          <div id="dialog-content"></div>
+        </section>
+      </div>
+
+      <!-- IN-WORLD FLOATING LABELS -->
+      <div class="hq-label" id="hq-label" hidden><span class="marker"></span><span id="hq-label-text">Trụ sở HCMUT</span></div>
+      <div class="object-label" id="stop-label" hidden>UniStop</div>
+      <div class="object-label" id="chest-label" hidden>Rương</div>
+
+      <!-- TOAST NOTIFICATION -->
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+      <!-- Hidden fallbacks for legacy/dev references -->
+      <nav class="map-tools" style="display:none;" aria-hidden="true">
+        <button id="landmark-button" type="button">◆</button>
+        <button id="overview-button" type="button">▦</button>
+        <button id="camera-button" type="button">◇</button>
+      </nav>
+      <span id="school-name" style="display:none;" aria-hidden="true"></span>
+      <span id="player-name" style="display:none;" aria-hidden="true"></span>
+      <span id="pending-count" style="display:none;" aria-hidden="true">0</span>
+      <span id="viewport-count" style="display:none;" aria-hidden="true">0</span>
+      <span id="strip-hover" style="display:none;" aria-hidden="true"></span>
+      <ul id="activity-list" style="display:none;" aria-hidden="true"></ul>
     </main>
-    <nav class="map-tools" aria-label="Điều hướng bản đồ">
-      <button id="landmark-button" type="button" title="Đến công trình (L)" aria-label="Đến công trình">◆</button>
-      <button id="overview-button" type="button" title="Toàn bản đồ (O)" aria-label="Toàn bản đồ">▦</button>
-      <button id="camera-button" type="button" title="Đổi góc nhìn (I)" aria-label="Đổi góc nhìn">◇</button>
-    </nav>
+
     <template id="dev-tools-template">
-      <aside class="identity glass"><p class="eyebrow">CÔNG CỤ THỬ NGHIỆM</p><h1 id="school-name"></h1><label for="player-select">Tài khoản thử nghiệm</label><select id="player-select" aria-label="Chọn tài khoản thử nghiệm"></select></aside>
-      <section class="resources glass"><div><p class="eyebrow">SỐ DƯ THỬ NGHIỆM</p><strong id="balance">—</strong><small id="player-name"></small></div><span id="explore-cost"></span></section>
-      <section class="activity-panel glass"><p class="eyebrow">NHẬT KÝ <b id="pending-count">0</b></p><ul id="activity-list"></ul></section>
-      <footer class="status-strip glass"><span id="strip-hover"></span><span><b id="viewport-count">0</b> vùng đang theo dõi</span></footer>
+      <!-- Kept for dev mode backward compatibility if referenced -->
     </template>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

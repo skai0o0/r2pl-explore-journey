@@ -17,7 +17,6 @@ import {
   buildTerrainChunkGeometry,
   TerrainChunks,
   terrainMaterial,
-  terrainMist,
   terrainPointFromRay,
   terrainTileColor,
   writeTerrainTile,
@@ -341,7 +340,8 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
       if (o instanceof THREE.InstancedMesh) instances.push(o);
     });
     assert(instances.length > 0);
-    assert(instances.every((o) => !o.castShadow && !o.receiveShadow));
+    assert(instances.some((o) => o.name === "OakTrees" && o.castShadow));
+    assert(instances.every((o) => o.receiveShadow || o.name === "BorderFlags"));
     replica.applySnapshot({
       chunkId: 0,
       viewRevision: 1n,
@@ -362,10 +362,10 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
     nature.group.traverse((o) => {
       if (o instanceof THREE.InstancedMesh) stale++;
     });
-    assert.equal(
-      stale,
-      0,
-      "Unknown tiles must have no trees, grass, flowers, or flags",
+    assert(stale > 0, "Public scenery remains visible beneath cosmetic fog");
+    assert(
+      !nature.group.getObjectByName("BorderFlags"),
+      "private ownership flags must not survive a revoked snapshot",
     );
     terrain.layers.get(0)!.pixels.fill(127);
     terrain.resetKnowledge();
@@ -379,7 +379,7 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
   }
 });
 
-test("live terrain painter keeps mist opaque, neutral biomes exact, school tint 68%, shared tint 50/50", () => {
+test("terrain ownership data retains neutral biomes, school tint 68%, shared tint 50/50", () => {
   const replica = new ProjectionReplica(0),
     field = new TerrainBiomes();
   const mask = new Uint8Array(8192),
@@ -470,7 +470,7 @@ test("territory edges inspect four neighbors across chunk seams and follow delta
   assert.equal(paint(), 15, "Removed ownership restores only the exposed edge");
 });
 
-test("coarse terrain UVs retain individual tile sampling; mist covers all undiscovered elevations", () => {
+test("coarse terrain UVs retain individual tile sampling while public terrain receives dusk lighting", () => {
   const field = new TerrainBiomes(),
     geometry = buildTerrainChunkGeometry(field, 0, 8);
   const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
@@ -484,23 +484,6 @@ test("coarse terrain UVs retain individual tile sampling; mist covers all undisc
     assert.equal(Math.floor((1 - hit.uv!.y) * 64), 1);
   }
   const texture = new THREE.DataTexture(new Uint8Array(16384), 64, 64);
-  const mist = terrainMist(texture, 255);
-  assert(mist.position.z > GAME_CONFIG.terrain.hillHeights[2]);
-  assert.equal(mist.material.uniforms.knowledge!.value, texture);
-  assert.equal(mist.material.toneMapped, false);
-  assert.equal(mist.material.depthWrite, true);
-  assert.deepEqual(Object.keys(mist.material.uniforms).sort(), [
-    "knowledge",
-    "mistA",
-    "mistB",
-  ]);
-  const uv = mist.geometry.getAttribute("uv");
-  assert(
-    Math.abs(
-      Math.max(...Array.from({ length: uv.count }, (_, i) => uv.getX(i))) -
-        40 / 64,
-    ) < 1e-6,
-  );
   const material = terrainMaterial(texture);
   const shader = {
     uniforms: {},
@@ -511,20 +494,8 @@ test("coarse terrain UVs retain individual tile sampling; mist covers all undisc
     shader as THREE.WebGLProgramParametersWithUniforms,
     {} as THREE.WebGLRenderer,
   );
-  assert(shader.fragmentShader.includes("if (knowledge.a < 0.001) discard;"));
-  assert(
-    shader.fragmentShader.includes(
-      "if (terrainTop > 0.5) outgoingLight = diffuseColor.rgb;",
-    ),
-  );
-  assert.equal(material.toneMapped, false);
-  for (const disposable of [
-    geometry,
-    mesh.material,
-    texture,
-    mist.geometry,
-    mist.material,
-    material,
-  ])
+  assert(!shader.fragmentShader.includes("if (knowledge.a < 0.001) discard;"));
+  assert.equal(material.toneMapped, true);
+  for (const disposable of [geometry, mesh.material, texture, material])
     disposable.dispose();
 });

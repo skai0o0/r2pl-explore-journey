@@ -5,6 +5,8 @@ import {
   chunkCoordinatesForId,
   chunkId,
 } from "../../shared/world/coordinates.ts";
+import { DiscoveryFog } from "./discoveryFog.ts";
+import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
 import type { TerrainBiomes, TerrainSample } from "./terrainBiomes.ts";
 
 const C = GAME_CONFIG.terrain;
@@ -90,8 +92,8 @@ export function* terrainGeometrySteps(
         b = t - Math.min(step, depth - row);
       const u = (col + Math.min(step, width - col) / 2) / 64,
         v = 1 - (row + Math.min(step, depth - row) / 2) / 64;
-      face([l, t, h, l, b, h, r, b, h, r, t, h], s.color, u, v);
-      const side = h >= 0.85 ? 0x7c5c3e : 0x3f621f;
+      face([l, t, h, l, b, h, r, b, h, r, t, h], P.terrain[s.biome], u, v);
+      const side = P.terrain.cliff;
       // Full perimeter skirts also seal interfaces between coarse and fine LODs.
       let low =
         col + step >= width ? C.waterHeight : sample(x + step, z).height;
@@ -164,11 +166,12 @@ export function terrainTileColor(
 
 export function terrainMaterial(
   texture: THREE.DataTexture,
+  discoveryFog?: DiscoveryFog,
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,
     map: texture,
-    toneMapped: false,
+    toneMapped: true,
   });
   material.userData.accent = { value: new THREE.Color(SCHOOLS[0].accent) };
   material.onBeforeCompile = (shader) => {
@@ -187,7 +190,7 @@ export function terrainMaterial(
         "#include <map_fragment>",
         `
       vec4 knowledge = texture2D(map, vMapUv);
-      if (knowledge.a < 0.001) discard;
+      // Terrain is public. Knowledge alpha only controls the territorial overlay.
       float state = floor(knowledge.a * 255.0 + 0.5);
     `,
       )
@@ -195,72 +198,31 @@ export function terrainMaterial(
         "#include <color_fragment>",
         `
       #include <color_fragment>
-      if (terrainTop > 0.5) diffuseColor.rgb = knowledge.rgb;
+      if (terrainTop > 0.5 && state >= 128.0) diffuseColor.rgb = mix(diffuseColor.rgb, knowledge.rgb, ${P.territoryTint});
       float edges = max(0.0, state - 128.0);
       vec2 cell = fract(vMapUv * 64.0);
       bool border = (mod(edges, 2.0) >= 1.0 && cell.x < ${C.territoryEdgeWidth})
         || (mod(floor(edges / 2.0), 2.0) >= 1.0 && cell.x > ${1 - C.territoryEdgeWidth})
         || (mod(floor(edges / 4.0), 2.0) >= 1.0 && cell.y > ${1 - C.territoryEdgeWidth})
         || (mod(floor(edges / 8.0), 2.0) >= 1.0 && cell.y < ${C.territoryEdgeWidth});
-      if (terrainTop > 0.5 && state >= 128.0 && border) diffuseColor.rgb = territoryAccent;
+      if (terrainTop > 0.5 && state >= 128.0 && border) diffuseColor.rgb = mix(diffuseColor.rgb, territoryAccent, 0.35);
     `,
       )
       .replace(
         "#include <opaque_fragment>",
         `
-      // Exact top palette; directional lighting remains on softened cliff faces.
-      if (terrainTop > 0.5) outgoingLight = diffuseColor.rgb;
+      // Public terrain receives the same dusk lighting and shadows as scenery.
+      if (terrainTop < 0.5) outgoingLight = mix(outgoingLight, diffuseColor.rgb, ${P.cliffFill});
       #include <opaque_fragment>
     `,
       );
   };
-  material.customProgramCacheKey = () => "fixed-biome-knowledge-v2";
+  material.customProgramCacheKey = () => "dusk-biome-knowledge-v3";
+  discoveryFog?.apply(material);
   return material;
 }
 
-/** Static opaque clouds conceal unknown elevations as well as their colors. */
-export function terrainMist(texture: THREE.DataTexture, id: number) {
-  const { chunkX, chunkZ } = chunkCoordinatesForId(id);
-  const width = Math.min(64, 1000 - chunkX * 64),
-    depth = Math.min(64, 1000 - chunkZ * 64);
-  const geometry = new THREE.PlaneGeometry(width, depth);
-  const uv = geometry.getAttribute("uv");
-  for (let i = 0; i < uv.count; i++)
-    uv.setXY(
-      i,
-      (uv.getX(i) * width) / 64,
-      1 - depth / 64 + (uv.getY(i) * depth) / 64,
-    );
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      knowledge: { value: texture },
-      mistA: { value: new THREE.Color(C.mistColors[0]) },
-      mistB: { value: new THREE.Color(C.mistColors[1]) },
-    },
-    vertexShader:
-      "varying vec2 tileUv; varying vec2 worldXY; void main() { tileUv = uv; worldXY = (modelMatrix * vec4(position, 1.0)).xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform sampler2D knowledge; uniform vec3 mistA; uniform vec3 mistB; varying vec2 tileUv; varying vec2 worldXY;
-      void main() {
-        if (texture2D(knowledge, tileUv).a > 0.001) discard;
-        float clouds = clamp(0.5 + 0.24 * sin(worldXY.x * 0.11 + sin(worldXY.y * 0.09)) + 0.26 * cos(worldXY.y * 0.13 + sin(worldXY.x * 0.07)), 0.0, 1.0);
-        gl_FragColor = vec4(mix(mistA, mistB, clouds), 1.0);
-        #include <colorspace_fragment>
-      }
-    `,
-    toneMapped: false,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = `mist-${id}`;
-  mesh.position.set(
-    chunkX * 64 + width / 2 - 500,
-    500 - chunkZ * 64 - depth / 2,
-    C.hillHeights[2] + 0.01,
-  );
-  return mesh;
-}
-
 export interface TerrainLayer {
-  readonly mist: ReturnType<typeof terrainMist>;
   readonly pixels: Uint8Array;
   readonly texture: THREE.DataTexture;
   readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshLambertMaterial>;
@@ -272,6 +234,7 @@ export interface TerrainLayer {
 export class TerrainChunks {
   readonly group = new THREE.Group();
   readonly layers = new Map<number, TerrainLayer>();
+  readonly discoveryFog = new DiscoveryFog();
   readonly #field: TerrainBiomes;
   readonly #onChange: () => void;
   readonly #frustum = new THREE.Frustum();
@@ -294,14 +257,15 @@ export class TerrainChunks {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.needsUpdate = true;
       const coarse = buildTerrainChunkGeometry(field, id, C.coarseStep);
-      const mesh = new THREE.Mesh(coarse, terrainMaterial(texture));
+      const mesh = new THREE.Mesh(
+        coarse,
+        terrainMaterial(texture, this.discoveryFog),
+      );
       mesh.name = `terrain-${id}`;
       mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      const mist = terrainMist(texture, id);
-      this.group.add(mesh, mist);
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
       this.layers.set(id, {
-        mist,
         pixels,
         texture,
         mesh,
@@ -322,7 +286,6 @@ export class TerrainChunks {
       layer.mesh.visible = this.#frustum.intersectsBox(
         layer.coarse.boundingBox!,
       );
-      layer.mist.visible = layer.mesh.visible;
       layer.wanted = false;
       if (layer.mesh.visible && span <= C.detailSpan) {
         layer.coarse.boundingBox!.getCenter(this.#point).project(camera);
@@ -379,10 +342,15 @@ export class TerrainChunks {
       this.#frame = requestAnimationFrame(this.#pump);
   };
   resetKnowledge(): void {
+    this.discoveryFog.reset();
     for (const layer of this.layers.values()) {
       layer.pixels.fill(0);
       layer.texture.needsUpdate = true;
     }
+  }
+  setMistBrightness(mult: number): void {
+    this.discoveryFog.setDensity(mult);
+    this.#onChange();
   }
   invalidate(): void {
     if (this.#frame !== undefined) cancelAnimationFrame(this.#frame);
@@ -405,10 +373,9 @@ export class TerrainChunks {
       layer.detail?.dispose();
       layer.coarse.dispose();
       layer.mesh.material.dispose();
-      layer.mist.geometry.dispose();
-      layer.mist.material.dispose();
       layer.texture.dispose();
     }
+    this.discoveryFog.dispose();
     this.group.clear();
     this.layers.clear();
     this.#builder = undefined;

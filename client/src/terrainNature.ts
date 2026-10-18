@@ -15,11 +15,12 @@ export interface NatureInstance {
   readonly scale: number;
   readonly rotation: number;
 }
-/** Only the supplied own-school discovery predicate may reveal scenery. */
+/** The caller chooses public scenery or an own-school discovery-filtered plan. */
 export function* naturePlanRows(
   field: TerrainBiomes,
   id: number,
   discovered: (x: number, z: number) => boolean,
+  treeJitter = 0,
 ): Generator<void, NatureInstance[]> {
   const { chunkX, chunkZ } = chunkCoordinatesForId(id),
     list: NatureInstance[] = [];
@@ -38,15 +39,31 @@ export function* naturePlanRows(
       const sample = field.sample(x, z);
       if (sample.height < 0) continue;
       const roll = terrainHash(x, z, 11);
-      const add = (kind: NatureKind, scale: number) =>
+      const add = (kind: NatureKind, scale: number) => {
+        const tree = kind === "oak" || kind === "birch";
+        const px =
+          x + 0.5 + (tree ? (terrainHash(x, z, 41) - 0.5) * treeJitter : 0);
+        const pz =
+          z + 0.5 + (tree ? (terrainHash(x, z, 42) - 0.5) * treeJitter : 0);
+        if (
+          px < 0 ||
+          pz < 0 ||
+          px >= 1000 ||
+          pz >= 1000 ||
+          field.isFoundation(px, pz, 2)
+        )
+          return;
+        const height = field.getTerrainHeight(px, pz);
+        if (height < 0) return;
         list.push({
           kind,
-          x: x + 0.5,
-          z: z + 0.5,
-          height: sample.height,
+          x: px,
+          z: pz,
+          height,
           scale,
           rotation: terrainHash(x, z, 5) * Math.PI * 2,
         });
+      };
       if (x % C.treeSpacing === 0 && z % C.treeSpacing === 0 && roll < 0.62) {
         add(
           getTerrainMoisture(x, z) > 0.6 ? "birch" : "oak",

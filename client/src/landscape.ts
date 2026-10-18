@@ -10,13 +10,16 @@ import {
   chunkCoordinatesForId,
   chunkId,
 } from "../../shared/world/coordinates.ts";
+import { createCampusScenery } from "./campusScenery.ts";
+import type { DiscoveryFog } from "./discoveryFog.ts";
 import {
   createBirchTreeGeometry,
   createFlowerGeometry,
   createGrassTuftGeometry,
   createOakTreeGeometry,
 } from "./natureProps.ts";
-import { TerrainBiomes } from "./terrainBiomes.ts";
+import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
+import { TerrainBiomes, terrainHash } from "./terrainBiomes.ts";
 import { type NatureInstance, naturePlanRows } from "./terrainNature.ts";
 
 const WORLD = 1000,
@@ -136,7 +139,7 @@ export interface OwnedFrontier {
   readonly tile: { x: number; z: number };
 }
 
-/** V1 voxel scenery generated only for authorized chunk discoveries, with bounded incremental work. */
+/** Public scenery, built in bounded chunks. Only flags and Knowledge use the private projection. */
 export class LandscapeEffects {
   readonly group = new THREE.Group();
   #objects: readonly WorldObject[];
@@ -177,13 +180,24 @@ export class LandscapeEffects {
       }
     | undefined;
   readonly #onChange: (() => void) | undefined;
+  readonly #discoveryFog: DiscoveryFog | undefined;
+  #campus: THREE.Group;
   constructor(
     objects: readonly WorldObject[] = [],
     onChange?: () => void,
     field = new TerrainBiomes(objects),
+    discoveryFog?: DiscoveryFog,
   ) {
     this.#objects = objects;
     this.#field = field;
+    this.#discoveryFog = discoveryFog;
+    discoveryFog?.apply(this.#material);
+    this.#campus = createCampusScenery(objects, field);
+    if (discoveryFog)
+      this.#campus.traverse((object) => {
+        if (object instanceof THREE.Mesh) discoveryFog.apply(object.material);
+      });
+    this.group.add(this.#campus);
     this.#onChange = onChange;
     this.group.name = "VoxelNatureChunks";
     this.#setHeadquarters();
@@ -196,6 +210,13 @@ export class LandscapeEffects {
   }
   setObjects(objects: readonly WorldObject[]): void {
     this.#objects = objects;
+    this.#dispose(this.#campus);
+    this.#campus = createCampusScenery(objects, this.#field);
+    this.#campus.traverse((object) => {
+      if (object instanceof THREE.Mesh)
+        this.#discoveryFog?.apply(object.material);
+    });
+    this.group.add(this.#campus);
     this.#setHeadquarters();
     const sources = [...this.#sources];
     this.clear();
@@ -219,8 +240,7 @@ export class LandscapeEffects {
     this.#queueRebuild(id, replica);
   }
   rebuild(id: number, replica: ProjectionReplica): void {
-    // A replacement snapshot may revoke discovery. Remove stale trees immediately,
-    // including tall crowns that could otherwise protrude above the opaque mist.
+    // Rebuild private border flags from replacement snapshots; scenery stays public.
     const previous = this.#chunks.get(id);
     if (previous) this.#dispose(previous.group);
     this.#chunks.delete(id);
@@ -250,17 +270,10 @@ export class LandscapeEffects {
       if (!first) return;
       const [id, replica] = first;
       this.#pending.delete(id);
-      const { chunkX, chunkZ } = chunkCoordinatesForId(id);
       this.#active = {
         id,
         replica,
-        builder: naturePlanRows(
-          this.#field,
-          id,
-          (x, z) =>
-            replica.hasChunk(id) &&
-            replica.isDiscovered(id, (z - chunkZ * 64) * 64 + x - chunkX * 64),
-        ),
+        builder: naturePlanRows(this.#field, id, () => true, P.trees.jitter),
       };
     }
     const result = this.#active.builder.next();
@@ -293,7 +306,13 @@ export class LandscapeEffects {
       "yellow",
       "blue",
     ] as const) {
-      const entries = instances.filter((p) => p.kind === kind);
+      const tree = kind === "oak" || kind === "birch";
+      const entries = instances.filter(
+        (p) =>
+          p.kind === kind &&
+          terrainHash(p.x, p.z, 33) <
+            (tree ? P.trees.retention : P.groundCover.retention),
+      );
       if (!entries.length) continue;
       const mesh = new THREE.InstancedMesh(
         this.#geo[kind],
@@ -314,14 +333,19 @@ export class LandscapeEffects {
       entries.forEach((p, i) => {
         dummy.position.set(p.x - HALF, HALF - p.z, p.height);
         dummy.rotation.set(0, 0, p.rotation);
-        dummy.scale.setScalar(p.scale);
+        dummy.scale.setScalar(
+          p.scale *
+            (tree
+              ? 0.8 + terrainHash(p.x, p.z, 31) * 0.6
+              : P.groundCover.scale),
+        );
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
       });
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingSphere();
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
+      mesh.castShadow = kind === "oak" || kind === "birch";
+      mesh.receiveShadow = true;
       group.add(mesh);
     }
     const ownedTiles: number[] = [],
@@ -338,7 +362,11 @@ export class LandscapeEffects {
       for (let x = baseX; x < Math.min(WORLD, baseX + 64); x++) {
         if (!owned(x, z)) continue;
         ownedTiles.push(z * WORLD + x);
-        if ((x + z) % 8 || this.#field.isFoundation(x + 0.5, z + 0.5)) continue;
+        if (
+          (x + z) % P.borderFlags.interval ||
+          this.#field.isFoundation(x + 0.5, z + 0.5)
+        )
+          continue;
         if (
           owned(x + 1, z) &&
           owned(x - 1, z) &&
@@ -352,7 +380,7 @@ export class LandscapeEffects {
           this.#field.getTerrainHeight(x, z) + 0.06,
         );
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.setScalar(0.65);
+        dummy.scale.setScalar(P.borderFlags.scale);
         dummy.updateMatrix();
         flags.push(dummy.matrix.clone());
       }
@@ -379,14 +407,14 @@ export class LandscapeEffects {
       owned: Int32Array.from(ownedTiles),
       bounds: new THREE.Box3(
         new THREE.Vector3(
-          baseX - HALF - 2,
-          HALF - Math.min(WORLD, baseZ + 64) - 2,
+          baseX - HALF - 5,
+          HALF - Math.min(WORLD, baseZ + 64) - 5,
           -0.4,
         ),
         new THREE.Vector3(
-          Math.min(WORLD, baseX + 64) - HALF + 2,
-          HALF - baseZ + 2,
-          9,
+          Math.min(WORLD, baseX + 64) - HALF + 5,
+          HALF - baseZ + 5,
+          11,
         ),
       ),
     });
@@ -483,6 +511,7 @@ export class LandscapeEffects {
   dispose(): void {
     this.#disposed = true;
     this.clear();
+    this.#dispose(this.#campus);
     if (this.#emblemGroup) {
       this.#dispose(this.#emblemGroup);
       this.#emblemGroup = undefined;

@@ -213,6 +213,8 @@ export class GameplayUI {
   }
   pick(o: WorldObject): void {
     if (!this.canShowObject(o)) return;
+    this.panel.open = false;
+    if (!this.devMode) this.panel.hidden = true;
     this._landmark?.close();
     this._unistop?.close();
     this._chestModal?.close();
@@ -531,6 +533,11 @@ export class GameplayUI {
   private render(): void {
     const content = this.panel.querySelector(".gameplay-content")!;
     const scroll = content.scrollTop;
+    const expanded = new Set(
+      Array.from(
+        content.querySelectorAll<HTMLDetailsElement>("details[open]"),
+      ).map((details) => details.dataset.section),
+    );
     content.replaceChildren();
     const storage = this.player
       ? `pending-game-${this.scope}-${this.player.token}`
@@ -651,6 +658,8 @@ export class GameplayUI {
       content.append(box);
     }
     const destinations = document.createElement("details");
+    destinations.dataset.section = "destinations";
+    destinations.open = expanded.has("destinations");
     const destinationSummary = document.createElement("summary");
     destinationSummary.textContent = "Công trình & trạm tiếp tế";
     destinations.append(destinationSummary);
@@ -674,6 +683,8 @@ export class GameplayUI {
     }
     content.append(destinations);
     const history = document.createElement("details");
+    history.dataset.section = "history";
+    history.open = expanded.has("history");
     const summary = document.createElement("summary");
     summary.textContent = "Lịch sử & thông báo";
     history.append(summary);
