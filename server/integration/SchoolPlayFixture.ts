@@ -30,7 +30,7 @@ export interface SchoolPlayFixture {
 export async function seedSchoolPlay(
   pool: Pool,
   campaignId = SCHOOL_PLAY_CAMPAIGN,
-  actorsPerSchool = 5,
+  actorsPerSchool = campaignId === SCHOOL_PLAY_CAMPAIGN ? 27 : 5,
 ): Promise<SchoolPlayFixture> {
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
@@ -47,20 +47,21 @@ export async function seedSchoolPlay(
   const players: DevPlayer[] = [];
   for (const school of schools)
     for (let n = 0; n < actorsPerSchool; n++) {
-      const role = (
-        ["human", "human", "explorer", "connector", "steward"] as const
-      )[n % 5]!;
+      const isHuman = n < 2;
+      const role: BotRole | "human" = isHuman
+        ? "human"
+        : (["explorer", "connector", "steward"] as const)[n % 3]!;
       const actor = {
         token: `dev-school-${school.slot}-actor-${n}`,
-        actorId: `93000000-0000-4000-8000-${String(school.slot * actorsPerSchool + n + 1).padStart(12, "0")}`,
+        actorId: `93000000-0000-4000-8000-${String(school.slot * 100 + n + 1).padStart(12, "0")}`,
         schoolSlot: school.slot,
-        name: `${school.label} · ${role === "human" ? "Explorer" : role} ${n + 1}`,
+        name: `${school.label} · ${isHuman ? "Explorer" : role} ${isHuman ? n + 1 : n - 1}`,
         schoolName: school.label,
         role,
         ordinal: actors.length,
       };
       actors.push(actor);
-      if (role === "human")
+      if (isHuman)
         players.push({
           token: actor.token,
           label: actor.name,
@@ -132,16 +133,21 @@ export async function seedSchoolPlay(
       for (const player of players.filter((p) => p.slot === h.schoolSlot))
         Object.assign(player.home, { x: h.x, z: h.z });
       const school = schools.find((s) => s.slot === h.schoolSlot);
-      if (school)
+      if (school) {
+        const minX = Math.min(h.x, 500);
+        const minZ = Math.min(h.z, 500);
+        const rx = Math.max(0, Math.min(1000 - 448, Math.floor(Math.max(0, minX - 64) / 64) * 64));
+        const rz = Math.max(0, Math.min(1000 - 448, Math.floor(Math.max(0, minZ - 64) / 64) * 64));
         Object.assign(school, {
           home: h.z * 1000 + h.x,
           region: {
-            x: Math.max(0, Math.min(744, h.x - 128)),
-            z: Math.max(0, Math.min(744, h.z - 128)),
-            size: 256,
+            x: rx,
+            z: rz,
+            size: 448,
           },
-          meeting: h.z * 1000 + h.x,
+          meeting: 500 * 1000 + 500,
         });
+      }
     }
     await db.query("COMMIT");
   } catch (error) {

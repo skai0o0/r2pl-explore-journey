@@ -132,7 +132,7 @@ export async function provisionSchoolRewards(
     for (const actor of fixture.actors) {
       const b = schoolRewardBinding(fixture, actor.token)!;
       await db.query(
-        "INSERT INTO r2pl_prep.running_bindings(campaign_id,actor_id,provider,external_student_id,school_slot,external_school_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING",
+        "INSERT INTO r2pl_prep.running_bindings(campaign_id,actor_id,provider,external_student_id,school_slot,external_school_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (campaign_id,actor_id) DO UPDATE SET provider=EXCLUDED.provider, external_student_id=EXCLUDED.external_student_id, school_slot=EXCLUDED.school_slot, external_school_id=EXCLUDED.external_school_id",
         [
           b.campaignId,
           b.actorId,

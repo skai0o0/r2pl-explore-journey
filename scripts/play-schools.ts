@@ -19,22 +19,29 @@ if (!Number.isInteger(wsPort) || wsPort < 1 || wsPort > 65535)
   throw new TypeError("Invalid WS_PORT");
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new TypeError("Invalid PORT");
-const play = await createSchoolPlayServer(pool, {
-  web: port,
-  websocket: wsPort,
-});
+const play = await createSchoolPlayServer(
+  pool,
+  {
+    web: port,
+    websocket: wsPort,
+  },
+  undefined,
+  {
+    actorsPerSchool: Number(process.env.ACTORS_PER_SCHOOL ?? 27),
+  },
+);
 console.log(`Eight-school playable fixture: http://127.0.0.1:${port}`);
 console.log(
   "Local play: loading screen -> game. No portal login or dummy portal service. Open the URL above.",
 );
 console.log(
-  "16 students; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
+  "16 students + 200 bots; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
 );
 if (process.env.ENABLE_BOTS === "1") {
-  console.log("Starting 24 WebSocket simulation bots...");
-  void play.startBots();
+  console.log("Starting 200 WebSocket simulation bots in realistic human pacing mode...");
+  void play.startBots({ count: 200, speed: "realistic" });
 } else {
-  console.log("Bots are disabled (ENABLE_BOTS!=1) for high-performance direct player testing.");
+  console.log("Bots standby (can be started on-demand via in-game UI or CLI).");
 }
 let stopping = false;
 async function stop(): Promise<void> {

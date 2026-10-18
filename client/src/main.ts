@@ -1223,6 +1223,109 @@ if (fogSlider && fogVal) {
   });
 }
 
+const btnStartBots = document.getElementById("btn-start-bots") as HTMLButtonElement | null;
+const btnStopBots = document.getElementById("btn-stop-bots") as HTMLButtonElement | null;
+const botCountSelect = document.getElementById("bot-count-select") as HTMLSelectElement | null;
+const botSpeedSelect = document.getElementById("bot-speed-select") as HTMLSelectElement | null;
+const botStatusTag = document.getElementById("bot-status-tag");
+const botActiveCount = document.getElementById("bot-active-count");
+const botRateVal = document.getElementById("bot-rate-val");
+const botTilesVal = document.getElementById("bot-tiles-val");
+
+if (btnStartBots && btnStopBots) {
+  const updateBotUI = (telemetry: {
+    status?: string;
+    activeBots?: number;
+    actionsPerSecond?: number;
+    totalActions?: number;
+  }) => {
+    const isRunning = telemetry.status === "running" || telemetry.status === "starting";
+    btnStartBots.disabled = isRunning;
+    btnStopBots.disabled = !isRunning;
+    if (botCountSelect) botCountSelect.disabled = isRunning;
+    if (botSpeedSelect) botSpeedSelect.disabled = isRunning;
+
+    if (botStatusTag) {
+      if (telemetry.status === "running") {
+        botStatusTag.textContent = "ĐANG CHẠY";
+        botStatusTag.style.background = "rgba(0, 229, 255, 0.2)";
+        botStatusTag.style.color = "var(--cyan-bright)";
+      } else if (telemetry.status === "starting") {
+        botStatusTag.textContent = "KHỞI ĐỘNG";
+        botStatusTag.style.background = "rgba(238, 203, 114, 0.2)";
+        botStatusTag.style.color = "#eecb72";
+      } else if (telemetry.status === "stopping") {
+        botStatusTag.textContent = "ĐANG DỪNG";
+        botStatusTag.style.background = "rgba(239, 68, 68, 0.2)";
+        botStatusTag.style.color = "#f87171";
+      } else {
+        botStatusTag.textContent = "DỪNG";
+        botStatusTag.style.background = "#1e293b";
+        botStatusTag.style.color = "#94a3b8";
+      }
+    }
+    if (botActiveCount) botActiveCount.textContent = String(telemetry.activeBots ?? 0);
+    if (botRateVal) botRateVal.textContent = String(telemetry.actionsPerSecond ?? 0);
+    if (botTilesVal) botTilesVal.textContent = String(telemetry.totalActions ?? 0);
+  };
+
+  const pollBotStatus = async () => {
+    try {
+      const res = await gameFetch("/api/fixture/bots");
+      if (res.ok) {
+        const data = await res.json();
+        updateBotUI(data);
+      }
+    } catch {
+      // Ignored
+    }
+  };
+
+  btnStartBots.addEventListener("click", async () => {
+    btnStartBots.disabled = true;
+    activity("Đang khởi động bot mô phỏng...", "normal");
+    try {
+      const res = await gameFetch("/api/fixture/bots/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          count: botCountSelect ? Number(botCountSelect.value) : 200,
+          speed: botSpeedSelect ? botSpeedSelect.value : "realistic",
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        updateBotUI(data);
+        activity("Bot đã bắt đầu khám phá bản đồ!", "success");
+      } else {
+        activity("Chưa thể khởi động bot.", "error");
+        btnStartBots.disabled = false;
+      }
+    } catch {
+      activity("Lỗi kết nối khi bật bot.", "error");
+      btnStartBots.disabled = false;
+    }
+  });
+
+  btnStopBots.addEventListener("click", async () => {
+    btnStopBots.disabled = true;
+    activity("Đang dừng toàn bộ bot...", "normal");
+    try {
+      const res = await gameFetch("/api/fixture/bots/stop", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        updateBotUI(data);
+        activity("Đã dừng mô phỏng bot.", "normal");
+      }
+    } catch {
+      activity("Lỗi khi dừng bot.", "error");
+    }
+  });
+
+  window.setInterval(pollBotStatus, 2000);
+  void pollBotStatus();
+}
+
 get("landmark-button").addEventListener("click", () => {
   const first = homeLandmark();
   world.animateFocus(first.x, first.z, 200);

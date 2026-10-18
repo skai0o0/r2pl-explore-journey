@@ -39,6 +39,7 @@
     "play:school": "npm run play:schools",
     "play:schools": "npm run build:client && node --env-file-if-exists=.env --experimental-strip-types scripts/play-schools.ts",
     "demo:play-rewards": "node --experimental-strip-types scripts/demo-playable-rewards.ts",
+    "simulate:200": "node --experimental-strip-types scripts/simulate-200-players.ts",
     "test:load500": "node --experimental-strip-types scripts/loadtest-500-clients.ts"
   },
   "dependencies": {

@@ -86,8 +86,45 @@
             <span>Sương mù</span>
             <span class="tiny-tag" id="fog-density-val">48%</span>
           </div>
-          <input type="range" id="fog-density-slider" min="15" max="75" value="48" aria-label="Mật độ sương mù">
-
+          <div class="bot-simulation-card" id="bot-simulation-panel" style="margin-top: 14px; padding: 12px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <p class="eyebrow" style="margin:0; color:var(--cyan-bright); font-size:11px;">GIẢ LẬP 200 NGƯỜI CHƠI (BOTS)</p>
+              <span class="tiny-tag" id="bot-status-tag" style="font-size:9px; background:#1e293b; color:#94a3b8;">DỪNG</span>
+            </div>
+            <p class="caption" style="margin:0 0 10px; font-size:11px; line-height:1.4;">
+              Kích hoạt 200 bot tự động mở ô, có chiến thuật tiến về trung tâm & đài quan sát để test tải thực tế.
+            </p>
+            <div class="row" style="margin-bottom: 6px;">
+              <span>Số lượng bot</span>
+              <select id="bot-count-select" style="background:#162732; color:#cbe3ed; border:1px solid #ffffff20; border-radius:4px; padding:3px 6px; font-size:11px;">
+                <option value="200" selected>200 Bot (Toàn diện)</option>
+                <option value="100">100 Bot</option>
+                <option value="50">50 Bot</option>
+                <option value="24">24 Bot (Nhẹ)</option>
+              </select>
+            </div>
+            <div class="row" style="margin-bottom: 10px;">
+              <span>Tốc độ click</span>
+              <select id="bot-speed-select" style="background:#162732; color:#cbe3ed; border:1px solid #ffffff20; border-radius:4px; padding:3px 6px; font-size:11px;">
+                <option value="realistic" selected>Thực tế (1-2s/click)</option>
+                <option value="slow">Thư thả (3-5s/click)</option>
+                <option value="fast">Thần tốc (0.5s/click)</option>
+              </select>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button id="btn-start-bots" class="primary" type="button" style="flex:1; justify-content:center; padding:8px 12px; font-size:12px; min-height:36px;">
+                ▶ Bật Bot
+              </button>
+              <button id="btn-stop-bots" class="secondary" type="button" style="flex:1; justify-content:center; padding:8px 12px; font-size:12px; min-height:36px;" disabled>
+                ⏹ Dừng
+              </button>
+            </div>
+            <div id="bot-live-telemetry" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); font-size:11px; color:var(--muted); display:flex; justify-content:space-between;">
+              <span>Đang chạy: <strong id="bot-active-count" style="color:var(--text-primary)">0</strong></span>
+              <span>Tốc độ: <strong id="bot-rate-val" style="color:var(--cyan)">0</strong>/s</span>
+              <span>Đã mở: <strong id="bot-tiles-val" style="color:var(--cyan-bright)">0</strong></span>
+            </div>
+          </div>
         </div>
           <div class="row" style="margin-top: 8px;">
             <span id="connection-status" data-online="false">Đang kết nối…</span>

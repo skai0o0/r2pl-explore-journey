@@ -27,7 +27,12 @@ import {
 import { PortalHttp } from "./PortalHttp.ts";
 import { PortalError } from "./PortalSignature.ts";
 import { PortalStore } from "./PortalStore.ts";
-import { SCHOOL_PLAY_CAMPAIGN, seedSchoolPlay } from "./SchoolPlayFixture.ts";
+import type { BotRole } from "../../shared/simulation/schoolBots.ts";
+import {
+  SCHOOL_PLAY_CAMPAIGN,
+  type SchoolPlayActor,
+  seedSchoolPlay,
+} from "./SchoolPlayFixture.ts";
 import { provisionSchoolRewards } from "./SchoolRewardFixture.ts";
 import { SchoolRewardHttp } from "./SchoolRewardHttp.ts";
 import { SignedGameplay } from "./SignedGameplay.ts";
@@ -110,7 +115,7 @@ async function startSchoolPlayServer(
 ) {
   const fixture = options.portal
     ? await seedPortalCampaign(pool, options.portal)
-    : await seedSchoolPlay(pool, campaignId, options.actorsPerSchool ?? 5);
+    : await seedSchoolPlay(pool, campaignId, options.actorsPerSchool);
   if (!options.portal) await provisionSchoolRewards(pool, fixture);
   const portal = options.portal
     ? new PortalStore(pool, options.portal)
@@ -260,7 +265,7 @@ async function startSchoolPlayServer(
         response.writeHead(503).end();
         return;
       }
-      if (path === "/api/fixture/bots") {
+      if (path.startsWith("/api/fixture/bots")) {
         response.writeHead(404).end();
         return;
       }
@@ -371,6 +376,45 @@ async function startSchoolPlayServer(
         return;
       }
       await rewardHttp.handle(request, response, url, token);
+      return;
+    }
+    if (path === "/api/fixture/bots" && request.method === "GET") {
+      if (portal) {
+        response.writeHead(404).end();
+        return;
+      }
+      const profile = token ? await accounts.profile(token) : null;
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.writeHead(
+        200,
+      ).end(JSON.stringify(getBotTelemetry(profile?.schoolSlot)));
+      return;
+    }
+    if (path === "/api/fixture/bots/start" && request.method === "POST") {
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      try {
+        let body = "";
+        for await (const chunk of request) body += chunk;
+        const opts = body ? JSON.parse(body) : {};
+        void startBots({
+          count: Number(opts.count ?? 200),
+          speed: opts.speed ?? "realistic",
+          durationSeconds: Number(opts.durationSeconds ?? 3600),
+        });
+        response.writeHead(200).end(JSON.stringify({ ok: true, ...getBotTelemetry() }));
+      } catch (err: any) {
+        response.writeHead(400).end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+    if (path === "/api/fixture/bots/stop" && request.method === "POST") {
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      try {
+        await stopBots();
+        response.writeHead(200).end(JSON.stringify({ ok: true, ...getBotTelemetry() }));
+      } catch (err: any) {
+        response.writeHead(500).end(JSON.stringify({ error: err.message }));
+      }
       return;
     }
     if (path === "/api/admin") {
@@ -738,8 +782,7 @@ async function startSchoolPlayServer(
       }
       if (
         path === "/api/fixture/me" ||
-        path === "/api/fixture/receipts" ||
-        path === "/api/fixture/bots"
+        path === "/api/fixture/receipts"
       ) {
         const actorAccounts =
           portal && portalActor
@@ -766,25 +809,12 @@ async function startSchoolPlayServer(
             fixtureOnly: !portal,
             earnedRunningPoints: String(running?.attributedPoints ?? 0),
           });
-        } else if (path === "/api/fixture/receipts")
+        } else if (path === "/api/fixture/receipts") {
           json({
             fixtureOnly: !portal,
             receipts: await actorAccounts.receipts(token),
           });
-        else
-          json({
-            fixtureOnly: true,
-            status: botStatus,
-            schoolSlot: profile.schoolSlot,
-            bots: peers
-              .filter((p) => p.school.slot === profile.schoolSlot)
-              .map((p) => ({
-                role: p.role,
-                applied: p.applied,
-                noChange: p.noChange,
-                rejected: p.rejected,
-              })),
-          });
+        }
         return;
       }
       if (path === "/health") {
@@ -863,73 +893,163 @@ async function startSchoolPlayServer(
   const webAddress = web.address();
   if (!webAddress || typeof webAddress === "string")
     throw new Error("Missing HTTP address");
-  const startBots = (durationSeconds = 600): Promise<void> => {
+  let botStopRequested = false;
+  let totalBotActions = 0;
+  let recentBotActions = 0;
+  let actionsPerSecond = 0;
+  let rateMeasureTimer: NodeJS.Timeout | undefined;
+
+  const getBotTelemetry = (schoolSlot?: number) => ({
+    fixtureOnly: true,
+    status: botStatus,
+    activeBots: peers.length,
+    totalActions: totalBotActions,
+    actionsPerSecond: Math.round(actionsPerSecond * 10) / 10,
+    schoolSlot: schoolSlot ?? 0,
+    bots: peers
+      .filter((p) => schoolSlot === undefined || p.school.slot === schoolSlot)
+      .map((p) => ({
+        role: p.role,
+        applied: p.applied,
+        noChange: p.noChange,
+        rejected: p.rejected,
+      })),
+    schools: fixture.schools.map((s) => ({
+      slot: s.slot,
+      label: s.label,
+      activeBots: peers.filter((p) => p.school.slot === s.slot).length,
+      applied: peers
+        .filter((p) => p.school.slot === s.slot)
+        .reduce((sum, p) => sum + p.applied, 0),
+    })),
+  });
+
+  const stopBots = async (): Promise<void> => {
+    botStopRequested = true;
+    botStatus = "stopping";
+    if (rateMeasureTimer) {
+      clearInterval(rateMeasureTimer);
+      rateMeasureTimer = undefined;
+    }
+    await Promise.allSettled(peers.map((peer) => peer.close()));
+    peers.length = 0;
+    botStatus = "idle";
+    botTask = undefined;
+    actionsPerSecond = 0;
+  };
+
+  const startBots = async (params?: number | {
+    count?: number;
+    speed?: "slow" | "realistic" | "fast";
+    durationSeconds?: number;
+  }): Promise<void> => {
     if (portal) throw new Error("Bots are disabled in portal campaigns");
-    if (botTask) throw new Error("Bots already started");
-    if (
-      !Number.isFinite(durationSeconds) ||
-      durationSeconds < 1 ||
-      durationSeconds > 600
-    )
-      throw new RangeError("Invalid bot duration");
+    if (botStatus === "running" || botStatus === "starting") return;
+    botStopRequested = false;
     botStatus = "starting";
+    const opts = typeof params === "number" ? { durationSeconds: params } : params;
+    const requestedCount = Math.max(1, Math.min(opts?.count ?? 200, 200));
+    const speed = opts?.speed ?? "realistic";
+    const durationSeconds = opts?.durationSeconds ?? 3600;
+
     botTask = (async () => {
+      const botActors = fixture.actors
+        .filter(
+          (a): a is SchoolPlayActor & { role: BotRole } => a.role !== "human",
+        )
+        .slice(0, requestedCount);
       let roomId: string | undefined;
-      for (const actor of fixture.actors) {
-        if (actor.role === "human" || stopped) continue;
-        const peer = new BotPeer(
-          `ws://127.0.0.1:${address.port}`,
-          actor.token,
-          fixture.schools[actor.schoolSlot]!,
-          actor.role,
-          (20261013 ^ actor.ordinal) >>> 0,
+
+      for (let i = 0; i < botActors.length; i += 25) {
+        if (botStopRequested || stopped) break;
+        const batch = botActors.slice(i, i + 25);
+        await Promise.all(
+          batch.map(async (actor) => {
+            const peer = new BotPeer(
+              `ws://127.0.0.1:${address.port}`,
+              actor.token,
+              fixture.schools[actor.schoolSlot]!,
+              actor.role,
+              (20261013 ^ actor.ordinal) >>> 0,
+            );
+            peers.push(peer);
+            roomId = await peer.connect(roomId);
+          }),
         );
-        peers.push(peer);
-        roomId = await peer.connect(roomId);
+        await pause(40);
       }
+
+      if (botStopRequested || stopped) {
+        await stopBots();
+        return;
+      }
+
       botStatus = "running";
       const deadline = performance.now() + durationSeconds * 1000;
-      const rates = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5];
+
+      recentBotActions = 0;
+      rateMeasureTimer = setInterval(() => {
+        actionsPerSecond = recentBotActions;
+        recentBotActions = 0;
+      }, 1000);
+      rateMeasureTimer.unref();
+
       await Promise.all(
         peers.map(async (peer) => {
-          while (!stopped && performance.now() < deadline) {
+          while (!botStopRequested && !stopped && performance.now() < deadline) {
             const intent = peer.planner.next(peer.role);
             if (!intent) break;
             const begun = performance.now();
-            const ack = await peer.explore(
-              intent.tile,
-              Uint8Array.from(
-                Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
-              ),
-            );
-            if (ack.status === ACK_STATUS.REJECTED) break;
-            const wait =
-              (1000 / rates[peer.school.slot]!) *
-              (0.8 + peer.planner.random() * 0.4);
-            await pause(
-              Math.min(
-                Math.max(0, wait - (performance.now() - begun)),
-                Math.max(0, deadline - performance.now()),
-              ),
-            );
+            try {
+              const ack = await peer.explore(
+                intent.tile,
+                Uint8Array.from(
+                  Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
+                ),
+              );
+              totalBotActions++;
+              recentBotActions++;
+              if (ack.status === ACK_STATUS.REJECTED) {
+                await pause(300);
+              }
+            } catch {
+              // Graceful catch for transient network jitter
+            }
+            const baseWait =
+              speed === "slow"
+                ? 2500 + peer.planner.random() * 2500
+                : speed === "fast"
+                  ? 400 + peer.planner.random() * 500
+                  : 1200 + peer.planner.random() * 1600;
+            const elapsed = performance.now() - begun;
+            const sleepMs = Math.max(50, baseWait - elapsed);
+            await pause(Math.min(sleepMs, Math.max(0, deadline - performance.now())));
           }
         }),
       );
+      if (rateMeasureTimer) {
+        clearInterval(rateMeasureTimer);
+        rateMeasureTimer = undefined;
+      }
       botStatus = "finished";
     })()
-      .catch(() => {
+      .catch((err) => {
+        console.error("Bot simulation error:", err);
         botStatus = "failed";
-        stopped = true;
       })
       .finally(async () => {
+        if (rateMeasureTimer) clearInterval(rateMeasureTimer);
         await Promise.allSettled(peers.map((peer) => peer.close()));
+        peers.length = 0;
+        if (botStatus !== "failed") botStatus = "idle";
+        botTask = undefined;
       });
     return botTask;
   };
   const close = async (): Promise<void> => {
     clearInterval(lifecycleTimer);
     stopped = true;
-    await botTask;
+    await stopBots();
     await new Promise<void>((ready) => {
       web.close(() => ready());
       web.closeIdleConnections();
@@ -944,6 +1064,8 @@ async function startSchoolPlayServer(
     webPort: webAddress.port,
     websocketPort: address.port,
     startBots,
+    stopBots,
+    getBotTelemetry,
     close,
   };
 }

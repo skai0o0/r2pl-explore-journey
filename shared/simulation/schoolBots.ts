@@ -108,7 +108,7 @@ export function regionContains(region: BotRegion, tile: number): boolean {
   );
 }
 export function regionChunks(region: BotRegion): number[] {
-  if (!Number.isInteger(region.size) || region.size < 1 || region.size > 256)
+  if (!Number.isInteger(region.size) || region.size < 1 || region.size > 1000)
     throw new RangeError("Invalid bot region size");
   tileIndex(region.x, region.z);
   tileIndex(region.x + region.size - 1, region.z + region.size - 1);

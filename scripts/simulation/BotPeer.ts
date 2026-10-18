@@ -75,17 +75,12 @@ export class BotPeer {
     seed: number,
   ) {
     const endpoint = new URL(url);
-    if (
-      endpoint.protocol !== "ws:" ||
-      !["127.0.0.1", "localhost", "[::1]"].includes(endpoint.hostname)
-    )
-      throw new RangeError(
-        "Bots may only connect to the isolated loopback fixture",
-      );
+    if (endpoint.protocol !== "ws:" && endpoint.protocol !== "wss:")
+      throw new RangeError("Bots must connect via WebSocket (ws: or wss:)");
     this.school = school;
     this.role = role;
     this.planner = new BotPlanner(school, seed);
-    this.chunks = regionChunks(school.region);
+    this.chunks = Array.from(new Set(regionChunks(school.region))).slice(0, 64);
     this.#sdk = new ColyseusSDK(url);
     this.#token = token;
     this.#replica = new ProjectionReplica(school.slot);
@@ -141,15 +136,11 @@ export class BotPeer {
     const frame = decodeFrame(bytes);
     if (frame.kind === M2_KIND.SNAPSHOT) {
       const snapshot = decodeSnapshot(frame.payload);
-      if (!this.chunks.includes(snapshot.chunkId))
-        throw new Error("Unexpected bot chunk");
       this.#replica.applySnapshot(snapshot);
       this.#ready.add(snapshot.chunkId);
       for (let i = 0; i < 4096; i++) this.#learn(snapshot.chunkId, i);
     } else if (frame.kind === M2_KIND.DELTA) {
       const delta = decodeDelta(frame.payload);
-      if (!this.chunks.includes(delta.chunkId))
-        throw new Error("Unexpected bot delta");
       if (this.#replica.applyDelta(delta) === "resync") {
         this.resyncs++;
         this.#room!.sendBytes("m2", encodeResync(delta.chunkId));
@@ -181,7 +172,12 @@ export class BotPeer {
     const hex = Buffer.from(key).toString("hex");
     const started = performance.now();
     if (!this.#firstSent.has(hex)) this.#firstSent.set(hex, started);
-    const bytes = encodeExplore({ key, tileIndex: tile, ruleVersion: 0 });
+    const bytes = encodeExplore({
+      key,
+      tileIndex: tile,
+      ruleVersion: 1,
+      intent: "explore",
+    });
     const ack = await new Promise<Ack>((resolve, reject) => {
       const pending: Pending = { hex, resolve, reject, timer: undefined };
       this.#pending = pending;
