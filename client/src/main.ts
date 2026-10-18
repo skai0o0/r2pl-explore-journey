@@ -92,17 +92,25 @@ document.body.dataset.debug = String(isDev);
 if (uiMode === "player") {
   miniMap.element.style.display = "none";
 }
-if (isDev) {
-  const template = document.getElementById(
-    "dev-tools-template",
-  ) as HTMLTemplateElement | null;
-  if (template) {
-    document
-      .querySelector(".game-shell")!
-      .append(template.content.cloneNode(true));
+if (isDev || session.fixtureOnly) {
+  if (isDev) {
+    const template = document.getElementById(
+      "dev-tools-template",
+    ) as HTMLTemplateElement | null;
+    if (template) {
+      document
+        .querySelector(".game-shell")!
+        .append(template.content.cloneNode(true));
+    }
   }
   const devToolsSection = document.getElementById("dev-tools-section");
-  if (devToolsSection) devToolsSection.hidden = false;
+  if (devToolsSection) {
+    devToolsSection.hidden = false;
+    const eyebrow = devToolsSection.querySelector(".eyebrow");
+    if (eyebrow && !isDev) {
+      eyebrow.textContent = "CHỌN TRƯỜNG & TÀI KHOẢN (STANDALONE)";
+    }
+  }
 }
 const mapTools = document.querySelector(".map-tools");
 if (mapTools) miniMap.element.append(mapTools);
@@ -181,7 +189,10 @@ const sdk = new ColyseusSDK(
 );
 let player: Player =
   players.find(
-    (item) => item.token === sessionStorage.getItem("r2pl-fixture-player"),
+    (item) =>
+      item.token ===
+      (sessionStorage.getItem("r2pl-fixture-player") ||
+        localStorage.getItem("r2pl-fixture-player")),
   ) ?? players[0]!;
 let privateObjects: readonly WorldObject[] = [];
 let replica = new ProjectionReplica(player.slot);
@@ -497,6 +508,7 @@ async function refreshProfile(token = player.token): Promise<void> {
           ? `Chiến binh ${profile.schoolName}`
           : profile.name,
       schoolId: SCHOOLS[player.slot]?.id ?? "hcmut",
+      schoolSlot: player.slot,
       schoolName: profile.schoolName,
       schoolColor: SCHOOLS[player.slot]?.color ?? "#fff",
       points: Number(profile.balance),
@@ -664,6 +676,59 @@ function homeLandmark(): { x: number; z: number; id: string } {
 }
 stats.onFlyToHQRequested = () =>
   world.animateFocus(player.home.x, player.home.z, P.homeSpan);
+
+if (session.fixtureOnly) {
+  const schoolMap = new Map<number, DevPlayer>();
+  for (const p of players) {
+    if (!schoolMap.has(p.slot)) {
+      schoolMap.set(p.slot, p);
+    }
+  }
+
+  const availableSchools = SCHOOLS.map((s) => {
+    const p = schoolMap.get(s.slot);
+    return {
+      slot: s.slot,
+      id: s.id,
+      shortName: s.shortName,
+      fullName: s.fullName.replace(/_/g, " "),
+      color: s.color,
+      accent: s.accent,
+      playerToken: p?.token ?? "",
+      playerName: p?.label ?? `Chiến binh ${s.shortName}`,
+    };
+  }).filter((s) => s.playerToken !== "");
+
+  stats.setAvailableSchools(availableSchools);
+
+  stats.onSchoolSelected = (slot: number) => {
+    const targetPlayer = players.find((p) => p.slot === slot);
+    if (targetPlayer && targetPlayer.token !== player.token) {
+      void connect(targetPlayer);
+      NotificationBanner.show({
+        title: "Đã đổi trường",
+        body: `Bạn đang khám phá với tư cách sinh viên ${targetPlayer.schoolName}`,
+      });
+    }
+  };
+
+  const hudSchoolSwitch = document.getElementById("hud-school-switch");
+  if (hudSchoolSwitch) {
+    hudSchoolSwitch.hidden = false;
+    hudSchoolSwitch.addEventListener("click", () => {
+      stats.openDialog("student");
+    });
+  }
+
+  const toolSwitchSchool = document.getElementById("tool-switch-school");
+  if (toolSwitchSchool) {
+    toolSwitchSchool.hidden = false;
+    toolSwitchSchool.addEventListener("click", () => {
+      stats.toggleTools(false);
+      stats.openDialog("student");
+    });
+  }
+}
 function refreshRanking(): void {
   void gameFetch("/api/game/ranking")
     .then((r) => r.json())
@@ -994,9 +1059,13 @@ async function connect(nextPlayer: Player): Promise<void> {
   ui.player.textContent = player.label;
   ui.school.textContent = player.schoolName;
   profileBalance = undefined;
-  selectedTilePanel.reset();
   profileCost = undefined;
+  selectedTilePanel.reset();
   sessionStorage.setItem("r2pl-fixture-player", player.token);
+  localStorage.setItem("r2pl-fixture-player", player.token);
+  if (ui.select.value !== player.token) {
+    ui.select.value = player.token;
+  }
   replica = new ProjectionReplica(player.slot);
   loadedChunks.clear();
   selected = undefined;
@@ -1071,8 +1140,27 @@ async function connect(nextPlayer: Player): Promise<void> {
   }
 }
 
+ui.select.replaceChildren();
+const schoolGroups = new Map<number, HTMLOptGroupElement>();
 for (const option of players) {
-  ui.select.add(new Option(option.label, option.token));
+  let group = schoolGroups.get(option.slot);
+  if (!group) {
+    const schoolCfg = SCHOOLS[option.slot];
+    const groupLabel = schoolCfg
+      ? `${schoolCfg.shortName} — ${schoolCfg.fullName.replace(/_/g, " ")}`
+      : option.schoolName;
+    group = document.createElement("optgroup");
+    group.label = groupLabel;
+    schoolGroups.set(option.slot, group);
+    ui.select.appendChild(group);
+  }
+  const opt = document.createElement("option");
+  opt.value = option.token;
+  const rolePart = option.label.includes("·")
+    ? option.label.split("·")[1]!.trim()
+    : option.label;
+  opt.textContent = `${option.schoolName} (${rolePart})`;
+  group.appendChild(opt);
 }
 ui.select.value = player.token;
 if (!session.fixtureOnly) {

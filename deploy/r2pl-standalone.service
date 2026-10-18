@@ -7,12 +7,16 @@ Requires=postgresql.service
 Type=simple
 User=root
 WorkingDirectory=/opt/r2pl-game
-ExecStart=/usr/bin/node --env-file=.env.sandbox --experimental-strip-types scripts/start-portal.ts
-Restart=on-failure
-RestartSec=3
-TimeoutStopSec=15
 Environment=NODE_ENV=production
-UMask=0077
+Environment=PORT=4191
+Environment=WS_PORT=2569
+Environment=R2PL_BOT_SIMULATION=1
+Environment=R2PL_BOT_DATABASE_URL=postgres://r2pl_user:r2pl_secure_pass_2026@127.0.0.1:5432/r2pl_bot_test_standalone
+Environment=PUBLIC_WEBSOCKET_URL=wss://play.skai0o0.id.vn
+Environment=ENABLE_BOTS=0
+ExecStart=/usr/bin/node --experimental-strip-types scripts/play-schools.ts
+Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target

@@ -7,6 +7,14 @@
     "/models/hqs/hsu_hq.glb",
     "/models/hqs/huce_hq.glb",
     "/models/hqs/ntu_hq.glb",
-    "/models/hqs/hcmiu_hq.glb"
+    "/models/hqs/hcmiu_hq.glb",
+    "/models/landmarks/fansipan.glb",
+    "/models/landmarks/halong.glb",
+    "/models/landmarks/nguhanhson.glb",
+    "/models/landmarks/phongnha.glb",
+    "/models/landmarks/nuibaden.glb",
+    "/models/landmarks/baden.glb",
+    "/models/landmarks/hoangthanhthanglong.glb",
+    "/models/landmarks/thanglong.glb"
   ]
 }

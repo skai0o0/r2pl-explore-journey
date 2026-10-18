@@ -23,6 +23,10 @@
             <small><span class="online" id="hud-online-dot"></span><span id="hud-school-name">HCMUT</span></small>
           </span>
         </button>
+        <button class="school-switch-btn" id="hud-school-switch" type="button" hidden aria-label="Đổi trường đại học" title="Đổi trường đại học">
+          <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+          <span class="switch-label">Đổi trường</span>
+        </button>
         <span class="divider"></span>
         <button class="buff-chip" id="hud-beacon" type="button" hidden aria-label="Xem buff đèn hiệu"></button>
         <span class="hud-wallet"><strong id="hud-points">—</strong><small>Points</small></span>
@@ -59,6 +63,7 @@
         <div class="section">
           <p class="eyebrow">Hành trình</p>
           <div class="tools-grid">
+            <button class="tool tool-wide" id="tool-switch-school" type="button" hidden><svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>Đổi trường đại học</button>
             <button class="tool tool-wide" id="tool-inventory" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14v14H5zM8 7V3h8v4M5 12h14m-8-2h2v4h-2z"/></svg>Hành trình</button>
             <button class="tool tool-wide" id="tool-beacon-scout" type="button" hidden>Trinh sát biên tri thức</button>
             <button class="tool tool-wide" id="tool-ranking" type="button"><svg viewBox="0 0 24 24"><path d="M8 3h8v6a4 4 0 0 1-8 0V3Zm0 2H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 1v6m-4 2h8"/></svg>Xếp hạng</button>

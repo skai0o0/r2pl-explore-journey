@@ -148,6 +148,31 @@
     width: 44px;
     background: var(--surface-raised);
   }
+  .hud .school-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 10px;
+    background: var(--surface-raised);
+    border: 1px solid var(--line-bright);
+    border-radius: 5px;
+    color: var(--cyan-bright);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.16s, border-color 0.16s;
+    white-space: nowrap;
+    min-height: 0;
+  }
+  .hud .school-switch-btn:hover {
+    background: var(--cyan-tint);
+    border-color: var(--cyan);
+  }
+  .hud .school-switch-btn svg {
+    width: 14px;
+    height: 14px;
+  }
   svg {
     flex-shrink: 0;
   }
@@ -485,6 +510,104 @@
   }
   .buff-summary p {
     margin: 5px 0 0;
+  }
+  .school-picker-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .school-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .school-picker-header .eyebrow {
+    margin: 0;
+    color: var(--cyan-bright);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .school-picker-desc {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .school-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 500px) {
+    .school-picker-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .school-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: border-color 0.16s, background 0.16s, transform 0.12s;
+    position: relative;
+    box-sizing: border-box;
+  }
+  .school-card:hover:not(.is-active) {
+    border-color: var(--cyan);
+    background: var(--surface-raised);
+    transform: translateY(-1px);
+  }
+  .school-card.is-active {
+    border-color: var(--cyan-bright);
+    background: var(--cyan-tint);
+    cursor: default;
+  }
+  .school-card-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .school-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .school-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .school-card-sub {
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .school-card-tag {
+    font-size: 9px;
+    color: var(--cyan-bright);
+    background: rgba(0, 229, 255, 0.12);
+    border: 1px solid var(--cyan-bright);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .hq-label,
   .object-label {
@@ -1259,6 +1382,14 @@
     }
     .hud .student {
       flex: 1;
+    }
+    .hud .school-switch-btn {
+      padding: 0 6px;
+      height: 32px;
+      gap: 3px;
+    }
+    .hud .school-switch-btn span.switch-label {
+      display: none;
     }
     .student-copy {
       max-width: 110px;

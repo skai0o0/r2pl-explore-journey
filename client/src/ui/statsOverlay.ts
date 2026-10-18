@@ -9,12 +9,24 @@ export interface SchoolRankingEntry {
   buffs?: readonly { name: string; description: string }[] | undefined;
 }
 
+export interface AvailableSchool {
+  readonly slot: number;
+  readonly id: string;
+  readonly shortName: string;
+  readonly fullName: string;
+  readonly color: string;
+  readonly accent: string;
+  readonly playerToken: string;
+  readonly playerName: string;
+}
+
 export interface StudentStats {
   studentName: string;
   studentEmail?: string | undefined;
   displayName?: string | undefined;
   earnedRunningPoints?: number;
   schoolId: string;
+  schoolSlot?: number | undefined;
   schoolName: string;
   schoolColor: string;
   points: number;
@@ -60,6 +72,15 @@ export class StatsOverlay {
   public onExploreRequested?: () => void;
   public onWalletRefreshRequested?: () => void;
   public onSchoolChange?: (schoolId: string) => void;
+  public onSchoolSelected?: (slot: number) => void;
+  private availableSchools: AvailableSchool[] = [];
+
+  public setAvailableSchools(schools: AvailableSchool[]): void {
+    this.availableSchools = schools;
+    if (this.activeDialogKind === "student") {
+      this.openDialog("student");
+    }
+  }
 
   constructor(parent?: HTMLElement, initialStats?: Partial<StudentStats>) {
     const defaultSchool = SCHOOL_ROSTER.hcmut;
@@ -306,11 +327,49 @@ export class StatsOverlay {
       titleEl.textContent = studentName;
       subtitleEl.textContent = `${schoolName} · Mã trường ${this.stats.schoolId.toUpperCase()}`;
 
+      const schoolPickerHtml =
+        this.availableSchools.length > 0
+          ? `
+        <div class="school-picker-section">
+          <div class="school-picker-header">
+            <span class="eyebrow">ĐỔI TRƯỜNG ĐẠI HỌC</span>
+            <span class="tiny-tag">STANDALONE</span>
+          </div>
+          <p class="school-picker-desc">
+            Chọn một trường bất kỳ để chuyển sang trải nghiệm bản đồ và tri thức của trường đó:
+          </p>
+          <div class="school-picker-grid">
+            ${this.availableSchools
+              .map((sc) => {
+                const isActive =
+                  sc.slot === this.stats.schoolSlot ||
+                  sc.id.toLowerCase() === this.stats.schoolId.toLowerCase();
+                return `
+                <button
+                  class="school-card ${isActive ? "is-active" : ""}"
+                  type="button"
+                  data-school-slot="${sc.slot}"
+                  title="${isActive ? "Trường hiện tại (bấm để về HQ)" : `Chuyển sang ${sc.fullName}`}"
+                >
+                  <span class="school-card-dot" style="background:${sc.color}; color:${sc.color}"></span>
+                  <div class="school-card-info">
+                    <span class="school-card-title">${sc.shortName}</span>
+                    <span class="school-card-sub">${sc.fullName}</span>
+                  </div>
+                  ${isActive ? `<span class="school-card-tag">Đang chọn ✓</span>` : ""}
+                </button>
+              `;
+              })
+              .join("")}
+          </div>
+        </div>
+      `
+          : "";
+
       contentEl.innerHTML = `
         <div class="stat-grid">
           <div class="stat"><small>Points khả dụng</small><strong>${this.stats.points.toLocaleString()}</strong></div>
           <div class="stat"><small>Điểm chạy tích lũy</small><strong>${(this.stats.earnedRunningPoints ?? 0).toLocaleString()}</strong></div>
-
           <div class="stat"><small>Đèn hiệu đã thắp</small><strong>${this.stats.litLandmarksCount ?? 0}</strong></div>
         </div>
         <p class="caption" style="margin-top: 14px; color: var(--muted);">
@@ -319,6 +378,7 @@ export class StatsOverlay {
         <button id="dialog-btn-fly-hq" class="primary" style="margin-top: 14px;">
           <span>Về trụ sở trường</span><span>⌂ ↗</span>
         </button>
+        ${schoolPickerHtml}
       `;
 
       contentEl
@@ -327,6 +387,29 @@ export class StatsOverlay {
           this.closeDialog();
           this.onFlyToHQRequested?.();
         });
+
+      if (this.availableSchools.length > 0) {
+        contentEl
+          .querySelectorAll<HTMLButtonElement>(".school-card")
+          .forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const slot = Number(btn.dataset.schoolSlot);
+              const target = this.availableSchools.find((s) => s.slot === slot);
+              if (!target) return;
+              if (
+                target.slot === this.stats.schoolSlot ||
+                target.id.toLowerCase() === this.stats.schoolId.toLowerCase()
+              ) {
+                this.closeDialog();
+                this.onFlyToHQRequested?.();
+                return;
+              }
+              this.closeDialog();
+              this.onSchoolSelected?.(slot);
+              this.onSchoolChange?.(target.id);
+            });
+          });
+      }
     } else if (kind === "progress") {
       kickerEl.textContent = "TIẾN TRÌNH & SỐ DƯ";
       titleEl.textContent = "Tri thức học viện";

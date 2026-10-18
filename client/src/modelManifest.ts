@@ -15,6 +15,14 @@ export const KNOWN_MODELS = new Set<string>([
   "/models/hqs/huce_hq.glb",
   "/models/hqs/ntu_hq.glb",
   "/models/hqs/hcmiu_hq.glb",
+  "/models/landmarks/fansipan.glb",
+  "/models/landmarks/halong.glb",
+  "/models/landmarks/nguhanhson.glb",
+  "/models/landmarks/phongnha.glb",
+  "/models/landmarks/nuibaden.glb",
+  "/models/landmarks/baden.glb",
+  "/models/landmarks/hoangthanhthanglong.glb",
+  "/models/landmarks/thanglong.glb",
 ]);
 
 let manifestLoaded = false;
@@ -61,6 +69,7 @@ export function getLandmarkModelUrl(landmarkId: string): string {
   let normalized = landmarkId.toLowerCase();
   if (normalized === "thanglong") normalized = "hoangthanhthanglong";
   if (normalized === "cairang") normalized = "chonoicairang";
+  if (normalized === "baden" || normalized === "nuibaden") normalized = "nuibaden";
   return `/models/landmarks/${normalized}.glb`;
 }
 
