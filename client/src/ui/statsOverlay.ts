@@ -1,5 +1,6 @@
 import { GAME_CONFIG } from "../../../shared/gameplay/gameConfig.ts";
 import { SCHOOL_IDS, SCHOOL_ROSTER } from "./v1Adapters.ts";
+import { isUiOverlayOpen, UiOverlay } from "./overlay.ts";
 
 export interface SchoolRankingEntry {
   schoolId: string;
@@ -46,6 +47,8 @@ export class StatsOverlay {
     | "ranking"
     | null = null;
   private toolsOpen = false;
+  private surface: UiOverlay | undefined;
+  private dialogSignature = "";
   private dialogOpener: HTMLElement | null = null;
 
   public get dialogOpen(): boolean {
@@ -101,6 +104,13 @@ export class StatsOverlay {
     }
 
     this.bindDOM();
+    const scrim = document.getElementById("scrim");
+    if (scrim)
+      this.surface = new UiOverlay(
+        scrim,
+        () => this.closeDialog(),
+        "Thông tin hành trình",
+      );
     this.render();
   }
 
@@ -178,6 +188,10 @@ export class StatsOverlay {
       this.openDialog("progress");
     });
 
+    document
+      .getElementById("hud-beacon")
+      ?.addEventListener("click", () => this.openDialog("progress"));
+
     // Close Dialog button
     document.getElementById("close-dialog")?.addEventListener("click", () => {
       this.closeDialog();
@@ -207,7 +221,7 @@ export class StatsOverlay {
           (e.target as HTMLElement).tagName,
         )
       ) {
-        if (!this.activeDialogKind) {
+        if (!isUiOverlayOpen()) {
           this.toggleTools(!this.toolsOpen);
         }
       }
@@ -264,6 +278,13 @@ export class StatsOverlay {
     kind: "student" | "progress" | "inventory" | "ranking",
   ): void {
     const opening = this.activeDialogKind === null;
+    const signature = JSON.stringify({
+      kind,
+      stats: this.stats,
+      rankings: this.schoolRankingsList,
+    });
+    if (!opening && signature === this.dialogSignature) return;
+    this.dialogSignature = signature;
     const focusedId = document.activeElement?.id;
     if (opening)
       this.dialogOpener = document.activeElement as HTMLElement | null;
@@ -287,9 +308,9 @@ export class StatsOverlay {
 
       contentEl.innerHTML = `
         <div class="stat-grid">
-          <div class="stat"><small>Điểm Tri Thức</small><strong>${this.stats.points.toLocaleString()}</strong></div>
+          <div class="stat"><small>Points khả dụng</small><strong>${this.stats.points.toLocaleString()}</strong></div>
           <div class="stat"><small>Điểm chạy tích lũy</small><strong>${(this.stats.earnedRunningPoints ?? 0).toLocaleString()}</strong></div>
-          <div class="stat"><small>Tinh Thể</small><strong>${(this.stats.crystals ?? 0).toLocaleString()}</strong></div>
+
           <div class="stat"><small>Đèn hiệu đã thắp</small><strong>${this.stats.litLandmarksCount ?? 0}</strong></div>
         </div>
         <p class="caption" style="margin-top: 14px; color: var(--muted);">
@@ -319,13 +340,13 @@ export class StatsOverlay {
       contentEl.innerHTML = `
         <div class="stat-grid">
           <div class="stat"><small>Điểm khả dụng</small><strong style="color:var(--cyan)">${this.stats.points.toLocaleString()}</strong></div>
-          <div class="stat"><small>Tinh Thể</small><strong>${(this.stats.crystals ?? 0).toLocaleString()}</strong></div>
+
           <div class="stat"><small>Ô Tri Thức trường</small><strong>${myTiles} <span style="font-size:12px;color:var(--muted)">(${pct}%)</span></strong></div>
           <div class="stat"><small>Đã khám phá</small><strong>${revTiles} <span style="font-size:12px;color:var(--muted)">(${expPct}%)</span></strong></div>
         </div>
         ${
           this.stats.buffs && this.stats.buffs.length > 0
-            ? `<div style="margin-top:12px; padding:8px; border-radius:4px; background:rgba(255,255,255,0.03); border-left:2px solid var(--cyan-bright);">
+            ? `<div class="buff-summary">
                 <small style="color:var(--cyan-bright); font-weight:600; font-size:10px;">HIỆU ỨNG ĐÈN HIỆU ĐANG CÓ</small>
                 ${this.stats.buffs.map((b) => `<p style="font-size:11px; margin:4px 0 0; color:#dbeafe;">◆ <b>${b.name}</b>: ${b.description}</p>`).join("")}
               </div>`
@@ -342,8 +363,8 @@ export class StatsOverlay {
           this.onWalletRefreshRequested?.();
         });
     } else if (kind === "inventory") {
-      kickerEl.textContent = "HÀNH TRANG KHÁM PHÁ";
-      titleEl.textContent = "Tài nguyên & Chìa Khóa";
+      kickerEl.textContent = "CHÌA KHÓA KHÁM PHÁ";
+      titleEl.textContent = "Chìa khóa của bạn";
       subtitleEl.textContent = "Dùng Chìa Khóa mở Rương tương ứng trên bản đồ";
 
       const aKeys = this.stats.aspireKeys ?? 0;
@@ -355,7 +376,7 @@ export class StatsOverlay {
           <div class="stat"><small>Chìa Aspire</small><strong style="color:#fbbf24">${aKeys}</strong></div>
           <div class="stat"><small>Chìa Nitro</small><strong style="color:#00ffe8">${nKeys}</strong></div>
           <div class="stat"><small>Chìa Predator</small><strong style="color:#a855f7">${pKeys}</strong></div>
-          <div class="stat"><small>Tinh Thể</small><strong>${(this.stats.crystals ?? 0).toLocaleString()}</strong></div>
+
         </div>
         <p class="caption" style="margin-top: 14px;">
           Chìa Khóa nhận được khi quay Trạm Tiếp Tế (UniStop). Chạm vào Rương đã khám phá trên bản đồ để mở quà.
@@ -371,20 +392,23 @@ export class StatsOverlay {
           ${this.renderRankingRows()}
         </div>
         <p class="ranking-note">
-          Bảng xếp hạng cập nhật tự động theo thời gian thực từ máy chủ authoritative.
+          Xếp hạng theo số ô tri thức đang nắm giữ. Dữ liệu cập nhật từ máy chủ.
         </p>
       `;
     }
 
     scrim.hidden = false;
+    this.surface?.open();
     if (opening) document.getElementById("close-dialog")?.focus();
     else if (focusedId) document.getElementById(focusedId)?.focus();
   }
 
   public closeDialog(): void {
     this.activeDialogKind = null;
+    this.dialogSignature = "";
     const scrim = document.getElementById("scrim");
     if (scrim) scrim.hidden = true;
+    this.surface?.close();
     this.dialogOpener?.focus();
     this.dialogOpener = null;
   }
@@ -554,6 +578,17 @@ export class StatsOverlay {
 
     const schoolShort =
       this.stats.schoolName || this.stats.schoolId.toUpperCase();
+
+    const beacon = document.getElementById("hud-beacon");
+    const activeBuff = this.stats.buffs?.[0];
+    if (beacon) {
+      beacon.hidden = !activeBuff;
+      beacon.textContent = activeBuff ? `Đèn hiệu · ${activeBuff.name}` : "";
+      beacon.title = activeBuff?.description ?? "";
+    }
+
+    const points = document.getElementById("hud-points");
+    if (points) points.textContent = this.stats.points.toLocaleString();
 
     // Update HUD elements
     const avatarEl = document.getElementById("hud-avatar");

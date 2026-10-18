@@ -24,6 +24,7 @@ export class DevAccountService {
     schoolName: string;
     schoolSlot: number;
     balance: string;
+    hasSpentPoints: boolean;
     cost: string;
     fixtureOnly: true;
     resource: "fixture-credit";
@@ -45,8 +46,9 @@ export class DevAccountService {
         balance: string;
         opening_balance: string;
         ledger_net: string;
+        has_spent_points: boolean;
       }>(
-        "SELECT w.resource,w.balance::text,w.opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.ledger_entries l WHERE l.campaign_id=w.campaign_id AND l.actor_id=w.actor_id AND l.resource=w.resource),0)::text AS ledger_net FROM r2pl_v2.wallet_accounts w JOIN r2pl_v2.campaign_schools s ON s.campaign_id=w.campaign_id AND s.slot=$3 WHERE w.campaign_id=$1 AND w.actor_id=$2 AND w.resource IN ('fixture-credit','fixture-crystals','fixture-treasure-map','fixture-key','key-aspire','key-nitro','key-predator')",
+        "SELECT w.resource,w.balance::text,w.opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.ledger_entries l WHERE l.campaign_id=w.campaign_id AND l.actor_id=w.actor_id AND l.resource=w.resource),0)::text AS ledger_net,EXISTS(SELECT 1 FROM r2pl_v2.ledger_entries spent WHERE spent.campaign_id=w.campaign_id AND spent.actor_id=w.actor_id AND spent.resource='fixture-credit' AND spent.amount<0) AS has_spent_points FROM r2pl_v2.wallet_accounts w JOIN r2pl_v2.campaign_schools s ON s.campaign_id=w.campaign_id AND s.slot=$3 WHERE w.campaign_id=$1 AND w.actor_id=$2 AND w.resource IN ('fixture-credit','fixture-crystals','fixture-treasure-map','fixture-key','key-aspire','key-nitro','key-predator')",
         [this.#campaignId, actor.actorId, actor.schoolSlot],
       )
     ).rows;
@@ -59,6 +61,7 @@ export class DevAccountService {
       schoolName: actor.schoolName,
       schoolSlot: actor.schoolSlot,
       balance: row.balance,
+      hasSpentPoints: row.has_spent_points,
       cost: String(GAME_CONFIG.knowledge.explorePoints),
       fixtureOnly: true,
       resource: "fixture-credit",

@@ -4,7 +4,6 @@ import {
   type GameCommand,
   type GameReceipt,
   type GameView,
-  type GiftEntitlementView,
   type LandmarkView,
   parseGameCommand,
 } from "../../shared/gameplay/commands.ts";
@@ -13,6 +12,7 @@ import {
   headquartersOwner,
 } from "../../shared/gameplay/expansion.ts";
 import {
+  BEACON_BUFF_CONFIG,
   GAME_CONFIG,
   LANDMARKS,
   type RewardOutcome,
@@ -32,6 +32,20 @@ import {
   localIndex,
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
+import { recordLedger } from "../persistence/WalletLedger.ts";
+import {
+  activeView,
+  chooseBuff,
+  currentBuff,
+  dailyBuff,
+  emptyBeacon,
+  migrateBeacons,
+  nextBeaconTarget,
+  rewardBuff,
+  schoolBeacon,
+  sharedPaymentBuff,
+} from "./BeaconBuffs.ts";
+import { scoutFrontier } from "./BeaconScout.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { campaignProviderFromEnv } from "./HttpCampaignProvider.ts";
 import type {
@@ -41,13 +55,6 @@ import type {
 import { clusters, payShared, settleShared } from "./SharedKnowledge.ts";
 import { SyntheticCampaignProvider } from "./SyntheticCampaignProvider.ts";
 
-interface Beacon {
-  holder: number | null;
-  takeovers: number;
-  pots: Record<string, number>;
-  solved: number[];
-  cooldowns: Record<string, number>;
-}
 const actionNames: Record<GameCommand["action"], string> = {
   running: "Đồng bộ Running",
   upkeep: "Duy trì Shared Knowledge",
@@ -56,6 +63,8 @@ const actionNames: Record<GameCommand["action"], string> = {
   contribute: "Đóng góp Crystal",
   spin: "Quay UniStop",
   open: "Mở Chest",
+  rally: "Hiệu triệu cùng trường",
+  scout: "Trinh sát biên tri thức",
 };
 const rejectionMessages: Record<string, string> = {
   INSUFFICIENT_BALANCE: "Ví chưa đủ tài nguyên",
@@ -63,28 +72,20 @@ const rejectionMessages: Record<string, string> = {
   CHEST_COLLECTED: "Chest đã được thu thập",
   CHEST_NOT_DISCOVERED: "Bạn chưa tìm thấy Chest này",
   KNOWLEDGE_PATH_REQUIRED:
-    "Chỉ sinh viên trường sở hữu Trạm tiếp tế mới được nhận đồ!",
+    "Tri thức trường cần chạm công trình; Trạm tiếp tế phải thuộc trường bạn.",
   GUESS_COOLDOWN: "Chưa hết thời gian chờ đoán lại",
   UNKNOWN_OBJECT: "Đối tượng đã thay đổi; tải bản đồ mới",
+  BEACON_ALREADY_ACTIVE: "Đèn hiệu này đang hoạt động cho trường bạn",
+  RALLY_COOLDOWN:
+    "Trường bạn vừa hiệu triệu. Vui lòng chờ trước khi gửi thông báo tiếp",
+  SCOUT_UNAVAILABLE: "Trường bạn chưa có đặc quyền trinh sát",
+  SCOUT_COOLDOWN: "Trường đã dùng lượt trinh sát hôm nay",
+  SCOUT_NO_FRONTIER: "Chưa có vùng biên mới để trinh sát",
   "Upkeep not due": "Cluster đang trong 24 giờ miễn upkeep",
   "Not your consolidation": "Trường bạn không phải guest nhận consolidation",
   "Unknown school cluster": "Cluster đã kết thúc hoặc không thuộc trường bạn",
 };
-const initialBeacon = (): Beacon => ({
-  holder: null,
-  takeovers: 0,
-  pots: {},
-  solved: [],
-  cooldowns: {},
-});
-const target = (b: Beacon) =>
-  GAME_CONFIG.landmark.baseCrystals +
-  Math.round(
-    (GAME_CONFIG.landmark.baseCrystals *
-      GAME_CONFIG.landmark.takeoverStepPercent *
-      (b.takeovers + (b.holder === null ? 0 : 1))) /
-      100,
-  );
+const initialBeacon = emptyBeacon;
 const normalize = (s: string) =>
   s
     .normalize("NFD")
@@ -333,6 +334,20 @@ export class SignedGameplay {
     }
   }
   async initialize(): Promise<void> {
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+        `signed-game:${this.fixture.campaignId}`,
+      ]);
+      await migrateBeacons(db, this.fixture.campaignId);
+      await db.query("COMMIT");
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
+    } finally {
+      db.release();
+    }
     for (const actor of this.fixture.actors)
       for (const tier of ["aspire", "nitro", "predator"])
         await this.pool.query(
@@ -349,6 +364,9 @@ export class SignedGameplay {
     const db = await this.pool.connect();
     try {
       await db.query("BEGIN");
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+        `signed-game:${this.fixture.campaignId}`,
+      ]);
       await this.captureReachedStops(db);
       const wallets = (
         await db.query<{ resource: string; balance: string }>(
@@ -359,17 +377,40 @@ export class SignedGameplay {
       const balance = (r: string) =>
         wallets.find((w) => w.resource === r)?.balance ?? "0";
       const landmarks: LandmarkView[] = [];
+      const ownBeacon = await schoolBeacon(
+        db,
+        this.fixture.campaignId,
+        actor.schoolSlot,
+      );
+      const storedRally = await this.state<
+        { target: string; createdAt: number } | undefined
+      >(db, "beacon-rally", String(actor.schoolSlot), undefined);
+      // Completed calls remain stored for rate limiting, but must not become new UI objectives after a later switch.
+      const rally =
+        storedRally && storedRally.createdAt > (ownBeacon.activatedAt ?? 0)
+          ? storedRally
+          : undefined;
       for (const l of LANDMARKS) {
         const b = await this.state(db, "beacon", l.id, initialBeacon());
         const o = await this.object(db, l.id);
         landmarks.push({
           id: l.id,
           holder: b.holder,
-          target: target(b),
+          target:
+            b.holder === actor.schoolSlot
+              ? ownBeacon.lastCost
+              : nextBeaconTarget(b, ownBeacon),
           pot: b.pots[String(actor.schoolSlot)] ?? 0,
           solved: b.solved.includes(actor.schoolSlot),
           cooldownUntil: b.cooldowns[String(actor.schoolSlot)] ?? 0,
           hasPath: !!o && (await this.path(db, o, actor.schoolSlot)),
+          buff:
+            b.holder === null
+              ? undefined
+              : activeView(
+                  await schoolBeacon(db, this.fixture.campaignId, b.holder),
+                ),
+          rallied: rally?.target === l.id,
         });
       }
       const chests = (
@@ -447,8 +488,22 @@ export class SignedGameplay {
           [this.fixture.campaignId, actor.actorId, actor.schoolSlot],
         )
       ).rows;
+      const canScout =
+        (await currentBuff(db, this.fixture.campaignId, actor.schoolSlot))
+          ?.id === "scout" &&
+        ((await dailyBuff(db, this.fixture.campaignId, actor.schoolSlot)).data
+          .earned.scout ?? 0) < BEACON_BUFF_CONFIG.scouts.dailyCap;
       await db.query("COMMIT");
       return {
+        activeBeacon: activeView(ownBeacon),
+        beaconTarget: nextBeaconTarget(initialBeacon(), ownBeacon),
+        rally,
+        canScout,
+        contributionCapacity: (
+          BigInt(balance("fixture-crystals")) +
+          BigInt(balance("fixture-credit")) /
+            BigInt(GAME_CONFIG.landmark.pointsPerCrystal)
+        ).toString(),
         ruleVersion: 1,
         runningMode: this.portalMode
           ? "portal"
@@ -584,9 +639,13 @@ export class SignedGameplay {
       [this.fixture.campaignId, a.actorId, resource, amount],
     );
     if (!updated.rowCount) throw new RuleRejection("INSUFFICIENT_BALANCE");
-    await db.query(
-      "INSERT INTO r2pl_v2.ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,$4,$5) ON CONFLICT(campaign_id,actor_id,command_key,resource) DO UPDATE SET amount=ledger_entries.amount+EXCLUDED.amount",
-      [this.fixture.campaignId, a.actorId, key, resource, amount],
+    await recordLedger(
+      db,
+      this.fixture.campaignId,
+      a.actorId,
+      key,
+      resource,
+      amount,
     );
   }
   private async apply(
@@ -707,6 +766,9 @@ export class SignedGameplay {
       };
     }
     if (c.action === "upkeep" || c.action === "consolidate") {
+      const before = (await clusters(db, this.fixture.campaignId)).find(
+        (v) => v.id === c.target && v.pair.includes(a.schoolSlot),
+      );
       if (!c.target || !c.amount) throw new RuleRejection("AMOUNT_REQUIRED");
       try {
         await payShared(
@@ -724,20 +786,94 @@ export class SignedGameplay {
         if (e instanceof RangeError) throw new RuleRejection(e.message);
         throw e;
       }
+      const completed =
+        c.action === "consolidate" &&
+        before &&
+        !(await clusters(db, this.fixture.campaignId)).some(
+          (v) => v.id === c.target,
+        );
+      const rebate = await sharedPaymentBuff(
+        db,
+        this.fixture.campaignId,
+        a.schoolSlot,
+        c.action === "upkeep" ? "upkeep" : "consolidation",
+        c.action === "upkeep"
+          ? GAME_CONFIG.knowledge.upkeepPoints
+          : completed
+            ? (before.required ?? 0)
+            : 0,
+      );
+      if (rebate) await this.change(db, a, key, "fixture-credit", rebate);
       return {
         status: "applied",
         reason: null,
         message: "Đã đóng góp Points cho cluster",
       };
     }
+    if (c.action === "scout") {
+      try {
+        await scoutFrontier(
+          db,
+          this.fixture.campaignId,
+          a.schoolSlot,
+          a.actorId,
+          key,
+        );
+      } catch (e) {
+        if (e instanceof RangeError) throw new RuleRejection(e.message);
+        throw e;
+      }
+      return {
+        status: "applied",
+        reason: null,
+        message: "Đã trinh sát một vùng biên cho trường",
+      };
+    }
     const o = c.target ? await this.object(db, c.target) : undefined;
     if (!o) throw new RuleRejection("UNKNOWN_OBJECT");
-    if (c.action === "contribute" || c.action === "guess") {
+    if (
+      c.action === "contribute" ||
+      c.action === "guess" ||
+      c.action === "rally"
+    ) {
       if (o.kind !== "landmark" || !(await this.path(db, o, a.schoolSlot)))
         throw new RuleRejection("KNOWLEDGE_PATH_REQUIRED");
       const b = await this.state(db, "beacon", o.id, initialBeacon()),
         slot = String(a.schoolSlot);
-      const currentTarget = target(b);
+      const school = await schoolBeacon(
+        db,
+        this.fixture.campaignId,
+        a.schoolSlot,
+      );
+      const currentTarget = nextBeaconTarget(b, school);
+      let deposited = 0;
+      if (c.action === "rally") {
+        if (b.holder === a.schoolSlot)
+          throw new RuleRejection("BEACON_ALREADY_ACTIVE");
+        const old = await this.state<
+          { target: string; createdAt: number } | undefined
+        >(db, "beacon-rally", slot, undefined);
+        if (old && now - old.createdAt < GAME_CONFIG.landmark.rallyCooldownMs)
+          throw new RuleRejection("RALLY_COOLDOWN");
+        await this.save(db, "beacon-rally", slot, {
+          target: o.id,
+          createdAt: now,
+        });
+        await db.query(
+          "INSERT INTO r2pl_v2.game_events(campaign_id,school_slot,title,body) VALUES($1,$2,$3,$4)",
+          [
+            this.fixture.campaignId,
+            a.schoolSlot,
+            "Hiệu triệu thắp đèn hiệu",
+            `${a.schoolName} kêu gọi cùng góp vào ${o.name}. Tiến độ ${b.pots[slot] ?? 0}/${currentTarget} Tinh thể.`,
+          ],
+        );
+        return {
+          status: "applied",
+          reason: null,
+          message: `Đã hiệu triệu cùng trường tới ${o.name}`,
+        };
+      }
       if (c.action === "guess") {
         if (!GAME_CONFIG.landmark.puzzleEnabled)
           throw new RuleRejection("PUZZLE_DISABLED");
@@ -762,18 +898,79 @@ export class SignedGameplay {
         }
         b.solved.push(a.schoolSlot);
         b.pots[slot] =
-          (b.pots[slot] ?? 0) +
-          Math.floor(
-            (currentTarget * GAME_CONFIG.landmark.puzzleBonusPercent) / 100,
-          );
+          (b.pots[slot] ?? 0) + GAME_CONFIG.landmark.puzzleBonusCrystals;
       } else {
         if (!c.amount) throw new RuleRejection("AMOUNT_REQUIRED");
-        await this.change(db, a, key, "fixture-crystals", -c.amount);
-        b.pots[slot] = (b.pots[slot] ?? 0) + c.amount;
+        if (b.holder === a.schoolSlot)
+          throw new RuleRejection("BEACON_ALREADY_ACTIVE");
+        const amount = Math.min(
+          c.amount,
+          Math.max(0, currentTarget - (b.pots[slot] ?? 0)),
+        );
+        deposited = amount;
+        const wallet = (
+          await db.query<{ balance: string }>(
+            "SELECT balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-crystals' FOR UPDATE",
+            [this.fixture.campaignId, a.actorId],
+          )
+        ).rows[0];
+        const available = BigInt(wallet?.balance ?? "0");
+        const shortage = Number(
+          BigInt(amount) > available ? BigInt(amount) - available : 0n,
+        );
+        if (shortage > 0) {
+          await this.change(
+            db,
+            a,
+            key,
+            "fixture-credit",
+            -shortage * GAME_CONFIG.landmark.pointsPerCrystal,
+          );
+          await this.change(db, a, key, "fixture-crystals", shortage);
+        }
+        await this.change(db, a, key, "fixture-crystals", -amount);
+        b.pots[slot] = (b.pots[slot] ?? 0) + amount;
       }
       let lit = false;
       if (b.holder !== a.schoolSlot && (b.pots[slot] ?? 0) >= currentTarget) {
-        if (b.holder !== null) b.takeovers++;
+        if (school.active && school.active !== o.id) {
+          const previous = await this.state(
+            db,
+            "beacon",
+            school.active,
+            initialBeacon(),
+          );
+          if (previous.holder === a.schoolSlot) previous.holder = null;
+          previous.pots[slot] = 0;
+          await this.save(db, "beacon", school.active, previous);
+        }
+        if (b.holder !== null) {
+          b.takeovers++;
+          const displaced = await schoolBeacon(
+            db,
+            this.fixture.campaignId,
+            b.holder,
+          );
+          b.pots[String(b.holder)] = 0;
+          displaced.active = null;
+          displaced.buffId = null;
+          await this.save(db, "school-beacon", String(b.holder), displaced);
+        }
+        const { buff, rank } = await chooseBuff(
+          db,
+          this.fixture.campaignId,
+          a.schoolSlot,
+          school.previous,
+        );
+        school.activations++;
+        school.lastCost = currentTarget;
+        school.active = o.id;
+        school.buffId = buff.id;
+        school.previous = [...school.previous, buff.id].slice(-2);
+        school.rankAtActivation = rank;
+        school.activatedAt = now;
+        await this.save(db, "school-beacon", slot, school);
+        b.lastCost = currentTarget;
         b.holder = a.schoolSlot;
         lit = true;
         await db.query(
@@ -789,6 +986,7 @@ export class SignedGameplay {
       return {
         status: "applied",
         reason: null,
+        ...(c.action === "contribute" ? { contributed: deposited } : {}),
         message: lit
           ? "Beacon đã sáng · Buff hoạt động"
           : "Đã cập nhật Crystal pot",
@@ -901,6 +1099,17 @@ export class SignedGameplay {
         await this.save(db, "gift-stock", o.tier, stock);
       }
     }
+    const benefit = await rewardBuff(
+      db,
+      this.fixture.campaignId,
+      a.schoolSlot,
+      kind,
+      reward.kind === "crystals" ? reward.quantity : 0,
+    );
+    if (reward.kind === "crystals" && benefit.crystals)
+      reward = { ...reward, quantity: reward.quantity + benefit.crystals };
+    if (benefit.points)
+      await this.change(db, a, key, "fixture-credit", benefit.points);
     let discovery: WorldObject | undefined;
     if (reward.kind === "points")
       await this.change(db, a, key, "fixture-credit", reward.quantity);
@@ -924,7 +1133,13 @@ export class SignedGameplay {
     }
     let nextAvailableAtMs: number | undefined;
     if (kind === "unistop") {
-      nextAvailableAtMs = now + GAME_CONFIG.rewards.unistopCooldownMs[o.tier];
+      nextAvailableAtMs =
+        now +
+        Math.ceil(
+          (GAME_CONFIG.rewards.unistopCooldownMs[o.tier] *
+            (100 - benefit.cooldownPercent)) /
+            100,
+        );
       cooldowns[o.id] = nextAvailableAtMs;
       await this.save(db, "cooldowns", a.actorId, cooldowns);
     }

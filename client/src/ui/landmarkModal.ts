@@ -1,3 +1,4 @@
+import { preserveSurface, UiOverlay } from "./overlay.ts";
 import { GAME_CONFIG } from "../../../shared/gameplay/gameConfig.ts";
 import { Icons } from "./icons.ts";
 // client/src/ui/landmarkModal.ts
@@ -28,6 +29,9 @@ export interface LandmarkModalData {
   crystalsBySchool: Record<string, number>;
   userPoints: number;
   userCrystals?: number | undefined;
+  contributionCapacity?: number | undefined;
+  activeBeaconName?: string | undefined;
+  rallied?: boolean | undefined;
   playerSchoolId: string;
   hasPath?: boolean | undefined;
   nameGuessed?: boolean | undefined;
@@ -49,6 +53,7 @@ export interface LandmarkModalCallbacks {
   onFocusLandmark?: (x: number, y: number) => void;
   onGuidePath?: (x: number, y: number) => void;
   onConvertPoints?: (amount: number) => void;
+  onRally?: (landmarkId: string) => void;
 }
 
 /** 10×10 cover grid: exactly 10 deterministic cells reveal the picture (90% hidden). */
@@ -67,11 +72,13 @@ export function puzzleMaskGrid(key: string): string {
 }
 
 export class LandmarkModal {
+  private surface: UiOverlay;
   private overlay: HTMLElement;
   private callbacks: LandmarkModalCallbacks;
   private currentLandmarkId: string | null = null;
   private currentData: LandmarkModalData | null = null;
   private isOpen = false;
+  private pending = false;
   private countdownTimer: any = null;
   public onConvertPoints?: (amount: number) => void;
 
@@ -92,6 +99,11 @@ export class LandmarkModal {
     this.overlay.addEventListener("touchend", stopProp, { passive: true });
 
     document.body.appendChild(this.overlay);
+    this.surface = new UiOverlay(
+      this.overlay,
+      () => this.close(),
+      "Công trình và đèn hiệu",
+    );
 
     this.bindGlobalEvents();
     this.bindLitEventListeners();
@@ -153,10 +165,17 @@ export class LandmarkModal {
 
   public open(data: LandmarkModalData): void {
     this.currentLandmarkId = data.landmarkId;
-    this.currentData = { ...data };
+    this.currentData = {
+      ...data,
+      guessCooldownUntil:
+        (data.guessCooldownUntil ?? 0) > Date.now()
+          ? data.guessCooldownUntil
+          : 0,
+    };
     this.isOpen = true;
     this.overlay.style.display = "flex";
     this.render();
+    this.surface.open();
     this.startCooldownTimer();
   }
 
@@ -164,8 +183,33 @@ export class LandmarkModal {
     this.open(data);
   }
 
+  public setPending(value: boolean): void {
+    this.pending = value;
+    this.overlay.setAttribute("aria-busy", String(value));
+    this.overlay
+      .querySelectorAll<HTMLButtonElement>(
+        "button[data-amount],#lm-rally,#lm-btn-guess-submit",
+      )
+      .forEach((button) => {
+        if (value) {
+          button.dataset.beforePending = String(button.disabled);
+          button.disabled = true;
+        } else if (button.dataset.beforePending !== undefined) {
+          button.disabled = button.dataset.beforePending === "true";
+          delete button.dataset.beforePending;
+        }
+      });
+  }
+
   public update(data: LandmarkModalData): void {
     if (!this.isOpen || this.currentLandmarkId !== data.landmarkId) return;
+    data = {
+      ...data,
+      guessCooldownUntil:
+        (data.guessCooldownUntil ?? 0) > Date.now()
+          ? data.guessCooldownUntil
+          : 0,
+    };
     if (JSON.stringify(this.currentData) === JSON.stringify(data)) return;
     const input =
       this.overlay.querySelector<HTMLInputElement>("#lm-guess-input");
@@ -193,6 +237,7 @@ export class LandmarkModal {
     this.isOpen = false;
     this.stopCooldownTimer();
     this.overlay.style.display = "none";
+    this.surface.close();
     this.currentLandmarkId = null;
     this.currentData = null;
   }
@@ -252,6 +297,7 @@ export class LandmarkModal {
 
   private bindGlobalEvents(): void {
     this.overlay.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (e.target === this.overlay) {
         this.close();
       }
@@ -266,6 +312,7 @@ export class LandmarkModal {
 
   private render(): void {
     if (!this.currentData) return;
+    const restore = preserveSurface(this.overlay);
 
     const data = this.currentData;
     const isLit = !!data.litBySchoolId && data.litBySchoolId !== "";
@@ -297,17 +344,9 @@ export class LandmarkModal {
     const myCrystals = crystalSource[data.playerSchoolId] || 0;
     const targetCrystals = maxCrystals;
     const guessBonus = landmarkGuessReward(targetCrystals);
-    const schoolCrystalEntries: { schoolId: string; crystals: number }[] = [];
-    Object.keys(crystalSource).forEach((sId) => {
-      const amt = crystalSource[sId];
-      if (amt !== undefined && amt > 0) {
-        schoolCrystalEntries.push({ schoolId: sId, crystals: amt });
-      }
-    });
-    schoolCrystalEntries.sort((a, b) => b.crystals - a.crystals);
-
     // Personal user balances
     const userCrystals = data.userCrystals || 0;
+    const capacity = data.contributionCapacity ?? userCrystals;
 
     // Guessing status & cooldown
     const now = Date.now();
@@ -358,14 +397,14 @@ export class LandmarkModal {
           <div class="lm-header-left">
             <div class="lm-modal-kicker">
               <span class="lm-kicker-icon">${Icons.beacon(16)}</span>
-              <span>[PREDATOR] // THẮP ĐÈN HIỆU CÔNG TRÌNH TRI THỨC</span>
+              <span>ĐÈN HIỆU CỦA TRƯỜNG</span>
             </div>
             <div class="lm-title-wrap">
               <h2 class="lm-title">${mySchoolGuessed ? data.name.toUpperCase() : "CÔNG TRÌNH BÍ ẨN"}</h2>
               ${categoryBadge}
             </div>
           </div>
-          <button class="lm-modal-close" id="lm-btn-close" title="Đóng [Esc]">
+          <button class="lm-modal-close" id="lm-btn-close" title="Đóng [Esc]" aria-label="Đóng công trình">
             ${Icons.close(18)}
           </button>
         </div>
@@ -373,7 +412,7 @@ export class LandmarkModal {
         <!-- Scrollable Modal Content -->
         <div class="lm-modal-body">
           <div class="landmark-puzzle-image ${mySchoolGuessed ? "solved" : "masked"}" data-mask-cells="${mySchoolGuessed ? 0 : 90}"><img src="/landmarks/${data.landmarkKey}.svg" alt="Hình gợi ý địa danh">${mySchoolGuessed ? "" : `<div class="pz-grid" aria-hidden="true">${puzzleMaskGrid(data.landmarkKey)}</div><span>Giải đố để mở ảnh</span>`}</div>
-          ${data.story ? `<p class="lm-story">📖 ${data.story}</p>` : ""}
+          ${data.story ? `<details class="lm-story-details"><summary>Câu chuyện địa danh</summary><p class="lm-story">${data.story}</p></details>` : ""}
           <!-- 1. Beacon Status Banner -->
           <div class="lm-beacon-banner lm-flame-banner ${isLit ? "is-lit" : "is-unlit"}" style="--school-color: ${litSchoolColor};">
             <div class="lm-flame-status-left">
@@ -404,18 +443,18 @@ export class LandmarkModal {
           <!-- Requirements Checklist -->
           <div class="requirements-checklist-card">
             <div class="checklist-header">
-              <span class="checklist-title">ĐIỀU KIỆN TƯƠNG TÁC ĐÈN HIỆU KỲ QUAN</span>
+              <span class="checklist-title">Điều kiện tương tác</span>
             </div>
 
             <!-- Item 1: Territory connection -->
             <div class="checklist-item ${data.hasPath !== false ? "ok" : "fail"}">
-              <span class="check-icon">${data.hasPath !== false ? "✅" : "❌"}</span>
+              <span class="check-icon">${data.hasPath !== false ? "✓" : "×"}</span>
               <div class="check-info">
-                <strong>Kết nối Tri thức của trường:</strong>
+                <strong>Đường tiếp cận</strong>
                 <span>${
                   data.hasPath !== false
-                    ? "Vùng Tri thức của trường đã chạm công trình (Được phép nạp Tinh Thể)"
-                    : `Chưa chạm vùng Tri thức${data.distanceToPerimeter ? ` (Cách rìa gần nhất ${data.distanceToPerimeter} ô)` : ""} — Cần mở đường chạm viền 40×40 để nạp Tinh Thể`
+                    ? "Tri thức trường đã chạm công trình. Có thể nạp vào quỹ."
+                    : `Chưa chạm vùng Tri thức${data.distanceToPerimeter ? ` (Cách rìa gần nhất ${data.distanceToPerimeter} ô)` : ""} — Cần mở đường chạm viền công trình để nạp Tinh Thể`
                 }</span>
                 ${
                   data.hasPath === false &&
@@ -435,9 +474,9 @@ export class LandmarkModal {
 
             <!-- Item 2: Landmark Guessing -->
             <div class="checklist-item ${mySchoolGuessed ? "ok" : isUnderCooldown ? "wait" : "warn"}">
-              <span class="check-icon">${mySchoolGuessed ? "✅" : isUnderCooldown ? "⏳" : "💡"}</span>
+              <span class="check-icon">${mySchoolGuessed ? "✓" : isUnderCooldown ? "·" : "?"}</span>
               <div class="check-info">
-                <strong>Giải đố Địa danh (+10% Tinh Thể = +${guessBonus} Tinh Thể):</strong>
+                <strong>Giải đố Địa danh (+${guessBonus} Tinh Thể vào quỹ · một lần/trường):</strong>
                 <span>${
                   mySchoolGuessed
                     ? `Trường bạn đã giải đố thành công! (+${guessBonus} Tinh Thể đã cộng)`
@@ -448,18 +487,6 @@ export class LandmarkModal {
               </div>
             </div>
 
-            <!-- Item 3: Crystal comparison vs Overtake target -->
-            <div class="checklist-item ${isLit && data.litBySchoolId === data.playerSchoolId ? "ok" : "warn"}">
-              <span class="check-icon">${isLit && data.litBySchoolId === data.playerSchoolId ? "⚡" : "🎯"}</span>
-              <div class="check-info">
-                <strong>Tiến độ Tinh thể trường bạn vs Mốc Đèn hiệu:</strong>
-                <span>Trường bạn đã nạp <strong>${myCrystals}</strong> / Mốc cần: <strong>${targetCrystals}</strong> Tinh thể ${
-                  isLit && data.litBySchoolId === data.playerSchoolId
-                    ? "— Trường bạn đang thắp sáng Đèn Hiệu!"
-                    : `(Cần nạp thêm ${Math.max(0, targetCrystals - myCrystals)} Tinh Thể để vượt)`
-                }</span>
-              </div>
-            </div>
           </div>
 
           <!-- 2. Crystal Progress Bar -->
@@ -482,8 +509,8 @@ export class LandmarkModal {
             <div class="lm-progress-note">
               ${
                 isLit
-                  ? `⚡ Đèn hiệu đang chiếu rọi đặc quyền tri thức cho <strong>${litSchool?.shortName || litSchoolName}</strong>. Trường khác có thể nạp vượt mốc (cao hơn ít nhất 5%, hiện cần ${targetCrystals.toLocaleString()} tinh thể) để thắp Đèn hiệu!`
-                  : `💡 Đạt mốc ${maxCrystals} Tinh thể để thắp sáng Đèn hiệu tri thức và kích hoạt đặc quyền toàn trường!`
+                  ? ` Đèn hiệu đang hoạt động cho <strong>${litSchool?.shortName || litSchoolName}</strong>. Mốc thắp tiếp theo tăng cố định ${GAME_CONFIG.landmark.activationStepCrystals} Tinh thể.`
+                  : ` Đạt mốc ${maxCrystals} Tinh thể để thắp sáng Đèn hiệu tri thức và kích hoạt đặc quyền toàn trường!`
               }
             </div>
           </div>
@@ -496,11 +523,11 @@ export class LandmarkModal {
               ${
                 data.buffActive
                   ? `<span class="lm-buff-badge active">${Icons.check(12)} ĐANG KÍCH HOẠT</span>`
-                  : `<span class="lm-buff-badge inactive">${Icons.lock(12)} ĐANG BẢO LƯU</span>`
+                  : `<span class="lm-buff-badge inactive">${Icons.lock(12)} CHƯA KÍCH HOẠT</span>`
               }
             </div>
             <div class="lm-buff-content">
-              ${mySchoolGuessed ? data.buffDescription : "Đặc quyền được khám phá khi trường thắp Đèn hiệu."}
+              ${isLit ? data.buffDescription : "Đặc quyền được xác định khi trường thắp Đèn hiệu."}
             </div>
           </div>
 
@@ -508,7 +535,7 @@ export class LandmarkModal {
           <div class="lm-guessing-card">
             <div class="lm-guess-header">
               <span class="lm-guess-icon">${Icons.target(16)}</span>
-              <span class="lm-guess-title">ĐOÁN TÊN CÔNG TRÌNH (NHẬN 10% MỐC THẮP = ${guessBonus} TINH THỂ)</span>
+              <span class="lm-guess-title">ĐOÁN TÊN CÔNG TRÌNH (+${guessBonus} TINH THỂ VÀO QUỸ · MỘT LẦN/TRƯỜNG)</span>
             </div>
 
             ${
@@ -535,7 +562,7 @@ export class LandmarkModal {
                       ? `
                       <div class="lm-guess-other-notice" style="margin-bottom: 8px; font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 5px;">
                         ${Icons.sparkles(12)}
-                        <span>Trường <strong>${guessedSchoolName}</strong> đã giải đố trước đó. Trường bạn vẫn có thể gửi dự đoán để nhận 10% mốc thắp của trường bạn!</span>
+                        <span>Trường <strong>${guessedSchoolName}</strong> đã giải đố trước đó. Trường bạn vẫn được giải đố một lần để cộng ${guessBonus} Tinh Thể vào quỹ công trình!</span>
                       </div>
                     `
                       : ""
@@ -545,7 +572,7 @@ export class LandmarkModal {
                       type="text"
                       id="lm-guess-input"
                       class="lm-guess-input ${isUnderCooldown ? "is-disabled" : ""}"
-                      placeholder="Nhập tên công trình viết thường..."
+                      placeholder="Nhập đầy đủ tên công trình…" aria-label="Đáp án tên công trình"
                       ${isUnderCooldown ? "disabled" : ""}
                       autocomplete="off"
                     />
@@ -561,55 +588,11 @@ export class LandmarkModal {
                   ${
                     isUnderCooldown
                       ? `<div class="lm-guess-timer" id="lm-guess-timer-text">Thời gian chờ thử lại: ${mm}:${ss}</div>`
-                      : `<div class="lm-guess-hint">Mỗi lần đoán sai sẽ áp dụng thời gian chờ thử lại là 10 phút. Tên công trình không phân biệt hoa thường.</div>`
+                      : `<div class="lm-guess-hint">Mỗi lần đoán sai sẽ áp dụng thời gian chờ thử lại là ${GAME_CONFIG.landmark.wrongGuessCooldownMs / 60000} phút. Tên công trình không phân biệt hoa thường.</div>`
                   }
                 </div>
               `
             }
-          </div>
-
-          <!-- 5. Contribution Leaderboard by School -->
-          <div class="lm-schools-leaderboard">
-            <div class="lm-section-title">
-              ${Icons.trophy(14)}
-              <span>TINH THỂ TRƯỜNG BẠN ĐÃ GÓP</span>
-            </div>
-            <div class="lm-schools-list">
-              ${
-                schoolCrystalEntries.length === 0
-                  ? `<div class="lm-no-fuel lm-no-crystals">Trường bạn chưa góp Tinh Thể vào công trình này.</div>`
-                  : schoolCrystalEntries
-                      .map((entry, idx) => {
-                        const sc = SCHOOL_ROSTER[entry.schoolId];
-                        const scColor = sc ? sc.colorHex : "#94a3b8";
-                        const isMySchool =
-                          entry.schoolId === data.playerSchoolId;
-                        const isLeading =
-                          idx === 0 && entry.crystals >= maxCrystals;
-                        const pctOfMax = Math.min(
-                          100,
-                          Math.round((entry.crystals / maxCrystals) * 100),
-                        );
-
-                        return `
-                      <div class="lm-school-row ${isMySchool ? "is-my-school" : ""}">
-                        <div class="lm-row-rank">#${idx + 1}</div>
-                        <div class="lm-row-school" style="color: ${scColor};">
-                          <span class="lm-school-dot" style="background: ${scColor};"></span>
-                          <strong>${sc ? sc.name : entry.schoolId.toUpperCase()}</strong>
-                          ${isMySchool ? `<span class="lm-my-badge">(Trường của bạn)</span>` : ""}
-                          ${isLeading ? `<span class="lm-leading-beacon lm-leading-flame">⚡ Thắp Đèn hiệu</span>` : ""}
-                        </div>
-                        <div class="lm-row-amount">
-                          <strong>${entry.crystals}</strong>
-                          <span>Tinh thể (${pctOfMax}%)</span>
-                        </div>
-                      </div>
-                    `;
-                      })
-                      .join("")
-              }
-            </div>
           </div>
 
           <!-- 6. Contribution Actions: Nạp Tinh Thể (+10, +20, +50) & Quy đổi Điểm Tri Thức -->
@@ -619,20 +602,13 @@ export class LandmarkModal {
                 ${Icons.crystal(16)}
                 <span>NẠP TINH THỂ THẮP SÁNG ĐÈN HIỆU</span>
               </div>
-              <div class="lm-user-balance-group">
-                <div class="lm-user-balance">
-                  <span class="lm-balance-label">Tinh thể cá nhân:</span>
-                  <span class="lm-balance-val crystal">
-                    ${Icons.crystal(14)}
-                    <strong>${userCrystals}</strong> Tinh thể
-                  </span>
-                </div>
-
-              </div>
             </div>
 
             <div class="lm-contrib-info">
-              Sử dụng Tinh thể thu thập từ UniStop/Rương để nạp vào Đèn hiệu công trình. Đèn hiệu cần nạp đủ Tinh thể để kích hoạt đặc quyền tri thức toàn trường.
+              Cùng góp đủ mốc để thắp Đèn hiệu cho toàn trường.
+              ${data.activeBeaconName ? `Khi đủ mốc, Đèn hiệu ${data.activeBeaconName} sẽ tắt; quỹ tại công trình cũ tiêu tán và buff cũ hết hiệu lực.` : "Mỗi trường chỉ có một Đèn hiệu hoạt động."}
+              ${data.rallied ? '<p class="lm-rally-status">Trường đang hiệu triệu tại công trình này.</p>' : ""}
+              <button type="button" class="lm-crystal-btn" id="lm-rally" ${data.hasPath === false || data.buffActive ? "disabled" : ""}>Hiệu triệu cùng trường</button>
             </div>
 
             <div class="lm-deposit-label">Nạp Tinh thể vào Đèn hiệu công trình:</div>
@@ -647,7 +623,9 @@ export class LandmarkModal {
                 )
                 .map((amount) => {
                   const canAfford =
-                    userCrystals >= amount && data.hasPath !== false;
+                    capacity >= amount &&
+                    data.hasPath !== false &&
+                    !data.buffActive;
                   return `<button class="lm-crystal-btn ${canAfford ? "can-afford" : "cannot-afford"}" data-amount="${amount}" ${canAfford ? "" : "disabled"}><span class="lm-btn-icon">${Icons.crystal(16)}</span><span class="lm-btn-text">${amount === targetCrystals - myCrystals ? "Nạp đủ mốc" : "Nạp"} +${amount} Tinh Thể</span><span class="lm-btn-cost">-${amount} Tinh Thể</span></button>`;
                 })
                 .join("")}
@@ -659,19 +637,26 @@ export class LandmarkModal {
         <div class="lm-modal-footer">
           <div class="lm-footer-hint">
             ${Icons.lightning(12)}
-            <span>Thắp sáng Đèn hiệu công trình để kích hoạt đặc quyền tri thức cho toàn bộ học viện của bạn!</span>
+            <span>Đèn hiệu kích hoạt đặc quyền cho toàn trường.</span>
           </div>
           <button class="lm-footer-close-btn" id="lm-btn-footer-close">
-            Đóng Giao Diện
+            Đóng
           </button>
         </div>
       </div>
     `;
 
     this.bindActionEvents();
+    restore();
+    if (this.pending) this.setPending(true);
   }
 
   private bindActionEvents(): void {
+    this.overlay.querySelector("#lm-rally")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.currentLandmarkId)
+        this.callbacks.onRally?.(this.currentLandmarkId);
+    });
     const closeBtn = this.overlay.querySelector("#lm-btn-close");
     closeBtn?.addEventListener("click", () => this.close());
 
@@ -711,6 +696,7 @@ export class LandmarkModal {
     ) as HTMLButtonElement | null;
 
     const doSubmitGuess = () => {
+      if (this.pending || guessSubmitBtn?.disabled) return;
       if (!guessInput || !this.currentLandmarkId) return;
       const guess = guessInput.value.trim();
       if (!guess) return;

@@ -1,0 +1,502 @@
+TAP version 13
+# Subtest: confirmed schools retain all immutable slots; AMTECH accounts never add a competitive school
+ok 1 - confirmed schools retain all immutable slots; AMTECH accounts never add a competitive school
+  ---
+  duration_ms: 1.5003
+  type: 'test'
+  ...
+# Error: UNAUTHORIZED
+#     at PortalStore.consumeSocketTicket (file:///C:/Users/Nem/Desktop/explore-journey/server/integration/PortalStore.ts:680:31)
+#     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+#     at async Object.authenticate (file:///C:/Users/Nem/Desktop/explore-journey/server/integration/SchoolPlayServer.ts:152:15)
+#     at async GatewayRoom.onAuth (file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/GatewayRoom.ts:52:24)
+#     at async GatewayRoom._onJoin (file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/core/build/Room.mjs:1105:28)
+#     at async connectClientToRoom (file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/core/build/Transport.mjs:132:3)
+#     at async WebSocketServer.onConnection (file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/ws-transport/build/WebSocketTransport.mjs:192:7)
+# Room connection was closed unexpectedly (4002):
+# Subtest: signed staff provisioning → PKCE admin-only editor → draft/publish/history/concurrency → revoke, without wallets or a ninth HQ
+ok 2 - signed staff provisioning → PKCE admin-only editor → draft/publish/history/concurrency → revoke, without wallets or a ninth HQ
+  ---
+  duration_ms: 1265.0631
+  type: 'test'
+  ...
+# Subtest: private 20-buff pool partitions all eight schools at rank boundaries
+ok 3 - private 20-buff pool partitions all eight schools at rank boundaries
+  ---
+  duration_ms: 1.2045
+  type: 'test'
+  ...
+# Subtest: each actual rank receives only its server-side pool on illumination
+ok 4 - each actual rank receives only its server-side pool on illumination
+  ---
+  duration_ms: 1516.4746
+  type: 'test'
+  ...
+# Subtest: HTTP contributions auto-convert only the shortage; puzzle fixed once; switch burns old pot and survives restart
+ok 5 - HTTP contributions auto-convert only the shortage; puzzle fixed once; switch burns old pot and survives restart
+  ---
+  duration_ms: 1022.5647
+  type: 'test'
+  ...
+# Subtest: racing deposits ignite once; insufficient funds and missing contact roll back both currencies
+ok 6 - racing deposits ignite once; insufficient funds and missing contact roll back both currencies
+  ---
+  duration_ms: 994.2147
+  type: 'test'
+  ...
+# Subtest: legacy multiple beacons migrate once to a single effect without granting resources
+ok 7 - legacy multiple beacons migrate once to a single effect without granting resources
+  ---
+  duration_ms: 636.6353
+  type: 'test'
+  ...
+# Subtest: exploration buff families use real authority, retain adjacency and daily caps, including cohort and scout
+    # Subtest: vanguard
+    ok 1 - vanguard
+      ---
+      duration_ms: 178.3585
+      type: 'test'
+      ...
+    # Subtest: assault
+    ok 2 - assault
+      ---
+      duration_ms: 140.7494
+      type: 'test'
+      ...
+    # Subtest: thrift
+    ok 3 - thrift
+      ---
+      duration_ms: 366.1763
+      type: 'test'
+      ...
+    # Subtest: breakthrough
+    ok 4 - breakthrough
+      ---
+      duration_ms: 94.5492
+      type: 'test'
+      ...
+    # Subtest: foothold
+    ok 5 - foothold
+      ---
+      duration_ms: 117.4837
+      type: 'test'
+      ...
+    # Subtest: wide
+    ok 6 - wide
+      ---
+      duration_ms: 15.3697
+      type: 'test'
+      ...
+    # Subtest: vision
+    ok 7 - vision
+      ---
+      duration_ms: 11.9738
+      type: 'test'
+      ...
+    # Subtest: cohort
+    ok 8 - cohort
+      ---
+      duration_ms: 262.2512
+      type: 'test'
+      ...
+    # Subtest: scout
+    ok 9 - scout
+      ---
+      duration_ms: 157.8658
+      type: 'test'
+      ...
+    1..9
+ok 8 - exploration buff families use real authority, retain adjacency and daily caps, including cohort and scout
+  ---
+  duration_ms: 1877.0158
+  type: 'test'
+  ...
+# Subtest: reward buff families apply after RNG, keep keys/claims/cooldowns, and never reset past cooldowns
+    # Subtest: urgent
+    ok 1 - urgent
+      ---
+      duration_ms: 538.4217
+      type: 'test'
+      ...
+    # Subtest: reserve
+    ok 2 - reserve
+      ---
+      duration_ms: 570.5431
+      type: 'test'
+      ...
+    # Subtest: reinforcement
+    ok 3 - reinforcement
+      ---
+      duration_ms: 211.9175
+      type: 'test'
+      ...
+    # Subtest: supply
+    ok 4 - supply
+      ---
+      duration_ms: 90.8551
+      type: 'test'
+      ...
+    # Subtest: return
+    ok 5 - return
+      ---
+      duration_ms: 77.6879
+      type: 'test'
+      ...
+    # Subtest: excavation
+    ok 6 - excavation
+      ---
+      duration_ms: 34.0501
+      type: 'test'
+      ...
+    # Subtest: harvest
+    ok 7 - harvest
+      ---
+      duration_ms: 34.3967
+      type: 'test'
+      ...
+    # Subtest: revival
+    ok 8 - revival
+      ---
+      duration_ms: 31.2027
+      type: 'test'
+      ...
+    # Subtest: comeback
+    ok 9 - comeback
+      ---
+      duration_ms: 203.0153
+      type: 'test'
+      ...
+    1..9
+ok 9 - reward buff families apply after RNG, keep keys/claims/cooldowns, and never reset past cooldowns
+  ---
+  duration_ms: 2314.2669
+  type: 'test'
+  ...
+# Subtest: upkeep and consolidation buffs refund real successful payments without creating refundable bonus escrow
+    # Subtest: upkeep
+    ok 1 - upkeep
+      ---
+      duration_ms: 197.8306
+      type: 'test'
+      ...
+    # Subtest: consolidation
+    ok 2 - consolidation
+      ---
+      duration_ms: 48.2297
+      type: 'test'
+      ...
+    1..2
+ok 10 - upkeep and consolidation buffs refund real successful payments without creating refundable bonus escrow
+  ---
+  duration_ms: 755.25
+  type: 'test'
+  ...
+# Subtest: 7x7 scout and exploration snapshots cross four chunks and never relay rival masks or private chests
+ok 11 - 7x7 scout and exploration snapshots cross four chunks and never relay rival masks or private chests
+  ---
+  duration_ms: 1195.6914
+  type: 'test'
+  ...
+# Subtest: landmark funding uses combined capacity without inventory or a separate conversion step
+ok 12 - landmark funding uses combined capacity without inventory or a separate conversion step
+  ---
+  duration_ms: 51.9129
+  type: 'test'
+  ...
+# Subtest: compact toolbar preserves the actionable inventory and mobile tile confirmation
+ok 13 - compact toolbar preserves the actionable inventory and mobile tile confirmation
+  ---
+  duration_ms: 60.0313
+  type: 'test'
+  ...
+# Subtest: wallet refresh preserves dialog focus, backdrop consumes input, and close restores opener
+ok 14 - wallet refresh preserves dialog focus, backdrop consumes input, and close restores opener
+  ---
+  duration_ms: 13.464
+  type: 'test'
+  ...
+# Subtest: the shipped HCMUT GLB's roof, outer wing and base are picked in isometric view
+ok 15 - the shipped HCMUT GLB's roof, outer wing and base are picked in isometric view
+  ---
+  duration_ms: 28.8204
+  type: 'test'
+  ...
+# Subtest: isometric rays select the high geometry of each actual procedural building
+ok 16 - isometric rays select the high geometry of each actual procedural building
+  ---
+  duration_ms: 4.4663
+  type: 'test'
+  ...
+# Subtest: empty space inside a hexagonal HQ's box falls through to the correct ground tile
+ok 17 - empty space inside a hexagonal HQ's box falls through to the correct ground tile
+  ---
+  duration_ms: 1.4234
+  type: 'test'
+  ...
+# Subtest: broad-phase filters off-ray and hidden buildings; narrow-phase holes never become hits
+ok 18 - broad-phase filters off-ray and hidden buildings; narrow-phase holes never become hits
+  ---
+  duration_ms: 0.6327
+  type: 'test'
+  ...
+# Subtest: closest visible mesh wins independently of catalog order or invisible children
+ok 19 - closest visible mesh wins independently of catalog order or invisible children
+  ---
+  duration_ms: 0.572
+  type: 'test'
+  ...
+# Subtest: mount lifecycle replaces fallback bounds with fitted Z-up GLB bounds, then recaches relocation
+ok 20 - mount lifecycle replaces fallback bounds with fitted Z-up GLB bounds, then recaches relocation
+  ---
+  duration_ms: 1.4981
+  type: 'test'
+  ...
+# Subtest: disposing an in-flight mount prevents a late model from re-registering its hitbox
+ok 21 - disposing an in-flight mount prevents a late model from re-registering its hitbox
+  ---
+  duration_ms: 0.4105
+  type: 'test'
+  ...
+# Subtest: cached world bounds include parent transforms and follow a chest lid's changed pose
+ok 22 - cached world bounds include parent transforms and follow a chest lid's changed pose
+  ---
+  duration_ms: 0.7323
+  type: 'test'
+  ...
+# Subtest: inventory refresh keeps destinations expanded and opening an object removes the covering panel
+ok 23 - inventory refresh keeps destinations expanded and opening an object removes the covering panel
+  ---
+  duration_ms: 233.9955
+  type: 'test'
+  ...
+# Subtest: real inventory buttons spin -> private discovery -> chest -> authoritative wallet, with no client reward mutation
+ok 24 - real inventory buttons spin -> private discovery -> chest -> authoritative wallet, with no client reward mutation
+  ---
+  duration_ms: 1210.6082
+  type: 'test'
+  ...
+# Subtest: expansion guide uses loaded own-school edges across seams and excludes protected HQs
+ok 25 - expansion guide uses loaded own-school edges across seams and excludes protected HQs
+  ---
+  duration_ms: 8.5086
+  type: 'test'
+  ...
+# Subtest: player mode is default and operator modes require explicit entry
+ok 26 - player mode is default and operator modes require explicit entry
+  ---
+  duration_ms: 0.2967
+  type: 'test'
+  ...
+# Subtest: player names hide fixture ordinals and unsolved Landmark names
+ok 27 - player names hide fixture ordinals and unsolved Landmark names
+  ---
+  duration_ms: 0.7727
+  type: 'test'
+  ...
+# Subtest: station labels obey footprint fog and label priority at close/overview zoom
+ok 28 - station labels obey footprint fog and label priority at close/overview zoom
+  ---
+  duration_ms: 11.2009
+  type: 'test'
+  ...
+# Subtest: manual intent survives transport while legacy auto payload stays compatible
+ok 29 - manual intent survives transport while legacy auto payload stays compatible
+  ---
+  duration_ms: 0.73
+  type: 'test'
+  ...
+# Subtest: portal auth binds raw bytes, request target, campaign, timestamp, and key rotation
+ok 30 - portal auth binds raw bytes, request target, campaign, timestamp, and key rotation
+  ---
+  duration_ms: 2.317
+  type: 'test'
+  ...
+# Subtest: mounted partner API -> PKCE session -> actual WebSocket spend -> restart, replay, correction and suspension
+ok 31 - mounted partner API -> PKCE session -> actual WebSocket spend -> restart, replay, correction and suspension
+  ---
+  duration_ms: 1133.3736
+  type: 'test'
+  ...
+# Subtest: distance fog preserves contrast at the real 1,800-unit camera distance
+ok 32 - distance fog preserves contrast at the real 1,800-unit camera distance
+  ---
+  duration_ms: 0.6947
+  type: 'test'
+  ...
+# Subtest: tree scattering is reproducible, grounded and clear of foundations
+ok 33 - tree scattering is reproducible, grounded and clear of foundations
+  ---
+  duration_ms: 10.7794
+  type: 'test'
+  ...
+# Subtest: cosmetic discovery atlas follows own snapshots/deltas across seams, preserves holes and clears on school change
+ok 34 - cosmetic discovery atlas follows own snapshots/deltas across seams, preserves holes and clears on school change
+  ---
+  duration_ms: 24.9974
+  type: 'test'
+  ...
+# Subtest: terrain and instanced crowns share world-space fog without an opaque cover or terrain discard
+ok 35 - terrain and instanced crowns share world-space fog without an opaque cover or terrain discard
+  ---
+  duration_ms: 1.1281
+  type: 'test'
+  ...
+# Subtest: public terrain and HQ dressing cannot reveal chest foundations or add interaction targets
+ok 36 - public terrain and HQ dressing cannot reveal chest foundations or add interaction targets
+  ---
+  duration_ms: 16.8687
+  type: 'test'
+  ...
+# Subtest: dev session contract validates synthetic identities, homes and transport bounds
+ok 37 - dev session contract validates synthetic identities, homes and transport bounds
+  ---
+  duration_ms: 1.8994
+  type: 'test'
+  ...
+# Subtest: eight-school playable server shares durable bot/student world with actor-private profiles and retry receipts
+ok 38 - eight-school playable server shares durable bot/student world with actor-private profiles and retry receipts
+  ---
+  duration_ms: 3277.5146
+  type: 'test'
+  ...
+# Subtest: expansion bootstrap rejects malformed HQ geometry, duplicate schools and campaign scope
+ok 39 - expansion bootstrap rejects malformed HQ geometry, duplicate schools and campaign scope
+  ---
+  duration_ms: 2.4464
+  type: 'test'
+  ...
+# Subtest: signed config publishes exact roster, footprints, costs and unnormalized reward tables
+ok 40 - signed config publishes exact roster, footprints, costs and unnormalized reward tables
+  ---
+  duration_ms: 1.5418
+  type: 'test'
+  ...
+# Subtest: signed routes keep chests private, persist Running into playable wallet, reject forged identity and replay once
+ok 41 - signed routes keep chests private, persist Running into playable wallet, reject forged identity and replay once
+  ---
+  duration_ms: 879.36
+  type: 'test'
+  ...
+# Subtest: signed rewards enforce cooldown, matching tier, finite Chest winner, Gift fallback, landmark cooldown and linear takeover
+ok 42 - signed rewards enforce cooldown, matching tier, finite Chest winner, Gift fallback, landmark cooldown and linear takeover
+  ---
+  duration_ms: 750.1419
+  type: 'test'
+  ...
+# Subtest: rendered river tiles remain ordinary adjacent exploration with a single PostgreSQL Point debit
+ok 43 - rendered river tiles remain ordinary adjacent exploration with a single PostgreSQL Point debit
+  ---
+  duration_ms: 355.282
+  type: 'test'
+  ...
+# Subtest: shared join charges 2, rejects third school, keeps private cluster views, and refunds expired consolidation
+ok 44 - shared join charges 2, rejects third school, keeps private cluster views, and refunds expired consolidation
+  ---
+  duration_ms: 1027.4976
+  type: 'test'
+  ...
+# Subtest: admin validates publish, moves protected HQ ownership, restores persisted homes and rollback; notifications are durable
+ok 45 - admin validates publish, moves protected HQ ownership, restores persisted homes and rollback; notifications are durable
+  ---
+  duration_ms: 2010.9547
+  type: 'test'
+  ...
+# Subtest: gift check-in redemption generates giftCode, retrieves by code, and redeems once idempotently
+ok 46 - gift check-in redemption generates giftCode, retrieves by code, and redeems once idempotently
+  ---
+  duration_ms: 1170.5425
+  type: 'test'
+  ...
+# Subtest: signed 5x5 fog relay converges across four chunks without exposing rival masks
+ok 47 - signed 5x5 fog relay converges across four chunks without exposing rival masks
+  ---
+  duration_ms: 688.0661
+  type: 'test'
+  ...
+# Subtest: manual Dock intent is validated before debit and protected by stable-key replay
+ok 48 - manual Dock intent is validated before debit and protected by stable-key replay
+  ---
+  duration_ms: 667.5774
+  type: 'test'
+  ...
+# Subtest: fixed simplex seeds and authored layout produce the same biomes regardless of load/order
+ok 49 - fixed simplex seeds and authored layout produce the same biomes regardless of load/order
+  ---
+  duration_ms: 15.8862
+  type: 'test'
+  ...
+# Subtest: all 48 building foundation zones stay level and reject water and nature, including moved layouts
+ok 50 - all 48 building foundation zones stay level and reject water and nature, including moved layouts
+  ---
+  duration_ms: 1.9644
+  type: 'test'
+  ...
+# Subtest: central lake and both river arms have depressed water and sandy banks without blocking knowledge tiles
+ok 51 - central lake and both river arms have depressed water and sandy banks without blocking knowledge tiles
+  ---
+  duration_ms: 9.5624
+  type: 'test'
+  ...
+# Subtest: chunk meshes contain real terraces, lit cliff faces and clipped edge chunks
+ok 52 - chunk meshes contain real terraces, lit cliff faces and clipped edge chunks
+  ---
+  duration_ms: 56.5248
+  type: 'test'
+  ...
+# Subtest: terrain picking matches rendered tops/cliffs in isometric view and selection follows height
+ok 53 - terrain picking matches rendered tops/cliffs in isometric view and selection follows height
+  ---
+  duration_ms: 38.4894
+  type: 'test'
+  ...
+# Subtest: voxel prop plans are repeatable, discovery-filtered, foundation-free and grounded at terrain height
+ok 54 - voxel prop plans are repeatable, discovery-filtered, foundation-free and grounded at terrain height
+  ---
+  duration_ms: 30.0469
+  type: 'test'
+  ...
+# Subtest: viewport LOD builds bounded detail incrementally, hides small props beyond 400 and becomes idle
+ok 55 - viewport LOD builds bounded detail incrementally, hides small props beyond 400 and becomes idle
+  ---
+  duration_ms: 111.6814
+  type: 'test'
+  ...
+# Subtest: terrain ownership data retains neutral biomes, school tint 68%, shared tint 50/50
+ok 56 - terrain ownership data retains neutral biomes, school tint 68%, shared tint 50/50
+  ---
+  duration_ms: 1.8393
+  type: 'test'
+  ...
+# Subtest: territory edges inspect four neighbors across chunk seams and follow deltas
+ok 57 - territory edges inspect four neighbors across chunk seams and follow deltas
+  ---
+  duration_ms: 3.9364
+  type: 'test'
+  ...
+# Subtest: coarse terrain UVs retain individual tile sampling while public terrain receives dusk lighting
+ok 58 - coarse terrain UVs retain individual tile sampling while public terrain receives dusk lighting
+  ---
+  duration_ms: 3.0041
+  type: 'test'
+  ...
+# Subtest: Vite forwards both Colyseus matchmaking and binary WebSocket messages
+ok 59 - Vite forwards both Colyseus matchmaking and binary WebSocket messages
+  ---
+  duration_ms: 308.1632
+  type: 'test'
+  ...
+# Subtest: Vite API proxy preserves Host so browser POST Origin passes same-origin validation
+ok 60 - Vite API proxy preserves Host so browser POST Origin passes same-origin validation
+  ---
+  duration_ms: 34.0832
+  type: 'test'
+  ...
+1..60
+# tests 80
+# suites 0
+# pass 80
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 43486.0621

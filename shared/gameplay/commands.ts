@@ -9,7 +9,9 @@ export interface GameCommand {
     | "open"
     | "running"
     | "upkeep"
-    | "consolidate";
+    | "consolidate"
+    | "rally"
+    | "scout";
   readonly target?: string;
   readonly amount?: number;
   readonly guess?: string;
@@ -22,6 +24,13 @@ export interface LandmarkView {
   readonly solved: boolean;
   readonly cooldownUntil: number;
   readonly hasPath: boolean;
+  readonly buff?: ActiveBeaconView | undefined;
+  readonly rallied?: boolean | undefined;
+}
+export interface ActiveBeaconView {
+  readonly landmarkId: string;
+  readonly name: string;
+  readonly description: string;
 }
 export interface GiftEntitlementView {
   readonly id: string;
@@ -32,6 +41,11 @@ export interface GiftEntitlementView {
   readonly schoolName?: string | undefined;
 }
 export interface GameView {
+  readonly activeBeacon?: ActiveBeaconView | undefined;
+  readonly beaconTarget?: number | undefined;
+  readonly rally?: { target: string; createdAt: number } | undefined;
+  readonly canScout?: boolean | undefined;
+  readonly contributionCapacity?: string | undefined;
   readonly runningMode?: "http" | "synthetic" | "portal";
   readonly ruleVersion: 1;
   readonly crystals: string;
@@ -60,6 +74,7 @@ export interface GameView {
   readonly events: readonly { id: string; title: string; body: string }[];
 }
 export interface GameReceipt {
+  readonly contributed?: number | undefined;
   readonly status: "applied" | "rejected";
   readonly reason: string | null;
   readonly reward?: RewardOutcome | undefined;
@@ -93,6 +108,8 @@ export function parseGameCommand(input: unknown): GameCommand {
       "running",
       "upkeep",
       "consolidate",
+      "rally",
+      "scout",
     ].includes(v.action)
   )
     throw new TypeError("Invalid command");

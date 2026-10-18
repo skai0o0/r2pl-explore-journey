@@ -1,7 +1,8 @@
+@layer legacy {
 .guidance-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9500;
+  z-index: var(--layer-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,7 +50,7 @@
   background: rgba(3, 7, 14, 0.82);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 1200;
+  z-index: var(--layer-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1054,7 +1055,7 @@
 .carousel-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--layer-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1517,7 +1518,7 @@
   border: 1px solid var(--predator-cyan);
   box-shadow: 0 0 30px rgba(0, 255, 232, 0.25);
   border-radius: 8px;
-  z-index: 1100;
+  z-index: var(--layer-dialog);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1829,7 +1830,7 @@
   top: 18px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 99999;
+  z-index: var(--layer-dialog);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2153,7 +2154,7 @@
   inset: 0;
   background: rgba(2, 6, 12, 0.85);
   backdrop-filter: blur(8px);
-  z-index: 1000;
+  z-index: var(--layer-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2321,7 +2322,7 @@
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10000;
+  z-index: var(--layer-feedback);
   overflow: hidden;
 }
 
@@ -2462,3 +2463,5 @@
   background: #facc15;
 }
 
+
+}

@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Pool, PoolClient } from "pg";
 import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
-import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import {
+  BEACON_BUFF_CONFIG,
+  GAME_CONFIG,
+} from "../../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
   decodeFogChunk,
@@ -22,7 +25,9 @@ import {
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
 import { schoolBit } from "../../shared/world/registry.ts";
+import { explorationBuff } from "../integration/BeaconBuffs.ts";
 import { adjustKnowledgeScore } from "../integration/KnowledgeScore.ts";
+import { recordLedger } from "./WalletLedger.ts";
 import {
   clusters,
   joinShared,
@@ -331,9 +336,7 @@ export class M3TestMutationService {
           client,
           command.campaignId,
           command.tileIndex,
-          this.#boundary.ruleVersion === 1
-            ? GAME_CONFIG.world.fogRevealRadius
-            : 0,
+          this.#boundary.ruleVersion === 1 ? BEACON_BUFF_CONFIG.scoutRadius : 0,
         );
       }
       if (this.#boundary?.ruleVersion === 1)
@@ -502,6 +505,16 @@ export class M3TestMutationService {
               : {}),
           };
         } else {
+          const benefit =
+            this.#boundary?.ruleVersion === 1
+              ? await explorationBuff(
+                  client,
+                  command.campaignId,
+                  command.schoolSlot,
+                  command.actorId,
+                  holders.length === 1,
+                )
+              : { points: 0, radius: 0 };
           if (this.#boundary?.ruleVersion === 1 && holders.length === 1)
             await joinShared(
               client,
@@ -571,16 +584,8 @@ export class M3TestMutationService {
           }
           if (this.#boundary?.ruleVersion === 1) {
             const fogs = new Map<number, { fog: Buffer; revision: string }>();
-            for (
-              let dz = -GAME_CONFIG.world.fogRevealRadius;
-              dz <= GAME_CONFIG.world.fogRevealRadius;
-              dz++
-            )
-              for (
-                let dx = -GAME_CONFIG.world.fogRevealRadius;
-                dx <= GAME_CONFIG.world.fogRevealRadius;
-                dx++
-              ) {
+            for (let dz = -benefit.radius; dz <= benefit.radius; dz++)
+              for (let dx = -benefit.radius; dx <= benefit.radius; dx++) {
                 const nx = x + dx,
                   nz = z + dz;
                 if (nx < 0 || nz < 0 || nx >= 1000 || nz >= 1000) continue;
@@ -642,7 +647,7 @@ export class M3TestMutationService {
           }
           if (effectiveCost > 0n)
             await client.query(
-              "INSERT INTO ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',$4)",
+              "INSERT INTO ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',$4) ON CONFLICT(campaign_id,actor_id,command_key,resource) DO UPDATE SET amount=ledger_entries.amount+EXCLUDED.amount",
               [
                 command.campaignId,
                 command.actorId,
@@ -650,6 +655,16 @@ export class M3TestMutationService {
                 (-effectiveCost).toString(),
               ],
             );
+          if (benefit.points) {
+            await client.query(
+              "UPDATE wallet_accounts SET balance=balance+$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+              [command.campaignId, command.actorId, benefit.points],
+            );
+            await recordLedger(client,command.campaignId,command.actorId,Buffer.from(command.key),"fixture-credit",benefit.points);
+            wallet.rows[0].balance = (
+              BigInt(wallet.rows[0].balance) + BigInt(benefit.points)
+            ).toString();
+          }
           const outbox = await client.query<{ id: string }>(
             "INSERT INTO outbox_events(campaign_id,actor_id,command_key,event_type,event_version,payload) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
             [

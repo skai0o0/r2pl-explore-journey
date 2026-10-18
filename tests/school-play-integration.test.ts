@@ -81,6 +81,7 @@ test("eight-school playable server shares durable bot/student world with actor-p
     const headers = { Authorization: `Bearer ${actor.token}` };
     const before = await server.accounts.profile(actor.token);
     assert(before?.ledgerConserved);
+    assert.equal(before.hasSpentPoints, false);
     peer = new BotPeer(
       `ws://127.0.0.1:${server.websocketPort}`,
       actor.token,
@@ -89,6 +90,16 @@ test("eight-school playable server shares durable bot/student world with actor-p
       987,
     );
     await peer.connect();
+    const rejected = await peer.explore(
+      tileIndex(0, 0),
+      Uint8Array.from(Buffer.from(randomUUID().replaceAll("-", ""), "hex")),
+    );
+    assert.equal(rejected.status, ACK_STATUS.REJECTED);
+    assert.equal(
+      (await server.accounts.profile(actor.token))?.hasSpentPoints,
+      false,
+      "rejected requests do not end onboarding",
+    );
     const intent = { tile: tileIndex(actor.home.x + 10, actor.home.z) };
     const key = Uint8Array.from(
       Buffer.from(randomUUID().replaceAll("-", ""), "hex"),
@@ -102,10 +113,16 @@ test("eight-school playable server shares durable bot/student world with actor-p
       balance: string;
       ledgerConserved: boolean;
       schoolSlot: number;
+      hasSpentPoints: boolean;
     };
     assert.equal(BigInt(profile.balance), BigInt(before.balance) - 1n);
     assert.equal(profile.schoolSlot, 0);
     assert.equal(profile.ledgerConserved, true);
+    assert.equal(profile.hasSpentPoints, true);
+    assert.equal(
+      (await server.accounts.profile(config.players[1]!.token))?.hasSpentPoints,
+      false,
+    );
     const receipts = (await (
       await fetch(`${base}/api/fixture/receipts`, { headers })
     ).json()) as { receipts: { status: string; amount: string }[] };
@@ -114,6 +131,43 @@ test("eight-school playable server shares durable bot/student world with actor-p
         (r) => r.status === "test_applied" && r.amount === "-1",
       ),
     );
+    // Synthetic incoming credit restores the opening balance; it must not reset onboarding.
+    const creditKey = Buffer.from(randomUUID().replaceAll("-", ""), "hex");
+    const credit = await pool.connect();
+    try {
+      await credit.query("BEGIN");
+      await credit.query(
+        "INSERT INTO r2pl_v2.command_results(campaign_id,actor_id,command_key,payload_hash,status,result) VALUES($1,$2,$3,$4,'test_applied','{}')",
+        [
+          campaignId,
+          server.fixture.actors[0]!.actorId,
+          creditKey,
+          Buffer.alloc(32),
+        ],
+      );
+      await credit.query(
+        "INSERT INTO r2pl_v2.ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',1)",
+        [campaignId, server.fixture.actors[0]!.actorId, creditKey],
+      );
+      await credit.query(
+        "UPDATE r2pl_v2.wallet_accounts SET balance=balance+1 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+        [campaignId, server.fixture.actors[0]!.actorId],
+      );
+      await credit.query("COMMIT");
+    } catch (error) {
+      await credit.query("ROLLBACK");
+      throw error;
+    } finally {
+      credit.release();
+    }
+    const credited = await server.accounts.profile(actor.token);
+    assert.equal(credited?.balance, before.balance);
+    assert.equal(
+      credited?.hasSpentPoints,
+      true,
+      "incoming credit never erases a committed debit",
+    );
+    assert.equal(credited?.ledgerConserved, true);
     const bots = server.startBots(1);
     await bots;
     const schoolStats = (await (
@@ -132,8 +186,13 @@ test("eight-school playable server shares durable bot/student world with actor-p
       campaignId,
     );
     const restored = await server.accounts.profile(actor.token);
-    assert.equal(restored?.balance, profile.balance);
+    assert.equal(restored?.balance, credited?.balance);
     assert.equal(restored?.ledgerConserved, true);
+    assert.equal(
+      restored?.hasSpentPoints,
+      true,
+      "spend history survives server restart",
+    );
     const rebuilt = parseDevSession(
       await (
         await fetch(`http://127.0.0.1:${server.webPort}/api/fixture/bootstrap`)

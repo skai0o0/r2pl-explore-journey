@@ -9,7 +9,7 @@
   </head>
   <body data-school="dawn" data-debug="false" data-mode="player">
     <main class="game-shell">
-      <div id="world-view" role="application" aria-label="Bản đồ Hành trình Khám phá. Kéo để di chuyển, cuộn để thu phóng."></div>
+      <div id="world-view" role="application" tabindex="0" aria-label="Bản đồ Hành trình Khám phá. Kéo để di chuyển, cuộn để thu phóng."></div>
       <div class="vignette"></div>
 
       <!-- COMPACT HUD (Top Left) -->
@@ -24,6 +24,8 @@
           </span>
         </button>
         <span class="divider"></span>
+        <button class="buff-chip" id="hud-beacon" type="button" hidden aria-label="Xem buff đèn hiệu"></button>
+        <span class="hud-wallet"><strong id="hud-points">—</strong><small>Points</small></span>
         <button class="progress-chip" id="hud-progress" type="button" aria-label="Xem tiến trình và số dư">
           <strong id="hud-tile-count">0 <span>ô</span></strong>
           <small>Tri thức</small>
@@ -48,33 +50,21 @@
           <button class="tool" id="tool-zoom-in" type="button" title="Phóng to (+)"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6m-3-3v6"/></svg>Phóng to</button>
           <button class="tool" id="tool-zoom-out" type="button" title="Thu nhỏ (-)"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6"/></svg>Thu nhỏ</button>
           <button class="tool" id="tool-rotate" type="button" title="Đổi góc nhìn (I)"><svg viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/></svg>Góc nhìn</button>
+          <button class="tool" id="tool-orbit-left" type="button" title="Xoay trái (Q)">↶ Xoay trái</button>
+          <button class="tool" id="tool-orbit-right" type="button" title="Xoay phải (E)">↷ Xoay phải</button>
+          <button class="tool tool-wide" id="tool-camera-reset" type="button">Đặt lại góc nhìn</button>
         </div>
+        <p class="caption camera-help">Kéo để pan · Cuộn để zoom · Giữ chuột phải/giữa và kéo để xoay, nghiêng. Cảm ứng: dùng hai ngón để di chuyển, chụm/phóng và xoay.</p>
 
         <div class="section">
           <p class="eyebrow">Hành trình</p>
           <div class="tools-grid">
-            <button class="tool tool-wide" id="tool-inventory" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14v14H5zM8 7V3h8v4M5 12h14m-8-2h2v4h-2z"/></svg>Hành trang</button>
+            <button class="tool tool-wide" id="tool-inventory" type="button"><svg viewBox="0 0 24 24"><path d="M5 7h14v14H5zM8 7V3h8v4M5 12h14m-8-2h2v4h-2z"/></svg>Hành trình</button>
+            <button class="tool tool-wide" id="tool-beacon-scout" type="button" hidden>Trinh sát biên tri thức</button>
             <button class="tool tool-wide" id="tool-ranking" type="button"><svg viewBox="0 0 24 24"><path d="M8 3h8v6a4 4 0 0 1-8 0V3Zm0 2H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 1v6m-4 2h8"/></svg>Xếp hạng</button>
             <button class="tool tool-wide" id="tool-find-expansion" type="button" title="Chọn ô sát tri thức trường mình"><svg viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 5v14"/></svg>Tìm ô để mở</button>
             <button class="tool tool-wide" id="tool-portal-return" type="button" hidden><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Về giải chạy</button>
           </div>
-        </div>
-
-        <div class="section tile-action-section tile-panel">
-          <div class="row">
-            <span>Ô đang chọn</span>
-            <span class="coordinate" id="tile-coordinates">Chạm bản đồ</span>
-          </div>
-          <div class="row" style="margin-top: 6px;">
-            <span id="tile-badge" class="tiny-tag">CHƯA CHỌN</span>
-            <span id="tile-close" class="icon-button" style="width:22px; height:22px; font-size:15px; cursor:pointer;" title="Bỏ chọn">×</span>
-          </div>
-          <p id="tile-knowledge" class="caption">Chạm vào ô kề cạnh trên bản đồ để khám phá</p>
-          <button class="primary" id="explore-button" type="button" disabled>
-            <span id="explore-label">Khám Phá Ô Này</span>
-            <span id="explore-cost">1 Point</span>
-          </button>
-          <p id="action-status" role="status" class="caption" data-kind="normal" style="margin-top: 6px;"></p>
         </div>
 
         <div class="section" id="dev-tools-section" hidden>
@@ -100,9 +90,24 @@
           </div>
       </section>
 
+        <button id="tile-panel-toggle" class="tile-panel-toggle secondary" type="button" aria-controls="selected-tile-panel" aria-expanded="false">Ô đang chọn</button>
+        <section id="selected-tile-panel" hidden data-empty="true" class="tile-action-section tile-panel" aria-label="Ô đang chọn">
+          <div class="tile-summary">
+            <span class="coordinate" id="tile-coordinates">Chạm bản đồ</span>
+            <span id="tile-badge" class="tiny-tag">CHƯA CHỌN</span>
+            <p id="tile-knowledge" class="caption">Chạm vào ô kề cạnh trên bản đồ để khám phá</p>
+          </div>
+          <button class="primary" id="explore-button" type="button" disabled>
+            <span id="explore-label">Mở ô này</span>
+            <span id="explore-cost">1 Point</span>
+          </button>
+          <button id="tile-close" class="icon-button" type="button" aria-label="Ẩn ô đang chọn" title="Ẩn bảng">×</button>
+          <p id="action-status" role="status" class="visually-hidden" data-kind="normal"></p>
+        </section>
+
       <!-- REUSABLE COMPACT DIALOG / SCRIM -->
       <div class="scrim" id="scrim" hidden>
-        <section class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <section class="dialog" id="dialog" aria-labelledby="dialog-title">
           <div class="panel-head">
             <div>
               <p class="eyebrow" id="dialog-kicker">HÀNH TRÌNH CỦA BẠN</p>

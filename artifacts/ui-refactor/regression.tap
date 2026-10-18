@@ -1,0 +1,634 @@
+TAP version 13
+# Subtest: confirmed schools retain all immutable slots; AMTECH accounts never add a competitive school
+ok 1 - confirmed schools retain all immutable slots; AMTECH accounts never add a competitive school
+  ---
+  duration_ms: 1.6022
+  type: 'test'
+  ...
+# Error: UNAUTHORIZED
+#     at PortalStore.consumeSocketTicket (file:///C:/Users/Nem/Desktop/explore-journey/server/integration/PortalStore.ts:680:31)
+#     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+#     at async Object.authenticate (file:///C:/Users/Nem/Desktop/explore-journey/server/integration/SchoolPlayServer.ts:152:15)
+#     at async GatewayRoom.onAuth (file:///C:/Users/Nem/Desktop/explore-journey/server/realtime/GatewayRoom.ts:52:24)
+#     at async GatewayRoom._onJoin (file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/core/build/Room.mjs:1105:28)
+#     at async connectClientToRoom (file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/core/build/Transport.mjs:132:3)
+#     at async WebSocketServer.onConnection (file:///C:/Users/Nem/Desktop/explore-journey/node_modules/@colyseus/ws-transport/build/WebSocketTransport.mjs:192:7)
+# Room connection was closed unexpectedly (4002):
+# Subtest: signed staff provisioning → PKCE admin-only editor → draft/publish/history/concurrency → revoke, without wallets or a ninth HQ
+ok 2 - signed staff provisioning → PKCE admin-only editor → draft/publish/history/concurrency → revoke, without wallets or a ninth HQ
+  ---
+  duration_ms: 1185.6246
+  type: 'test'
+  ...
+# Subtest: private 20-buff pool partitions all eight schools at rank boundaries
+ok 3 - private 20-buff pool partitions all eight schools at rank boundaries
+  ---
+  duration_ms: 1.3151
+  type: 'test'
+  ...
+# Subtest: each actual rank receives only its server-side pool on illumination
+ok 4 - each actual rank receives only its server-side pool on illumination
+  ---
+  duration_ms: 1298.9091
+  type: 'test'
+  ...
+# Subtest: HTTP contributions auto-convert only the shortage; puzzle fixed once; switch burns old pot and survives restart
+ok 5 - HTTP contributions auto-convert only the shortage; puzzle fixed once; switch burns old pot and survives restart
+  ---
+  duration_ms: 935.2825
+  type: 'test'
+  ...
+# Subtest: racing deposits ignite once; insufficient funds and missing contact roll back both currencies
+ok 6 - racing deposits ignite once; insufficient funds and missing contact roll back both currencies
+  ---
+  duration_ms: 620.4853
+  type: 'test'
+  ...
+# Subtest: legacy multiple beacons migrate once to a single effect without granting resources
+ok 7 - legacy multiple beacons migrate once to a single effect without granting resources
+  ---
+  duration_ms: 529.8752
+  type: 'test'
+  ...
+# Subtest: exploration buff families use real authority, retain adjacency and daily caps, including cohort and scout
+    # Subtest: vanguard
+    ok 1 - vanguard
+      ---
+      duration_ms: 160.4171
+      type: 'test'
+      ...
+    # Subtest: assault
+    ok 2 - assault
+      ---
+      duration_ms: 100.073
+      type: 'test'
+      ...
+    # Subtest: thrift
+    ok 3 - thrift
+      ---
+      duration_ms: 271.3261
+      type: 'test'
+      ...
+    # Subtest: breakthrough
+    ok 4 - breakthrough
+      ---
+      duration_ms: 64.0176
+      type: 'test'
+      ...
+    # Subtest: foothold
+    ok 5 - foothold
+      ---
+      duration_ms: 39.5706
+      type: 'test'
+      ...
+    # Subtest: wide
+    ok 6 - wide
+      ---
+      duration_ms: 8.6221
+      type: 'test'
+      ...
+    # Subtest: vision
+    ok 7 - vision
+      ---
+      duration_ms: 10.5618
+      type: 'test'
+      ...
+    # Subtest: cohort
+    ok 8 - cohort
+      ---
+      duration_ms: 172.6486
+      type: 'test'
+      ...
+    # Subtest: scout
+    ok 9 - scout
+      ---
+      duration_ms: 111.489
+      type: 'test'
+      ...
+    1..9
+ok 8 - exploration buff families use real authority, retain adjacency and daily caps, including cohort and scout
+  ---
+  duration_ms: 1332.7702
+  type: 'test'
+  ...
+# Subtest: reward buff families apply after RNG, keep keys/claims/cooldowns, and never reset past cooldowns
+    # Subtest: urgent
+    ok 1 - urgent
+      ---
+      duration_ms: 420.472
+      type: 'test'
+      ...
+    # Subtest: reserve
+    ok 2 - reserve
+      ---
+      duration_ms: 363.8497
+      type: 'test'
+      ...
+    # Subtest: reinforcement
+    ok 3 - reinforcement
+      ---
+      duration_ms: 182.0594
+      type: 'test'
+      ...
+    # Subtest: supply
+    ok 4 - supply
+      ---
+      duration_ms: 53.9035
+      type: 'test'
+      ...
+    # Subtest: return
+    ok 5 - return
+      ---
+      duration_ms: 64.2176
+      type: 'test'
+      ...
+    # Subtest: excavation
+    ok 6 - excavation
+      ---
+      duration_ms: 19.5854
+      type: 'test'
+      ...
+    # Subtest: harvest
+    ok 7 - harvest
+      ---
+      duration_ms: 24.8272
+      type: 'test'
+      ...
+    # Subtest: revival
+    ok 8 - revival
+      ---
+      duration_ms: 30.3133
+      type: 'test'
+      ...
+    # Subtest: comeback
+    ok 9 - comeback
+      ---
+      duration_ms: 122.2236
+      type: 'test'
+      ...
+    1..9
+ok 9 - reward buff families apply after RNG, keep keys/claims/cooldowns, and never reset past cooldowns
+  ---
+  duration_ms: 1687.2642
+  type: 'test'
+  ...
+# Subtest: upkeep and consolidation buffs refund real successful payments without creating refundable bonus escrow
+    # Subtest: upkeep
+    ok 1 - upkeep
+      ---
+      duration_ms: 176.6972
+      type: 'test'
+      ...
+    # Subtest: consolidation
+    ok 2 - consolidation
+      ---
+      duration_ms: 49.1013
+      type: 'test'
+      ...
+    1..2
+ok 10 - upkeep and consolidation buffs refund real successful payments without creating refundable bonus escrow
+  ---
+  duration_ms: 568.7485
+  type: 'test'
+  ...
+# Subtest: 7x7 scout and exploration snapshots cross four chunks and never relay rival masks or private chests
+ok 11 - 7x7 scout and exploration snapshots cross four chunks and never relay rival masks or private chests
+  ---
+  duration_ms: 668.3975
+  type: 'test'
+  ...
+# Subtest: landmark funding uses combined capacity without inventory or a separate conversion step
+ok 12 - landmark funding uses combined capacity without inventory or a separate conversion step
+  ---
+  duration_ms: 63.0856
+  type: 'test'
+  ...
+# Subtest: compact toolbar preserves the actionable inventory and mobile tile confirmation
+ok 13 - compact toolbar preserves the actionable inventory and mobile tile confirmation
+  ---
+  duration_ms: 52.38
+  type: 'test'
+  ...
+# Subtest: wallet refresh preserves dialog focus, backdrop consumes input, and close restores opener
+ok 14 - wallet refresh preserves dialog focus, backdrop consumes input, and close restores opener
+  ---
+  duration_ms: 21.0875
+  type: 'test'
+  ...
+# Subtest: the shipped HCMUT GLB's roof, outer wing and base are picked in isometric view
+ok 15 - the shipped HCMUT GLB's roof, outer wing and base are picked in isometric view
+  ---
+  duration_ms: 20.441
+  type: 'test'
+  ...
+# Subtest: isometric rays select the high geometry of each actual procedural building
+ok 16 - isometric rays select the high geometry of each actual procedural building
+  ---
+  duration_ms: 4.6031
+  type: 'test'
+  ...
+# Subtest: empty space inside a hexagonal HQ's box falls through to the correct ground tile
+ok 17 - empty space inside a hexagonal HQ's box falls through to the correct ground tile
+  ---
+  duration_ms: 1.1936
+  type: 'test'
+  ...
+# Subtest: broad-phase filters off-ray and hidden buildings; narrow-phase holes never become hits
+ok 18 - broad-phase filters off-ray and hidden buildings; narrow-phase holes never become hits
+  ---
+  duration_ms: 0.5648
+  type: 'test'
+  ...
+# Subtest: closest visible mesh wins independently of catalog order or invisible children
+ok 19 - closest visible mesh wins independently of catalog order or invisible children
+  ---
+  duration_ms: 1.4164
+  type: 'test'
+  ...
+# Subtest: mount lifecycle replaces fallback bounds with fitted Z-up GLB bounds, then recaches relocation
+ok 20 - mount lifecycle replaces fallback bounds with fitted Z-up GLB bounds, then recaches relocation
+  ---
+  duration_ms: 1.6391
+  type: 'test'
+  ...
+# Subtest: disposing an in-flight mount prevents a late model from re-registering its hitbox
+ok 21 - disposing an in-flight mount prevents a late model from re-registering its hitbox
+  ---
+  duration_ms: 0.3705
+  type: 'test'
+  ...
+# Subtest: cached world bounds include parent transforms and follow a chest lid's changed pose
+ok 22 - cached world bounds include parent transforms and follow a chest lid's changed pose
+  ---
+  duration_ms: 0.7097
+  type: 'test'
+  ...
+# Subtest: inventory refresh keeps destinations expanded and opening an object removes the covering panel
+ok 23 - inventory refresh keeps destinations expanded and opening an object removes the covering panel
+  ---
+  duration_ms: 275.7613
+  type: 'test'
+  ...
+# Subtest: real inventory buttons spin -> private discovery -> chest -> authoritative wallet, with no client reward mutation
+ok 24 - real inventory buttons spin -> private discovery -> chest -> authoritative wallet, with no client reward mutation
+  ---
+  duration_ms: 1331.1878
+  type: 'test'
+  ...
+# Subtest: dev credit state only blocks a known positive unaffordable cost
+ok 25 - dev credit state only blocks a known positive unaffordable cost
+  ---
+  duration_ms: 0.9096
+  type: 'test'
+  ...
+# Subtest: camera projection, tile corners, and ground picking agree in every view
+ok 26 - camera projection, tile corners, and ground picking agree in every view
+  ---
+  duration_ms: 2.6272
+  type: 'test'
+  ...
+# Subtest: tile indicators reuse constant scene resources without WebGL
+ok 27 - tile indicators reuse constant scene resources without WebGL
+  ---
+  duration_ms: 3.4254
+  type: 'test'
+  ...
+# Subtest: model registry uses local swappable URLs and preserves world locations
+ok 28 - model registry uses local swappable URLs and preserves world locations
+  ---
+  duration_ms: 0.2666
+  type: 'test'
+  ...
+# Subtest: fixture glTF files are self-contained glTF 2.0 geometry
+ok 29 - fixture glTF files are self-contained glTF 2.0 geometry
+  ---
+  duration_ms: 6.0658
+  type: 'test'
+  ...
+# Subtest: loader deduplicates requests and returns isolated scene resources
+ok 30 - loader deduplicates requests and returns isolated scene resources
+  ---
+  duration_ms: 1.3049
+  type: 'test'
+  ...
+# Subtest: placement conversion and fallback lifecycle do not require WebGL
+ok 31 - placement conversion and fallback lifecycle do not require WebGL
+  ---
+  duration_ms: 0.8226
+  type: 'test'
+  ...
+# Subtest: Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotation
+ok 32 - Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotation
+  ---
+  duration_ms: 1.2383
+  type: 'test'
+  ...
+# Subtest: Hotfix: PBR lighting material tuning, target footprint spans, and Z-up auto-fit GLB placement
+ok 33 - Hotfix: PBR lighting material tuning, target footprint spans, and Z-up auto-fit GLB placement
+  ---
+  duration_ms: 1.475
+  type: 'test'
+  ...
+# Subtest: world-unit procedural fallbacks stay Z-up through missing and rejected GLB mounts
+ok 34 - world-unit procedural fallbacks stay Z-up through missing and rejected GLB mounts
+  ---
+  duration_ms: 4.8487
+  type: 'test'
+  ...
+# Subtest: awaited manifest lets a newly added GLB replace its procedural fallback on first mount
+ok 35 - awaited manifest lets a newly added GLB replace its procedural fallback on first mount
+  ---
+  duration_ms: 21.2842
+  type: 'test'
+  ...
+# Subtest: pan and orbit cannot select tiles, including fast drags, return-to-start and cancellation
+ok 36 - pan and orbit cannot select tiles, including fast drags, return-to-start and cancellation
+  ---
+  duration_ms: 1.1375
+  type: 'test'
+  ...
+# Subtest: two fingers pan, pinch and twist without either release becoming a click
+ok 37 - two fingers pan, pinch and twist without either release becoming a click
+  ---
+  duration_ms: 0.8295
+  type: 'test'
+  ...
+# Subtest: rotation and tilt preserve Z-up terrain picking and clip depth in every quadrant
+ok 38 - rotation and tilt preserve Z-up terrain picking and clip depth in every quadrant
+  ---
+  duration_ms: 3.9431
+  type: 'test'
+  ...
+# Subtest: orbit exposes a ground tile hidden behind a tall building from the original camera
+ok 39 - orbit exposes a ground tile hidden behind a tall building from the original camera
+  ---
+  duration_ms: 3.6341
+  type: 'test'
+  ...
+# Subtest: actual HQ, landmark, UniStop and chest geometry remains selectable after orbit
+ok 40 - actual HQ, landmark, UniStop and chest geometry remains selectable after orbit
+  ---
+  duration_ms: 6.6913
+  type: 'test'
+  ...
+# Subtest: expansion guide uses loaded own-school edges across seams and excludes protected HQs
+ok 41 - expansion guide uses loaded own-school edges across seams and excludes protected HQs
+  ---
+  duration_ms: 8.1509
+  type: 'test'
+  ...
+# Subtest: player mode is default and operator modes require explicit entry
+ok 42 - player mode is default and operator modes require explicit entry
+  ---
+  duration_ms: 0.2366
+  type: 'test'
+  ...
+# Subtest: player names hide fixture ordinals and unsolved Landmark names
+ok 43 - player names hide fixture ordinals and unsolved Landmark names
+  ---
+  duration_ms: 0.3589
+  type: 'test'
+  ...
+# Subtest: station labels obey footprint fog and label priority at close/overview zoom
+ok 44 - station labels obey footprint fog and label priority at close/overview zoom
+  ---
+  duration_ms: 8.183
+  type: 'test'
+  ...
+# Subtest: manual intent survives transport while legacy auto payload stays compatible
+ok 45 - manual intent survives transport while legacy auto payload stays compatible
+  ---
+  duration_ms: 0.5957
+  type: 'test'
+  ...
+# Subtest: portal auth binds raw bytes, request target, campaign, timestamp, and key rotation
+ok 46 - portal auth binds raw bytes, request target, campaign, timestamp, and key rotation
+  ---
+  duration_ms: 2.4528
+  type: 'test'
+  ...
+# Subtest: mounted partner API -> PKCE session -> actual WebSocket spend -> restart, replay, correction and suspension
+ok 47 - mounted partner API -> PKCE session -> actual WebSocket spend -> restart, replay, correction and suspension
+  ---
+  duration_ms: 1068.7513
+  type: 'test'
+  ...
+# Subtest: distance fog preserves contrast at the real 1,800-unit camera distance
+ok 48 - distance fog preserves contrast at the real 1,800-unit camera distance
+  ---
+  duration_ms: 0.6915
+  type: 'test'
+  ...
+# Subtest: tree scattering is reproducible, grounded and clear of foundations
+ok 49 - tree scattering is reproducible, grounded and clear of foundations
+  ---
+  duration_ms: 13.7447
+  type: 'test'
+  ...
+# Subtest: cosmetic discovery atlas follows own snapshots/deltas across seams, preserves holes and clears on school change
+ok 50 - cosmetic discovery atlas follows own snapshots/deltas across seams, preserves holes and clears on school change
+  ---
+  duration_ms: 27.7364
+  type: 'test'
+  ...
+# Subtest: terrain and instanced crowns share world-space fog without an opaque cover or terrain discard
+ok 51 - terrain and instanced crowns share world-space fog without an opaque cover or terrain discard
+  ---
+  duration_ms: 1.0254
+  type: 'test'
+  ...
+# Subtest: public terrain and HQ dressing cannot reveal chest foundations or add interaction targets
+ok 52 - public terrain and HQ dressing cannot reveal chest foundations or add interaction targets
+  ---
+  duration_ms: 17.349
+  type: 'test'
+  ...
+# Subtest: dev session contract validates synthetic identities, homes and transport bounds
+ok 53 - dev session contract validates synthetic identities, homes and transport bounds
+  ---
+  duration_ms: 1.6345
+  type: 'test'
+  ...
+# Subtest: eight-school playable server shares durable bot/student world with actor-private profiles and retry receipts
+ok 54 - eight-school playable server shares durable bot/student world with actor-private profiles and retry receipts
+  ---
+  duration_ms: 3002.8562
+  type: 'test'
+  ...
+# Subtest: expansion bootstrap rejects malformed HQ geometry, duplicate schools and campaign scope
+ok 55 - expansion bootstrap rejects malformed HQ geometry, duplicate schools and campaign scope
+  ---
+  duration_ms: 1.0016
+  type: 'test'
+  ...
+# Subtest: tile panel is opt-in for experienced students and remains visible until a novice spends Points
+ok 56 - tile panel is opt-in for experienced students and remains visible until a novice spends Points
+  ---
+  duration_ms: 28.8188
+  type: 'test'
+  ...
+# Subtest: signed config publishes exact roster, footprints, costs and unnormalized reward tables
+ok 57 - signed config publishes exact roster, footprints, costs and unnormalized reward tables
+  ---
+  duration_ms: 1.5214
+  type: 'test'
+  ...
+# Subtest: signed routes keep chests private, persist Running into playable wallet, reject forged identity and replay once
+ok 58 - signed routes keep chests private, persist Running into playable wallet, reject forged identity and replay once
+  ---
+  duration_ms: 781.4707
+  type: 'test'
+  ...
+# Subtest: signed rewards enforce cooldown, matching tier, finite Chest winner, Gift fallback, landmark cooldown and linear takeover
+ok 59 - signed rewards enforce cooldown, matching tier, finite Chest winner, Gift fallback, landmark cooldown and linear takeover
+  ---
+  duration_ms: 875.6848
+  type: 'test'
+  ...
+# Subtest: rendered river tiles remain ordinary adjacent exploration with a single PostgreSQL Point debit
+ok 60 - rendered river tiles remain ordinary adjacent exploration with a single PostgreSQL Point debit
+  ---
+  duration_ms: 387.6526
+  type: 'test'
+  ...
+# Subtest: shared join charges 2, rejects third school, keeps private cluster views, and refunds expired consolidation
+ok 61 - shared join charges 2, rejects third school, keeps private cluster views, and refunds expired consolidation
+  ---
+  duration_ms: 681.0456
+  type: 'test'
+  ...
+# Subtest: admin validates publish, moves protected HQ ownership, restores persisted homes and rollback; notifications are durable
+ok 62 - admin validates publish, moves protected HQ ownership, restores persisted homes and rollback; notifications are durable
+  ---
+  duration_ms: 1261.8107
+  type: 'test'
+  ...
+# Subtest: gift check-in redemption generates giftCode, retrieves by code, and redeems once idempotently
+ok 63 - gift check-in redemption generates giftCode, retrieves by code, and redeems once idempotently
+  ---
+  duration_ms: 553.3031
+  type: 'test'
+  ...
+# Subtest: signed 5x5 fog relay converges across four chunks without exposing rival masks
+ok 64 - signed 5x5 fog relay converges across four chunks without exposing rival masks
+  ---
+  duration_ms: 399.9582
+  type: 'test'
+  ...
+# Subtest: manual Dock intent is validated before debit and protected by stable-key replay
+ok 65 - manual Dock intent is validated before debit and protected by stable-key replay
+  ---
+  duration_ms: 410.6378
+  type: 'test'
+  ...
+# Subtest: fixed simplex seeds and authored layout produce the same biomes regardless of load/order
+ok 66 - fixed simplex seeds and authored layout produce the same biomes regardless of load/order
+  ---
+  duration_ms: 13.6836
+  type: 'test'
+  ...
+# Subtest: all 48 building foundation zones stay level and reject water and nature, including moved layouts
+ok 67 - all 48 building foundation zones stay level and reject water and nature, including moved layouts
+  ---
+  duration_ms: 1.5828
+  type: 'test'
+  ...
+# Subtest: central lake and both river arms have depressed water and sandy banks without blocking knowledge tiles
+ok 68 - central lake and both river arms have depressed water and sandy banks without blocking knowledge tiles
+  ---
+  duration_ms: 9.5498
+  type: 'test'
+  ...
+# Subtest: chunk meshes contain real terraces, lit cliff faces and clipped edge chunks
+ok 69 - chunk meshes contain real terraces, lit cliff faces and clipped edge chunks
+  ---
+  duration_ms: 56.1891
+  type: 'test'
+  ...
+# Subtest: terrain picking matches rendered tops/cliffs in isometric view and selection follows height
+ok 70 - terrain picking matches rendered tops/cliffs in isometric view and selection follows height
+  ---
+  duration_ms: 43.8991
+  type: 'test'
+  ...
+# Subtest: voxel prop plans are repeatable, discovery-filtered, foundation-free and grounded at terrain height
+ok 71 - voxel prop plans are repeatable, discovery-filtered, foundation-free and grounded at terrain height
+  ---
+  duration_ms: 29.2814
+  type: 'test'
+  ...
+# Subtest: viewport LOD builds bounded detail incrementally, hides small props beyond 400 and becomes idle
+ok 72 - viewport LOD builds bounded detail incrementally, hides small props beyond 400 and becomes idle
+  ---
+  duration_ms: 114.9807
+  type: 'test'
+  ...
+# Subtest: terrain ownership data retains neutral biomes, school tint 68%, shared tint 50/50
+ok 73 - terrain ownership data retains neutral biomes, school tint 68%, shared tint 50/50
+  ---
+  duration_ms: 1.6754
+  type: 'test'
+  ...
+# Subtest: territory edges inspect four neighbors across chunk seams and follow deltas
+ok 74 - territory edges inspect four neighbors across chunk seams and follow deltas
+  ---
+  duration_ms: 4.1856
+  type: 'test'
+  ...
+# Subtest: coarse terrain UVs retain individual tile sampling while public terrain receives dusk lighting
+ok 75 - coarse terrain UVs retain individual tile sampling while public terrain receives dusk lighting
+  ---
+  duration_ms: 3.2164
+  type: 'test'
+  ...
+# Subtest: exclusive surfaces isolate map input, trap focus and restore prior inert state
+ok 76 - exclusive surfaces isolate map input, trap focus and restore prior inert state
+  ---
+  duration_ms: 23.6556
+  type: 'test'
+  ...
+# Subtest: UniStop refresh preserves focus and scroll, displays rare odds, and yields to a chest
+ok 77 - UniStop refresh preserves focus and scroll, displays rare odds, and yields to a chest
+  ---
+  duration_ms: 38.1927
+  type: 'test'
+  ...
+# Subtest: cyan theme text pairs meet readable contrast on gameplay surfaces
+ok 78 - cyan theme text pairs meet readable contrast on gameplay surfaces
+  ---
+  duration_ms: 2.2159
+  type: 'test'
+  ...
+# Subtest: a dialog nested inside the game shell also makes its HUD and canvas siblings inert
+ok 79 - a dialog nested inside the game shell also makes its HUD and canvas siblings inert
+  ---
+  duration_ms: 5.3094
+  type: 'test'
+  ...
+# Subtest: reduced motion shows the supplied receipt outcome and closing never replays a reward
+ok 80 - reduced motion shows the supplied receipt outcome and closing never replays a reward
+  ---
+  duration_ms: 564.3277
+  type: 'test'
+  ...
+# Subtest: Vite forwards both Colyseus matchmaking and binary WebSocket messages
+ok 81 - Vite forwards both Colyseus matchmaking and binary WebSocket messages
+  ---
+  duration_ms: 131.1492
+  type: 'test'
+  ...
+# Subtest: Vite API proxy preserves Host so browser POST Origin passes same-origin validation
+ok 82 - Vite API proxy preserves Host so browser POST Origin passes same-origin validation
+  ---
+  duration_ms: 33.1537
+  type: 'test'
+  ...
+1..82
+# tests 102
+# suites 0
+# pass 102
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41215.7199

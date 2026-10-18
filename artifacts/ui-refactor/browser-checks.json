@@ -1,0 +1,52 @@
+{
+  "at": "2026-10-18T17:14:07.936Z",
+  "syntheticOnly": true,
+  "gameplayCampaign": "55762177-6f9a-43ac-9d14-2f695124a274",
+  "editorCampaign": "764f98a0-c27c-490b-923d-77e4f0ec73e3",
+  "viewportChecks": [
+    {
+      "requested": {
+        "width": 390,
+        "height": 844
+      },
+      "observed": {
+        "width": 390,
+        "height": 845
+      },
+      "target": "game 4180"
+    },
+    {
+      "requested": {
+        "width": 1280,
+        "height": 800
+      },
+      "observed": {
+        "width": 1281,
+        "height": 800
+      },
+      "target": "editor 4184"
+    }
+  ],
+  "gameplay": [
+    "UniStop -> private treasure map -> chest -> 10 Crystals; Aspire key consumed",
+    "wrong puzzle -> 10 minute cooldown; correct full name after expiry -> pot +100",
+    "Fansipan: pot 100 + contribution 900 -> active buff; 10 Crystals + 890 Points spent",
+    "Halong: puzzle +100, first actor +10, second actor +990 -> pot 1100, old pot burned",
+    "reload and process restart -> online, 100 Points and new buff retained",
+    "mobile opens: 86 -> 85 -> 84 Points; 630 -> 631 -> 632 knowledge",
+    "tile 547,305 blocked without adjacency, no Points debit",
+    "drag preserved selection 563,318; 3D/top camera preserved selection",
+    "ranking shows eight schools; modal background inert and focus return"
+  ],
+  "editor": [
+    "synthetic PKCE login",
+    "search/select HQ",
+    "rename draft -> undo -> redo -> save draft",
+    "confirm publish -> v1 on isolated sandbox"
+  ],
+  "randomFixture": "two deterministic draws through normal authoritative reward transaction",
+  "console": {
+    "game4180": [],
+    "game4182": []
+  }
+}

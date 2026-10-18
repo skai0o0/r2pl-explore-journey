@@ -16,7 +16,7 @@ function create(): HTMLElement {
   overlay.className = "journey-boot";
   overlay.setAttribute("aria-label", "Chuẩn bị hành trình");
   overlay.innerHTML =
-    '<div class="boot-orbit" aria-hidden="true"><span></span><span></span><span></span></div><div class="boot-card"><a class="boot-brand" href="/">R<span>2</span> <small>R2PL · HÀNH TRÌNH KHÁM PHÁ</small></a><div class="boot-content"></div><footer>CHẠY CÙNG TRƯỜNG · MỞ RỘNG HÀNH TRÌNH</footer></div>';
+    '<div class="boot-orbit" aria-hidden="true"><span></span><span></span><span></span></div><div class="boot-card"><a class="boot-brand" href="/"><img src="/Headline.png" alt="Road to Predator League 2027"><small>HÀNH TRÌNH KHÁM PHÁ</small></a><div class="boot-content"></div><footer>CHẠY CÙNG TRƯỜNG · MỞ RỘNG HÀNH TRÌNH</footer></div>';
   document.body.append(overlay);
   return overlay;
 }

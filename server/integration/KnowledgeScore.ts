@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
-import { LANDMARKS, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import { SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import { activeView, type SchoolBeacon } from "./BeaconBuffs.ts";
 export interface SchoolScore {
   points: number;
   reachedAtMs: number;
@@ -86,8 +87,8 @@ export async function knowledgeRanking(db: PoolClient, campaign: string) {
     )
   ).rows;
   const beacons = (
-    await db.query<{ id: string; data: { holder: number | null } }>(
-      "SELECT id,data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='beacon'",
+    await db.query<{ id: string; data: SchoolBeacon }>(
+      "SELECT id,data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='school-beacon'",
       [campaign],
     )
   ).rows;
@@ -102,11 +103,17 @@ export async function knowledgeRanking(db: PoolClient, campaign: string) {
       points: score.points,
       reachedAt: score.reachedAtMs,
       buffs: beacons
-        .filter((b) => b.data.holder === s.slot)
+        .filter((b) => Number(b.id) === s.slot)
         .flatMap((b) => {
-          const l = LANDMARKS.find((l) => l.id === b.id);
-          return l
-            ? [{ id: l.id, name: l.name, description: l.buffDescription }]
+          const buff = activeView(b.data);
+          return buff
+            ? [
+                {
+                  id: buff.landmarkId,
+                  name: buff.name,
+                  description: buff.description,
+                },
+              ]
             : [];
         }),
     };

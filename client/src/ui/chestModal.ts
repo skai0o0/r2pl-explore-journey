@@ -1,8 +1,12 @@
+import { UiOverlay } from "./overlay.ts";
 // client/src/ui/chestModal.ts
 /**
  * Dedicated Chest Modal with Predator HUD Requirements Checklist & Loot Preview
  */
-import { GAME_CONFIG, type WorldObject } from "../../../shared/gameplay/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  type WorldObject,
+} from "../../../shared/gameplay/gameConfig.ts";
 import { Icons } from "./icons.ts";
 
 export interface ChestView {
@@ -22,11 +26,14 @@ export interface ChestModalCallbacks {
 }
 
 export class ChestModal {
+  private callbacks: ChestModalCallbacks;
+  private surface: UiOverlay;
   private overlay: HTMLElement;
   private currentData: ChestView | null = null;
   private isOpen = false;
 
-  constructor(private callbacks: ChestModalCallbacks) {
+  constructor(callbacks: ChestModalCallbacks) {
+    this.callbacks = callbacks;
     this.overlay = document.createElement("div");
     this.overlay.className = "chest-modal-overlay";
     this.overlay.setAttribute("data-ui", "true");
@@ -41,8 +48,14 @@ export class ChestModal {
     this.overlay.addEventListener("touchend", stopProp, { passive: true });
 
     document.body.appendChild(this.overlay);
+    this.surface = new UiOverlay(
+      this.overlay,
+      () => this.close(),
+      "Rương kho báu",
+    );
 
     this.overlay.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (e.target === this.overlay) this.close();
     });
 
@@ -56,11 +69,13 @@ export class ChestModal {
     this.isOpen = true;
     this.overlay.style.display = "flex";
     this.render();
+    this.surface.open();
   }
 
   public close(): void {
     this.isOpen = false;
     this.overlay.style.display = "none";
+    this.surface.close();
     this.currentData = null;
   }
 
@@ -71,35 +86,52 @@ export class ChestModal {
   private render(): void {
     if (!this.currentData) return;
     const d = this.currentData;
-    const tierName = d.tier === "predator" ? "Predator" : d.tier === "nitro" ? "Nitro" : "Aspire";
-    const tierColor = d.tier === "predator" ? "#a855f7" : d.tier === "nitro" ? "#00ffe8" : "#fbbf24";
+    const tierName =
+      d.tier === "predator"
+        ? "Predator"
+        : d.tier === "nitro"
+          ? "Nitro"
+          : "Aspire";
+    const tierColor =
+      d.tier === "predator"
+        ? "#a855f7"
+        : d.tier === "nitro"
+          ? "#00ffe8"
+          : "#fbbf24";
 
     const hasKey = d.keysCount >= 1;
-    const canOpen = hasKey && !d.claimed;
+    const canOpen = hasKey && !d.claimed && d.discovered;
 
     // Drop table preview
     const outcomes = GAME_CONFIG.rewards.chest[d.tier]?.outcomes ?? [];
     const totalWeight = outcomes.reduce((sum, r) => sum + r.weight, 0);
 
-    const lootRows = outcomes.map((r) => {
-      const pct = totalWeight > 0 ? ((r.weight / totalWeight) * 100).toFixed(0) : "0";
-      const name =
-        r.kind === "gift"
-          ? "🎁 Quà Hiện Vật Predator"
-          : r.kind === "crystals"
-            ? `💎 Tinh Thể ×${r.quantity}`
-            : r.kind === "points"
-              ? `⚡ Điểm Tri Thức ×${r.quantity}`
-              : r.kind === "key"
-                ? `🔑 Chìa Khóa ×${r.quantity}`
-                : `🗺️ Bản Đồ Kho Báu ×${r.quantity}`;
-      return `
+    const lootRows = outcomes
+      .map((r) => {
+        const pct =
+          totalWeight > 0
+            ? ((r.weight / totalWeight) * 100).toLocaleString("vi-VN", {
+                maximumFractionDigits: 2,
+              })
+            : "0";
+        const name =
+          r.kind === "gift"
+            ? " Quà Hiện Vật Predator"
+            : r.kind === "crystals"
+              ? ` Tinh Thể ×${r.quantity}`
+              : r.kind === "points"
+                ? ` Điểm Tri Thức ×${r.quantity}`
+                : r.kind === "key"
+                  ? ` Chìa Khóa ×${r.quantity}`
+                  : ` Bản Đồ Kho Báu ×${r.quantity}`;
+        return `
         <div class="loot-preview-row">
           <span class="loot-name">${name}</span>
           <span class="loot-pct">${pct}%</span>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
 
     this.overlay.innerHTML = `
       <div class="chest-modal-dialog">
@@ -111,7 +143,7 @@ export class ChestModal {
               <span class="brand-badge">${tierName.toUpperCase()} CHEST</span>
             </div>
             <h2 class="chest-title">RƯƠNG KHO BÁU TRI THỨC</h2>
-            <div class="chest-coords">Tọa độ bí mật: (${d.x}, ${d.z})</div>
+            <div class="chest-coords">${d.discovered ? `Tọa độ: (${d.x}, ${d.z})` : "Chưa khám phá vị trí rương"}</div>
           </div>
           <button class="chest-close-btn" id="chest-btn-close" title="Đóng [Esc]">×</button>
         </div>
@@ -134,16 +166,16 @@ export class ChestModal {
 
             <!-- Item 1: Discovered -->
             <div class="checklist-item ok">
-              <span class="check-icon">✅</span>
+              <span class="check-icon">✓</span>
               <div class="check-info">
                 <strong>Vị trí kho báu:</strong>
-                <span>Đã định vị chính xác tại tọa độ (${d.x}, ${d.z})</span>
+                <span>${d.discovered ? `Đã định vị tại (${d.x}, ${d.z})` : "Cần khám phá vị trí rương trước khi mở."}</span>
               </div>
             </div>
 
             <!-- Item 2: Key requirement -->
             <div class="checklist-item ${hasKey ? "ok" : "fail"}">
-              <span class="check-icon">${hasKey ? "✅" : "❌"}</span>
+              <span class="check-icon">${hasKey ? "✓" : "×"}</span>
               <div class="check-info">
                 <strong>Chìa khóa mở rương:</strong>
                 <span>Yêu cầu 1 Chìa Khóa ${tierName} (Đang có: <strong>${d.keysCount}</strong> chìa)</span>
@@ -152,7 +184,7 @@ export class ChestModal {
                     ? `
                   <div class="check-action-row">
                     <button type="button" class="btn-check-guide" id="btn-find-key">
-                      🧭 Tìm chìa tại Trạm tiếp tế cùng bậc
+                       Tìm chìa tại Trạm tiếp tế cùng bậc
                     </button>
                   </div>
                 `
@@ -163,7 +195,7 @@ export class ChestModal {
 
             <!-- Item 3: Claimed status -->
             <div class="checklist-item ${!d.claimed ? "ok" : "fail"}">
-              <span class="check-icon">${!d.claimed ? "✅" : "❌"}</span>
+              <span class="check-icon">${!d.claimed ? "✓" : "×"}</span>
               <div class="check-info">
                 <strong>Trạng thái rương:</strong>
                 <span>${!d.claimed ? "Rương còn nguyên vẹn, sẵn sàng mở!" : "Rương đã được mở trước đó."}</span>
@@ -172,22 +204,19 @@ export class ChestModal {
           </div>
 
           <!-- Drop Rates -->
-          <div class="loot-table-card">
-            <div class="loot-table-header">
+          <details class="loot-table-card"><summary class="loot-table-header">
               ${Icons.sparkles(14)}
               <span>TỶ LỆ RƠI VẬT PHẨM TỪ RƯƠNG NÀY</span>
-            </div>
-            <div class="loot-table-grid">
+            </summary><div class="loot-table-grid">
               ${lootRows}
-            </div>
-          </div>
+            </div></details>
         </div>
 
         <!-- Footer -->
         <div class="chest-modal-footer">
           <button type="button" class="btn-open-chest" id="btn-do-open" ${canOpen ? "" : "disabled"}>
             ${Icons.sparkles(16)}
-            <span>${canOpen ? "Mở Rương Báu (1 Key)" : hasKey ? "Rương Đã Mở" : "Cần 1 Chìa Khóa"}</span>
+            <span>${!d.discovered ? "Cần khám phá rương" : canOpen ? "Mở rương · 1 chìa" : hasKey ? "Rương đã mở" : "Cần 1 chìa khóa"}</span>
           </button>
           <button type="button" class="btn-close-chest" id="btn-footer-close">
             Đóng
@@ -197,8 +226,12 @@ export class ChestModal {
     `;
 
     // Bind events
-    this.overlay.querySelector("#chest-btn-close")?.addEventListener("click", () => this.close());
-    this.overlay.querySelector("#btn-footer-close")?.addEventListener("click", () => this.close());
+    this.overlay
+      .querySelector("#chest-btn-close")
+      ?.addEventListener("click", () => this.close());
+    this.overlay
+      .querySelector("#btn-footer-close")
+      ?.addEventListener("click", () => this.close());
 
     const openBtn = this.overlay.querySelector("#btn-do-open");
     openBtn?.addEventListener("click", () => {

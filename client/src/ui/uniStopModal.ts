@@ -1,3 +1,4 @@
+import { preserveSurface, UiOverlay } from "./overlay.ts";
 // client/src/ui/uniStopModal.ts
 import { GAME_CONFIG } from "../../../shared/gameplay/gameConfig.ts";
 import { Icons } from "./icons.ts";
@@ -31,6 +32,7 @@ export interface UniStopModalCallbacks {
 
 /** Reads the private profile cooldown, never the station's obsolete global timer. */
 export class UniStopModal {
+  private surface: UiOverlay;
   private overlay = document.createElement("div");
   private data?: UniStopView;
   private timer?: number | undefined;
@@ -64,6 +66,7 @@ export class UniStopModal {
       this.overlay.addEventListener(name, (e) => e.stopPropagation());
 
     this.overlay.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (e.target === this.overlay) this.close();
     });
 
@@ -76,6 +79,11 @@ export class UniStopModal {
     });
 
     parent.appendChild(this.overlay);
+    this.surface = new UiOverlay(
+      this.overlay,
+      () => this.close(),
+      "Trạm tiếp tế",
+    );
   }
 
   public isOpen() {
@@ -92,13 +100,25 @@ export class UniStopModal {
     this.data = data;
     this.overlay.style.display = "flex";
     this.render();
-    this.timer = window.setInterval(() => this.render(), 1000);
+    this.surface.open();
+    this.timer = window.setInterval(() => this.tick(), 1000);
   }
 
   public update(data: UniStopView) {
     if (data.id !== this.data?.id) return;
+    const changed = JSON.stringify(this.data) !== JSON.stringify(data);
     this.data = data;
-    this.render();
+    if (changed) this.render();
+    else this.tick();
+  }
+
+  private tick(): void {
+    if (!this.data || !this.isOpen()) return;
+    const timer = this.overlay.querySelector(".timer-live");
+    const remaining = this.availability().remainingSeconds;
+    if (remaining > 0 && timer)
+      timer.textContent = this.formatCountdown(remaining);
+    else if (remaining === 0 && timer) this.render();
   }
 
   public finishRequest() {
@@ -111,6 +131,7 @@ export class UniStopModal {
   public close() {
     const wasOpen = this.isOpen();
     this.overlay.style.display = "none";
+    this.surface.close();
     if (this.timer !== undefined) window.clearInterval(this.timer);
     this.timer = undefined;
     this.finishRequest();
@@ -136,6 +157,7 @@ export class UniStopModal {
 
   private render() {
     if (!this.data) return;
+    const restore = preserveSurface(this.overlay);
     const d = this.data;
     const config = UNISTOP_CONFIGS[d.tier];
     const state = this.availability();
@@ -167,17 +189,21 @@ export class UniStopModal {
     const lootRows = outcomes
       .map((r) => {
         const pct =
-          totalWeight > 0 ? ((r.weight / totalWeight) * 100).toFixed(1) : "0";
+          totalWeight > 0
+            ? ((r.weight / totalWeight) * 100).toLocaleString("vi-VN", {
+                maximumFractionDigits: 2,
+              })
+            : "0";
         const name =
           r.kind === "gift"
-            ? "🎁 Quà Hiện Vật"
+            ? " Quà Hiện Vật"
             : r.kind === "crystals"
-              ? `💎 Tinh Thể ×${r.quantity}`
+              ? ` Tinh Thể ×${r.quantity}`
               : r.kind === "points"
-                ? `⚡ Điểm Tri Thức ×${r.quantity}`
+                ? ` Điểm Tri Thức ×${r.quantity}`
                 : r.kind === "key"
-                  ? `🔑 Chìa Khóa ×${r.quantity}`
-                  : `🗺️ Bản Đồ Kho Báu ×${r.quantity}`;
+                  ? ` Chìa Khóa ×${r.quantity}`
+                  : ` Bản Đồ Kho Báu ×${r.quantity}`;
         return `
         <div class="loot-preview-row">
           <span class="loot-name">${name}</span>
@@ -188,7 +214,7 @@ export class UniStopModal {
       .join("");
 
     this.overlay.innerHTML = `
-      <section class="guidance-modal unistop-modal-card" role="dialog" aria-modal="true" aria-labelledby="unistop-title">
+      <section class="guidance-modal unistop-modal-card">
         <header class="unistop-modal-header">
           <div class="unistop-header-left">
             <div class="unistop-brand-tag" style="--tier-color: ${tierColor};">
@@ -210,7 +236,7 @@ export class UniStopModal {
 
             <!-- Item 1: School Ownership -->
             <div class="checklist-item ${isOwnedByMySchool ? "ok" : "fail"}">
-              <span class="check-icon">${isOwnedByMySchool ? "✅" : "❌"}</span>
+              <span class="check-icon">${isOwnedByMySchool ? "✓" : "×"}</span>
               <div class="check-info">
                 <strong>Quyền tiếp tế của trường:</strong>
                 <span>${
@@ -238,7 +264,7 @@ export class UniStopModal {
 
             <!-- Item 2: Cooldown Countdown -->
             <div class="checklist-item ${state.remainingSeconds === 0 ? "ok" : "wait"}">
-              <span class="check-icon">${state.remainingSeconds === 0 ? "✅" : "⏳"}</span>
+              <span class="check-icon">${state.remainingSeconds === 0 ? "✓" : "×"}</span>
               <div class="check-info">
                 <strong>Lượt quay cá nhân:</strong>
                 <span>${
@@ -251,7 +277,7 @@ export class UniStopModal {
 
             <!-- Item 3: Weekly Running Gift Eligibility -->
             <div class="checklist-item ${d.hasWeeklyRunningPoints ? "ok" : "warn"}">
-              <span class="check-icon">${d.hasWeeklyRunningPoints ? "🎁" : "⚠️"}</span>
+              <span class="check-icon">${d.hasWeeklyRunningPoints ? "✓" : "×"}</span>
               <div class="check-info">
                 <strong>Điều kiện Quà hiện vật:</strong>
                 <span>${
@@ -264,7 +290,7 @@ export class UniStopModal {
                     ? `
                   <div class="check-action-row">
                     <button type="button" class="btn-check-guide" id="btn-sync-running">
-                      🏃 Đồng bộ km chạy
+                       Đồng bộ km chạy
                     </button>
                   </div>
                 `
@@ -275,24 +301,21 @@ export class UniStopModal {
           </div>
 
           <!-- Drop Rates Preview -->
-          <div class="loot-table-card">
-            <div class="loot-table-header">
+          <details class="loot-table-card"><summary class="loot-table-header">
               ${Icons.sparkles(14)}
               <span>TỶ LỆ RƠI VẬT PHẨM TRẠM ${tierName.toUpperCase()}</span>
-            </div>
-            <div class="loot-table-grid">
+            </summary><div class="loot-table-grid">
               ${lootRows}
-            </div>
-          </div>
+            </div></details>
 
           <p class="guidance-note">
-            💡 Mỗi sinh viên có lượt tiếp tế cá nhân riêng biệt. Đổi chủ trường không xóa lượt chờ của bạn.
+             Mỗi sinh viên có lượt tiếp tế cá nhân riêng biệt. Đổi chủ trường không xóa lượt chờ của bạn.
           </p>
         </div>
 
         <footer class="unistop-modal-footer">
           <button type="button" class="guidance-primary unistop-claim" ${!state.canClaim || this.pending ? "disabled" : ""}>
-            ${this.pending ? "Đang xử lý…" : state.canClaim ? "Nhận Lượt Tiếp Tế (Quay Thưởng)" : !isOwnedByMySchool ? "Cần Mở Đường Chạm Trạm" : "Đang Trong Thời Gian Chờ"}
+            ${this.pending ? "Đang xử lý…" : state.canClaim ? "Nhận tiếp tế" : !isOwnedByMySchool ? "Cần mở đường tới trạm" : "Đang hồi lượt"}
           </button>
         </footer>
       </section>
@@ -325,5 +348,6 @@ export class UniStopModal {
     syncBtn?.addEventListener("click", () => {
       this.callbacks.onSyncRunning?.();
     });
+    restore();
   }
 }

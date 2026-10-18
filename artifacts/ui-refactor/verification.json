@@ -1,0 +1,154 @@
+{
+  "at": "2026-10-18T17:14:48.637Z",
+  "campaign": "55762177-6f9a-43ac-9d14-2f695124a274",
+  "syntheticOnly": true,
+  "wallets": [
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-credit",
+      "balance": "100",
+      "opening": "1000",
+      "ledger": "-900"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-crystals",
+      "balance": "0",
+      "opening": "0",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-key",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-treasure-map",
+      "balance": "1",
+      "opening": "0",
+      "ledger": "1"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "key-aspire",
+      "balance": "0",
+      "opening": "1",
+      "ledger": "-1"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "key-nitro",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "key-predator",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-credit",
+      "balance": "765",
+      "opening": "1000",
+      "ledger": "-235"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-crystals",
+      "balance": "10",
+      "opening": "1000",
+      "ledger": "-990"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-key",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-treasure-map",
+      "balance": "0",
+      "opening": "0",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "key-aspire",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "key-nitro",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "key-predator",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0"
+    }
+  ],
+  "walletsConserved": true,
+  "beacons": [
+    {
+      "id": "fansipan",
+      "data": {
+        "pots": {
+          "0": 0
+        },
+        "holder": null,
+        "solved": [
+          0
+        ],
+        "lastCost": 1000,
+        "cooldowns": {
+          "0": 1792333735599
+        },
+        "takeovers": 0
+      }
+    },
+    {
+      "id": "halong",
+      "data": {
+        "pots": {
+          "0": 1100
+        },
+        "holder": 0,
+        "solved": [
+          0
+        ],
+        "lastCost": 1100,
+        "cooldowns": {},
+        "takeovers": 0
+      }
+    }
+  ],
+  "activeBeacon": "halong",
+  "activationCount": 2,
+  "lastCost": 1100,
+  "nextCost": 1200,
+  "chestClaims": [
+    "chest_aspire_1"
+  ],
+  "tests": {
+    "tests": 85,
+    "pass": 85,
+    "fail": 0,
+    "skipped": 0
+  },
+  "privatePoolAbsentFromClient": true
+}

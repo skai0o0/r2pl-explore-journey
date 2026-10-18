@@ -1,3 +1,4 @@
+import { UiOverlay } from "./overlay.ts";
 // client/src/ui/carouselModal.ts
 import { Icons } from "./icons.ts";
 import type { LootItem, LootRarity } from "./v1Adapters.ts";
@@ -17,6 +18,7 @@ export interface CarouselSpinOptions {
 }
 
 export class CarouselModal {
+  private surface: UiOverlay;
   private overlay: HTMLElement;
   private dialog: HTMLElement;
   private strip: HTMLElement;
@@ -107,7 +109,7 @@ export class CarouselModal {
             <span class="rarity-tag legendary"><span class="dot"></span> Huyền thoại</span>
           </div>
           <div class="carousel-spin-status">Đang mở khóa phần thưởng...</div>
-          <button type="button" class="carousel-skip-btn" id="cmodal-skip-btn">⚡ Bỏ qua hiệu ứng (Mở nhanh)</button>
+          <button type="button" class="carousel-skip-btn" id="cmodal-skip-btn"> Bỏ qua hiệu ứng (Mở nhanh)</button>
         </div>
 
         <!-- Result Celebration Overlay -->
@@ -121,7 +123,7 @@ export class CarouselModal {
             <div class="result-special-actions" id="cmodal-special-actions"></div>
             <button class="btn-claim-reward" id="cmodal-claim-btn">
               ${Icons.sparkles(18)}
-              <span>NHẬN THƯỞNG</span>
+              <span>Tiếp tục khám phá</span>
             </button>
           </div>
         </div>
@@ -132,6 +134,11 @@ export class CarouselModal {
     `;
 
     document.body.appendChild(this.overlay);
+    this.surface = new UiOverlay(
+      this.overlay,
+      () => this.close(),
+      "Kết quả tiếp tế",
+    );
 
     this.dialog = this.overlay.querySelector(".carousel-modal-dialog")!;
     this.strip = this.overlay.querySelector("#cmodal-strip")!;
@@ -314,6 +321,7 @@ export class CarouselModal {
     // 2. Hide Result & Clear Confetti
     this.resultOverlay.classList.remove("show");
     this.resultOverlay.setAttribute("aria-hidden", "true");
+    this.resultOverlay.inert = true;
     this.stopConfetti();
 
     // 3. Render 30 Carousel Cards
@@ -373,6 +381,7 @@ export class CarouselModal {
 
     // 4. Open Modal & Calculate Coordinates
     this.overlay.style.display = "flex";
+    this.surface.open();
     this.frame(() => {
       this.overlay.classList.add("visible");
     });
@@ -389,6 +398,12 @@ export class CarouselModal {
     const targetTranslateX = -(targetCardCenter - centerOffset + jitter);
     this.targetTranslateX = targetTranslateX;
     this.currentOptions = options;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      this.strip.style.transition = "none";
+      this.strip.style.transform = `translateX(${targetTranslateX}px)`;
+      this.onSpinComplete(options);
+      return;
+    }
 
     // 5. Run CS:GO Easing Animation
     const spinDuration = 4800; // 4.8 seconds
@@ -465,8 +480,10 @@ export class CarouselModal {
     }
 
     // Launch Confetti Celebration
-    this.startConfetti();
+    if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+      this.startConfetti();
 
+    // Result comes exclusively from the server receipt; animation never determines loot.
     // Show Result Overlay after 450ms
     this.later(() => {
       const rarityEl = this.overlay.querySelector(
@@ -545,7 +562,7 @@ export class CarouselModal {
           const mapBtn = document.createElement("button");
           mapBtn.type = "button";
           mapBtn.className = "btn-view-map-loc";
-          mapBtn.innerHTML = `🗺️ Xem vị trí Rương vừa tìm thấy`;
+          mapBtn.innerHTML = ` Xem vị trí Rương vừa tìm thấy`;
           mapBtn.addEventListener("click", () => {
             const coords = options.discoveryCoords ?? { x: 500, z: 500 };
             this.close();
@@ -562,7 +579,7 @@ export class CarouselModal {
           codeBox.className = "gift-code-box";
           codeBox.innerHTML = `
             <span class="gift-code-val">${code}</span>
-            <button type="button" class="btn-copy-code" id="btn-copy-code">📋 Sao chép mã Check-in</button>
+            <button type="button" class="btn-copy-code" id="btn-copy-code"> Sao chép mã Check-in</button>
           `;
           codeBox
             .querySelector("#btn-copy-code")
@@ -576,7 +593,11 @@ export class CarouselModal {
       }
 
       this.resultOverlay.removeAttribute("aria-hidden");
+      this.resultOverlay.inert = false;
       this.resultOverlay.classList.add("show");
+      this.overlay
+        .querySelector<HTMLButtonElement>("#cmodal-claim-btn")
+        ?.focus();
     }, 450);
   }
 
@@ -685,6 +706,7 @@ export class CarouselModal {
     this.currentOptions = null;
     this.overlay.classList.remove("visible");
     this.overlay.style.display = "none";
+    this.surface.close();
     this.resultOverlay.classList.remove("show");
     void this.audioCtx?.suspend();
   }

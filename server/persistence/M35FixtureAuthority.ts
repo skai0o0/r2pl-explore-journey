@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
-import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import { BEACON_BUFF_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import type { Snapshot } from "../../shared/protocol/m2.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
@@ -76,7 +76,7 @@ export class M35FixtureAuthority {
     if (explicitFixtureCost < 0n)
       throw new RangeError("Invalid explicit fixture cost");
     this.fogRevealRadius =
-      boundary?.ruleVersion === 1 ? GAME_CONFIG.world.fogRevealRadius : 0;
+      boundary?.ruleVersion === 1 ? BEACON_BUFF_CONFIG.scoutRadius : 0;
     this.#pool = pool;
     this.#campaignId = campaignId;
     this.#cost = explicitFixtureCost;

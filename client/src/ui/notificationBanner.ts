@@ -1,3 +1,4 @@
+import { Icons } from "./icons.ts";
 // client/src/ui/notificationBanner.ts
 
 export interface NotificationBannerOptions {
@@ -80,6 +81,12 @@ export class NotificationBanner {
     borderGlow: string;
   } {
     switch (category) {
+      case "error":
+        return {
+          label: "CHƯA THỂ THỰC HIỆN",
+          color: "var(--danger)",
+          borderGlow: "none",
+        };
       case "territory":
         return {
           label: "LÃNH THỔ",
@@ -114,50 +121,21 @@ export class NotificationBanner {
   }
 
   private static resolveIcon(icon?: string): string {
-    if (!icon) return "🦉";
-    // If it's already an emoji or symbol
-    if (icon.length > 2 && !icon.includes("-") && !/^[a-z_]+$/.test(icon)) {
-      return icon;
-    }
     switch (icon) {
-      case "clock":
-        return "⏰";
-      case "swords":
-        return "⚔️";
-      case "shield-broken":
-        return "🛡️💥";
-      case "shield-check":
-        return "🛡️✨";
-      case "scissors":
-        return "✂️";
-      case "flame":
-        return "🔥";
-      case "award":
-        return "🏆";
-      case "zap-off":
-        return "⚡";
-      case "hourglass":
-        return "⏳";
-      case "check-circle":
-        return "✅";
       case "gift":
-        return "🎁";
-      case "sparkles":
-        return "✨";
-      case "map":
-        return "🗺️";
+        return Icons.box(20);
       case "key":
-        return "🔑";
-      case "trending-up":
-        return "📈";
-      case "trending-down":
-        return "📉";
-      case "target":
-        return "🎯";
-      case "zap":
-        return "⚡";
+        return Icons.key(20);
+      case "map":
+        return Icons.map(20);
+      case "trophy":
+        return Icons.trophy(20);
+      case "flame":
+        return Icons.beacon(20);
+      case "check-circle":
+        return Icons.check(20);
       default:
-        return "🦉";
+        return Icons.target(20);
     }
   }
 
@@ -183,6 +161,10 @@ export class NotificationBanner {
 
     const banner = document.createElement("div");
     banner.className = "predator-push-banner";
+    banner.setAttribute("role", "status");
+    for (const name of ["pointerdown", "pointerup", "click"])
+      banner.addEventListener(name, (e) => e.stopPropagation());
+    banner.dataset.category = options.category ?? "normal";
     banner.style.setProperty("--banner-accent", catMeta.color);
     banner.style.setProperty("--banner-glow", catMeta.borderGlow);
 

@@ -1,0 +1,82 @@
+@layer legacy, components;
+
+:root {
+  color-scheme: dark;
+  --ink: #080d10;
+  --surface: #101b21;
+  --surface-raised: #172830;
+  --hud-bg: #101b21f5;
+  --panel-bg: #101b21;
+  --dialog-bg: #101b21;
+  --cyan: #00d4eb;
+  --cyan-bright: #7ceef7;
+  --cyan-tint: #00d4eb12;
+  --text-primary: #f2fafc;
+  --text-secondary: #a0b7c0;
+  --muted: #a0b7c0;
+  --line: #a0b7c023;
+  --line-bright: #a0b7c03d;
+  --warning: #f2c572;
+  --danger: #ff9ba8;
+  --success: #89e1bd;
+  --font-main: "DM Sans", "Segoe UI", Arial, sans-serif;
+  --font-display: "Barlow Condensed", "Segoe UI", sans-serif;
+  --font-mono: Consolas, "SFMono-Regular", monospace;
+  --font-family: var(--font-main);
+  --predator-cyan: var(--cyan);
+  --layer-world: 1;
+  --layer-labels: 3;
+  --layer-hud: 10;
+  --layer-panel: 20;
+  --layer-dialog: 30;
+  --layer-feedback: 40;
+  --layer-loading: 50;
+  --radius: 8px;
+}
+
+body {
+  font-family: var(--font-main);
+  color: var(--text-primary);
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--cyan-bright);
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+[hidden] {
+  display: none !important;
+}
+[inert] {
+  pointer-events: none;
+}
+* {
+  scrollbar-color: #37515c var(--surface);
+  scrollbar-width: thin;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

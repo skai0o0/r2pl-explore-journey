@@ -1,3 +1,5 @@
+import { isUiOverlayOpen } from "./ui/overlay.ts";
+import { SelectedTilePanel } from "./ui/selectedTilePanel.ts";
 import { ColyseusSDK, type Room } from "@colyseus/sdk";
 import type { GameView } from "../../shared/gameplay/commands.ts";
 import {
@@ -112,6 +114,7 @@ interface Profile {
   schoolName: string;
   schoolSlot: number;
   balance: string;
+  hasSpentPoints: boolean;
   cost: string;
   fixtureOnly: boolean;
   earnedRunningPoints?: string;
@@ -190,6 +193,7 @@ let subscribeTimer: number | undefined;
 let balanceTimer: number | undefined;
 let reconnectTimer: number | undefined;
 let subscribed = "";
+const selectedTilePanel = new SelectedTilePanel(document);
 let profileBalance: string | undefined;
 let profileCost: string | undefined;
 let profileRequest = 0;
@@ -341,6 +345,9 @@ function requestTileContext(tile: PickedTile): void {
 }
 
 function updateTile(): void {
+  ui.explore.closest<HTMLElement>(".tile-panel")!.dataset.empty = String(
+    !selected,
+  );
   if (!selected) {
     ui.tile.textContent = "Chạm bản đồ";
     ui.badge.textContent = "CHƯA CHỌN";
@@ -348,7 +355,7 @@ function updateTile(): void {
     ui.badge.removeAttribute("data-state");
     ui.knowledge.textContent = "Chạm vào ô kề cạnh trên bản đồ để khám phá";
     ui.explore.disabled = true;
-    ui.explore.textContent = "Khám Phá Ô Này";
+    ui.explore.textContent = "Mở ô này";
     ui.action.textContent = "";
     return;
   }
@@ -393,7 +400,7 @@ function updateTile(): void {
           ? "Dùng Chìa Khóa cùng cấp để mở rương."
           : "Nhận tài nguyên khi trường bạn giữ trạm.";
     ui.explore.disabled = !gameplay.canShowObject(object);
-    ui.explore.textContent = "Mở Chi Tiết / Tương Tác";
+    ui.explore.textContent = "Xem chi tiết";
     return;
   }
   if (owned) {
@@ -430,7 +437,7 @@ function updateTile(): void {
     : context.action === "study"
       ? `Giao Lưu Tri Thức · ${context.points} Points`
       : context.action === "explore"
-        ? `Khám Phá Ô Này · ${context.points} Point`
+        ? `Mở ô này · ${context.points} Point`
         : "Không thể mở ô";
   if (
     context &&
@@ -479,6 +486,7 @@ async function refreshProfile(token = player.token): Promise<void> {
     ui.balance.textContent = profile.balance;
     ui.cost.textContent = profile.cost;
     profileBalance = profile.balance;
+    selectedTilePanel.updateProfile(profile.hasSpentPoints);
     profileCost = profile.cost;
     stats.updateStats({
       studentName: profile.name,
@@ -526,7 +534,7 @@ const world = new WorldView(
     updateTile();
     world.setSelectedObject(object?.id);
     if (!autoExplore) {
-      stats.toggleTools(true);
+      stats.toggleTools(false);
     }
     if (
       autoTarget === tile.index &&
@@ -605,6 +613,7 @@ const stats = new StatsOverlay();
 stats.onInventoryRequested = () => gameplay.openInventory();
 stats.onWalletRefreshRequested = () => void refreshProfile();
 stats.onExploreRequested = () => {
+  selectedTilePanel.open();
   if (!room) return;
   const index = findExpansionTile(
     replica,
@@ -720,13 +729,16 @@ const gameplay = new GameplayUI(
       predatorKeys: Number(view.keys.predator),
       litLandmarksCount: view.landmarks.filter((l) => l.holder === player.slot)
         .length,
-      buffs: view.landmarks
-        .filter((l) => l.holder === player.slot)
-        .flatMap((v) => {
-          const l = LANDMARKS.find((l) => l.id === v.id);
-          return l ? [{ name: l.name, description: l.buffDescription }] : [];
-        }),
+      buffs: view.activeBeacon
+        ? [
+            {
+              name: view.activeBeacon.name,
+              description: view.activeBeacon.description,
+            },
+          ]
+        : [],
     });
+    get("tool-beacon-scout").hidden = !view.canScout;
     privateObjects = view.chests;
     world.setPrivateObjects(view.chests);
     miniMap.setObjects([...publicWorld, ...view.chests]);
@@ -747,6 +759,7 @@ const gameplay = new GameplayUI(
   },
 );
 miniMap.onPanRequested = (x, z) => world.animateFocus(x, z, 100);
+gameplay.onFindExpansion = () => stats.onExploreRequested?.();
 miniMap.onPanLive = (x, z) => world.focus(x, z, 100);
 miniMap.onZoomIn = () => world.zoom(0.72);
 miniMap.onZoomOut = () => world.zoom(1.38);
@@ -762,8 +775,8 @@ quickInput.addEventListener("change", () => {
   autoExplore = quickInput.checked;
   localStorage.setItem("r2pl-auto-explore", String(autoExplore));
 });
-quickLabel.append(quickInput, "⚡ Mở Nhanh 1 Chạm");
-ui.explore.closest(".tile-panel")!.append(quickLabel);
+quickLabel.append(quickInput, "Mở nhanh một chạm");
+get("tools-panel").append(quickLabel);
 const overviewButton = get<HTMLButtonElement>("overview-button");
 const worldHost = get<HTMLElement>("world-view");
 
@@ -774,7 +787,7 @@ function announceCameraMode(log: boolean): void {
   get("camera-button").setAttribute("aria-label", `Đổi góc nhìn · ${label}`);
   worldHost.setAttribute(
     "aria-label",
-    `Bản đồ Hành trình Khám phá. ${label}. Nhấn I để đổi góc nhìn.`,
+    `Bản đồ Hành trình Khám phá. ${label}. Kéo để pan; cuộn để zoom; kéo chuột phải hoặc giữa để xoay và nghiêng. Q/E xoay, I đổi góc nhìn. Hai ngón để pan, zoom và xoay.`,
   );
   if (log && isDev) activity(`${label} · nhấn I để đổi góc nhìn`);
 }
@@ -882,7 +895,7 @@ function handleFrame(raw: Uint8Array): void {
         world.setPending(Array.from(pending.values()).at(-1)?.tile);
         updatePending();
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
-          activity("Đã mở tri thức cho trường bạn.", "success");
+          ui.action.textContent = "";
           world.playReveal(action.tile.x, action.tile.z, player.slot);
 
           if (session !== LEGACY_DEV_SESSION) {
@@ -981,6 +994,7 @@ async function connect(nextPlayer: Player): Promise<void> {
   ui.player.textContent = player.label;
   ui.school.textContent = player.schoolName;
   profileBalance = undefined;
+  selectedTilePanel.reset();
   profileCost = undefined;
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   replica = new ProjectionReplica(player.slot);
@@ -1088,11 +1102,24 @@ ui.retry.addEventListener("click", () => void connect(player));
 document.getElementById("tool-zoom-in")?.addEventListener("click", () => {
   world.zoom(0.72);
 });
+document
+  .getElementById("tool-beacon-scout")
+  ?.addEventListener("click", () => void gameplay.command({ action: "scout" }));
 document.getElementById("tool-zoom-out")?.addEventListener("click", () => {
   world.zoom(1.38);
 });
 document.getElementById("tool-rotate")?.addEventListener("click", () => {
   world.toggleCameraMode();
+  announceCameraMode(false);
+});
+get("tool-orbit-left").addEventListener("click", () =>
+  world.rotateCamera(P.camera.rotationStep),
+);
+get("tool-orbit-right").addEventListener("click", () =>
+  world.rotateCamera(-P.camera.rotationStep),
+);
+get("tool-camera-reset").addEventListener("click", () => {
+  world.resetCamera();
   announceCameraMode(false);
 });
 
@@ -1119,18 +1146,9 @@ get("camera-button").addEventListener("click", () => {
   world.toggleCameraMode();
   announceCameraMode(false);
 });
-get("tile-close").addEventListener("click", () => {
-  selected = undefined;
-  selectedBuilding = undefined;
-  autoTarget = undefined;
-  contextAbort?.abort();
-  contextRequest++;
-  world.select(undefined);
-  world.setSelectedObject(undefined);
-  updateTile();
-});
 
 window.addEventListener("keydown", (event) => {
+  if (isUiOverlayOpen()) return;
   if (
     event.ctrlKey &&
     event.altKey &&
@@ -1152,10 +1170,24 @@ window.addEventListener("keydown", (event) => {
     stats.dialogOpen ||
     event.target instanceof HTMLButtonElement ||
     event.target instanceof HTMLSelectElement ||
-    event.target instanceof HTMLInputElement
+    event.target instanceof HTMLInputElement ||
+    (event.target instanceof HTMLElement &&
+      (event.target.isContentEditable ||
+        event.target.closest("textarea,[role='textbox']"))) ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey
   )
     return;
   switch (event.key) {
+    case "q":
+    case "Q":
+      world.rotateCamera(P.camera.rotationStep);
+      break;
+    case "e":
+    case "E":
+      world.rotateCamera(-P.camera.rotationStep);
+      break;
     case "h":
     case "H":
       world.animateFocus(player.home.x, player.home.z, P.homeSpan);

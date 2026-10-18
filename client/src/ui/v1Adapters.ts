@@ -19,7 +19,7 @@ export const SCHOOL_ROSTER: Record<
     s.id,
     {
       id: s.id,
-      name: s.fullName,
+      name: s.fullName.replaceAll("_", " "),
       shortName: s.shortName,
       colorHex: s.color,
       accentHex: s.accent,
@@ -32,13 +32,10 @@ export const LANDMARK_ROSTER = Object.fromEntries(
   LANDMARKS.map((l) => [l.id, l]),
 );
 export const BEACON_CRYSTALS = GAME_CONFIG.landmark.baseCrystals;
-export const landmarkGuessReward = (target: number) =>
-  Math.floor((target * GAME_CONFIG.landmark.puzzleBonusPercent) / 100);
+export const landmarkGuessReward = (_target: number) =>
+  GAME_CONFIG.landmark.puzzleBonusCrystals;
 export const beaconOvertakeTarget = (current: number) =>
-  current +
-  Math.round(
-    (BEACON_CRYSTALS * GAME_CONFIG.landmark.takeoverStepPercent) / 100,
-  );
+  current + GAME_CONFIG.landmark.activationStepCrystals;
 export type UniStopTier = RewardProfile;
 export type LootRarity = "common" | "rare" | "epic" | "legendary";
 export interface LootItem {

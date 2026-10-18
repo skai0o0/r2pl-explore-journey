@@ -1,14 +1,15 @@
+@import "./ui/theme.css";
 .journey-boot {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: var(--layer-loading);
   display: grid;
   place-items: center;
   padding: 32px;
   background:
-    radial-gradient(ellipse at 90% 50%, #1c493e 0, transparent 55%), #0b1b20;
-  color: #eff6ef;
-  font-family: system-ui;
+    radial-gradient(ellipse at 90% 50%, #1c493e 0, transparent 55%), var(--ink);
+  color: var(--text-primary);
+  font-family: var(--font-main);
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -20,7 +21,7 @@
 .boot-brand {
   font-size: 40px;
   font-weight: 1000;
-  color: #d5fa83;
+  color: var(--cyan);
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -34,7 +35,7 @@
   margin-left: 20px;
   font-size: 11px;
   letter-spacing: 2px;
-  color: #dbe8db;
+  color: var(--text-secondary);
 }
 .boot-content {
   max-width: 660px;
@@ -49,19 +50,19 @@
 .boot-kicker {
   font-size: 11px;
   letter-spacing: 3px;
-  color: #d5fa83;
+  color: var(--cyan);
 }
 .boot-note {
   max-width: 460px;
   font-size: 16px;
   line-height: 1.8;
-  color: #b4c7c2;
+  color: var(--muted);
   margin: 0 0 28px;
 }
 .boot-primary {
   border: 0;
   border-radius: 12px;
-  background: #d5fa83;
+  background: var(--cyan);
   color: #142522;
   padding: 18px 24px;
   font-size: 15px;
@@ -83,7 +84,7 @@
   font-size: 13px;
 }
 .boot-how {
-  color: #8da69f;
+  color: var(--muted);
   font-size: 11px;
   line-height: 2;
   margin-top: 38px;
@@ -91,7 +92,7 @@
 .boot-card footer {
   font-size: 10px;
   letter-spacing: 2px;
-  color: #7e9d92;
+  color: var(--muted);
   border-top: 1px solid #ffffff18;
   padding-top: 24px;
 }
@@ -108,7 +109,7 @@
 .boot-orbit span {
   position: absolute;
   inset: 0;
-  border: 1px solid #c0ef8d;
+  border: 1px solid var(--cyan-bright);
   border-radius: 44%;
 }
 .boot-orbit span:nth-child(2) {
@@ -116,14 +117,14 @@
 }
 .boot-orbit span:nth-child(3) {
   inset: 128px;
-  background: radial-gradient(circle, #a3de7730, transparent);
+  background: radial-gradient(circle, var(--cyan-tint), transparent);
 }
 .boot-stages {
   list-style: none;
   padding: 0;
   display: grid;
   gap: 14px;
-  color: #718b83;
+  color: var(--muted);
 }
 .boot-stages li {
   display: flex;
@@ -139,18 +140,18 @@
   border: 1px solid currentColor;
 }
 .boot-stages li[data-state="active"] {
-  color: #e1fcad;
+  color: var(--cyan-bright);
 }
 .boot-stages li[data-state="active"]:before {
-  background: #d5fa83;
+  background: var(--cyan);
   animation: bootPulse 1s infinite alternate;
 }
 .boot-stages li[data-state="done"] {
   color: #b0c2b9;
 }
 .boot-stages li[data-state="done"]:before {
-  background: #75bca0;
-  border-color: #75bca0;
+  background: var(--cyan);
+  border-color: var(--cyan);
 }
 @keyframes bootPulse {
   to {
@@ -184,3 +185,10 @@
     max-width: 240px;
   }
 }
+
+.boot-orbit { display:none; }
+.journey-boot { background:var(--ink); }
+.boot-brand img { width:140px;height:92px;object-fit:contain; }
+.boot-card { width:min(720px,100%); padding:32px; border:1px solid var(--line); background:var(--surface); border-radius:12px; }
+.boot-content h1 { font-family:var(--font-display); }
+@media (max-width:600px) { .journey-boot { padding:12px; } .boot-card { padding:22px; } .boot-brand { flex-wrap:wrap; } .boot-brand small { margin:0; font-size:10px; } .boot-content { padding:24px 0; } .boot-note { font-size:14px; } }

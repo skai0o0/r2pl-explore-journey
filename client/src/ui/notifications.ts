@@ -3,7 +3,10 @@
  * In-Game Notification Templates & Formatting Utilities
  * Ported from V1 with full Predator HUD styling and click-to-locate support.
  */
-import { NotificationBanner, type NotificationBannerOptions } from "./notificationBanner.ts";
+import {
+  NotificationBanner,
+  type NotificationBannerOptions,
+} from "./notificationBanner.ts";
 
 export type NotificationCategory =
   | "territory"
@@ -74,7 +77,8 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     category: "territory",
     target: "all",
     titleTemplate: "Ô Tri Thức mới được khai phá!",
-    bodyTemplate: "{student_name} ({my_school}) vừa khai phá ô tri thức tại ({x}, {z})!",
+    bodyTemplate:
+      "{student_name} ({my_school}) vừa khai phá ô tri thức tại ({x}, {z})!",
     icon: "target",
   },
 
@@ -92,7 +96,8 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     category: "landmark",
     target: "all",
     titleTemplate: "Thắp sáng Đèn hiệu thành công!",
-    bodyTemplate: "{landmark_name} đã được thắp sáng thành công bởi {my_school}!",
+    bodyTemplate:
+      "{landmark_name} đã được thắp sáng thành công bởi {my_school}!",
     icon: "award",
   },
   {
@@ -116,7 +121,8 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     category: "landmark",
     target: "school",
     titleTemplate: "Giải đố thành công!",
-    bodyTemplate: "{student_name} vừa giải đúng {landmark_name} (+10% tinh thể)! 🎉",
+    bodyTemplate:
+      "{student_name} vừa giải đúng {landmark_name} (+{crystals} Tinh thể vào quỹ)! 🎉",
     icon: "check-circle",
   },
 
@@ -126,7 +132,8 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     category: "gacha",
     target: "personal",
     titleTemplate: "Trạm tiếp tế đã hồi!",
-    bodyTemplate: "Trạm tiếp tế {chest_tier} ({x}, {z}) đã hồi lượt quay miễn phí!",
+    bodyTemplate:
+      "Trạm tiếp tế {chest_tier} ({x}, {z}) đã hồi lượt quay miễn phí!",
     icon: "gift",
   },
   {
@@ -134,7 +141,8 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     category: "gacha",
     target: "school",
     titleTemplate: "Chiếm trạm tiếp tế thành công!",
-    bodyTemplate: "{my_school} đã nối tri thức chạm Trạm {chest_tier} ({x}, {z})!",
+    bodyTemplate:
+      "{my_school} đã nối tri thức chạm Trạm {chest_tier} ({x}, {z})!",
     icon: "sparkles",
   },
   {
@@ -150,7 +158,8 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     category: "gacha",
     target: "personal",
     titleTemplate: "Tìm thấy Bản đồ kho báu! 🗺️",
-    bodyTemplate: "Bản đồ chỉ lối tới rương {chest_tier} tại tọa độ ({x}, {z})!",
+    bodyTemplate:
+      "Bản đồ chỉ lối tới rương {chest_tier} tại tọa độ ({x}, {z})!",
     icon: "map",
   },
   {
@@ -245,7 +254,7 @@ export function notifyActionError(
   return NotificationBanner.show({
     title: "Chưa thể thực hiện",
     body: reason ? `${message}: ${reason}` : message,
-    category: "territory",
+    category: "error",
     icon: "zap-off",
     durationMs: 5000,
     ...(onClick ? { onClick } : {}),

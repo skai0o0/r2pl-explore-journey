@@ -189,6 +189,10 @@ export function layoutMapLabels(
 export function campaignDisplayText(text: string): string {
   return text
     .replace(/Shared Knowledge/g, "Tri Thức chung")
+    .replace(/\bBeacon\b/g, "Đèn hiệu")
+    .replace(/\bChest\b/g, "rương")
+    .replace(/\btreasure_map\b/g, "Bản đồ kho báu")
+    .replace(/\bcrystals\b/g, "Tinh thể")
     .replace(/Crystal pot/g, "quỹ Tinh Thể")
     .replace(/\bCrystals?\b/g, "Tinh Thể")
     .replace(/\bPoints?\b/g, "Điểm")

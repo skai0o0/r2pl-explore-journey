@@ -1,0 +1,168 @@
+{
+  "date": "2026-10-18",
+  "environment": "isolated loopback synthetic campaign",
+  "campaign": "8c3c4644-04d2-4c54-b1f1-b84edabc649d",
+  "tests": {
+    "total": 80,
+    "passed": 80,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": "PASS",
+  "typecheck": "PASS",
+  "clientPoolLeakage": [],
+  "school": {
+    "active": "halong",
+    "activations": 2,
+    "lastCost": 1100,
+    "nextTarget": 1200,
+    "buff": {
+      "landmarkId": "halong",
+      "name": "Tiếp tế khẩn",
+      "description": "10 lượt UniStop trúng Tinh thể đầu mỗi ngày được thêm 1 Tinh thể/lượt/trường."
+    }
+  },
+  "beacons": [
+    {
+      "id": "fansipan",
+      "holder": null,
+      "pot": 0
+    },
+    {
+      "id": "halong",
+      "holder": 0,
+      "pot": 1100
+    }
+  ],
+  "wallets": [
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-credit",
+      "balance": "89",
+      "opening": "1000",
+      "ledger": "-911",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-crystals",
+      "balance": "0",
+      "opening": "0",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-key",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "fixture-treasure-map",
+      "balance": "0",
+      "opening": "0",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "key-aspire",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "key-nitro",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000001",
+      "resource": "key-predator",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-credit",
+      "balance": "785",
+      "opening": "1000",
+      "ledger": "-215",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-crystals",
+      "balance": "10",
+      "opening": "1000",
+      "ledger": "-990",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-key",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "fixture-treasure-map",
+      "balance": "0",
+      "opening": "0",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "key-aspire",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "key-nitro",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    },
+    {
+      "actor_id": "93000000-0000-4000-8000-000000000002",
+      "resource": "key-predator",
+      "balance": "1",
+      "opening": "1",
+      "ledger": "0",
+      "ledgerConserved": true
+    }
+  ],
+  "browser": {
+    "initialCrystals": 0,
+    "firstPuzzle": 100,
+    "firstDepositPoints": 900,
+    "pointsAfterFirstActivation": 100,
+    "secondPuzzle": 100,
+    "firstStudentContribution": 10,
+    "secondStudentContribution": 990,
+    "pointsAfterOneMoreTile": 89,
+    "knowledgeTiles": 616,
+    "reload": true,
+    "mobile": {
+      "width": 390,
+      "height": 844
+    },
+    "consoleErrors": 0
+  }
+}

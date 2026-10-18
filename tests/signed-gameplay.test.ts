@@ -381,20 +381,20 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
     );
     assert.equal(
       (await g.view(rival)).landmarks.find((l) => l.id === "fansipan")!.target,
-      1050,
+      1100,
     );
     await g.command(
       rival,
       cmd("guess", "fansipan", undefined, "Đỉnh Fansipan"),
     );
-    await g.command(rival, cmd("contribute", "fansipan", 945));
+    await g.command(rival, cmd("contribute", "fansipan", 1000));
     assert.equal(
       (await g.view(a)).landmarks.find((l) => l.id === "fansipan")!.holder,
       1,
     );
     assert.equal(
       (await g.view(a)).landmarks.find((l) => l.id === "fansipan")!.target,
-      1100,
+      1200,
     );
     assert((await server.accounts.profile(a.token))!.ledgerConserved);
   } finally {

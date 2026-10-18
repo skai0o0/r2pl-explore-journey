@@ -31,6 +31,7 @@ import {
   type ModelPlacement,
 } from "./assetRegistry.ts";
 import { LandscapeEffects } from "./landscape.ts";
+import { MapCameraInput } from "./mapCameraInput.ts";
 import { createProceduralBuilding } from "./proceduralBuildings.ts";
 import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
 import { TerrainBiomes } from "./terrainBiomes.ts";
@@ -79,6 +80,8 @@ export function configureMapCamera(
   centerZ: number,
   span: number,
   aspect: number,
+  azimuth: number = P.camera.azimuth,
+  elevation: number = P.camera.elevation,
 ): void {
   const targetX = centerX - WORLD_WIDTH / 2;
   const targetY = WORLD_HEIGHT / 2 - centerZ;
@@ -91,13 +94,19 @@ export function configureMapCamera(
 
   if (mode === "isometric") {
     camera.up.set(0, 0, 1);
+    const tilt = Math.max(
+      P.camera.minElevation,
+      Math.min(P.camera.maxElevation, elevation),
+    );
+    const distance = CAMERA_DISTANCE * Math.hypot(Math.SQRT1_2, 0.62);
     camera.position.set(
-      targetX + CAMERA_DISTANCE * 0.5,
-      targetY - CAMERA_DISTANCE * 0.5,
-      CAMERA_DISTANCE * 0.62,
+      targetX + distance * Math.cos(tilt) * Math.cos(azimuth),
+      targetY + distance * Math.cos(tilt) * Math.sin(azimuth),
+      distance * Math.sin(tilt),
     );
   } else {
-    camera.up.set(0, 1, 0);
+    const rotation = azimuth - P.camera.azimuth;
+    camera.up.set(-Math.sin(rotation), Math.cos(rotation), 0);
     camera.position.set(targetX, targetY, CAMERA_DISTANCE);
   }
   camera.lookAt(targetX, targetY, 0);
@@ -351,11 +360,9 @@ export class WorldView {
   #span = 275;
   #centerX: number = SCHOOLS[0].hq.x;
   #centerZ: number = SCHOOLS[0].hq.z;
-  #drag:
-    | { x: number; y: number; centerX: number; centerZ: number; moved: boolean }
-    | undefined;
-  #pointers = new Map<number, { x: number; y: number }>();
-  #pinchDist = 0;
+  readonly #cameraInput = new MapCameraInput();
+  #azimuth: number = P.camera.azimuth;
+  #elevation: number = P.camera.elevation;
   #selected: PickedTile | undefined;
   #hovered: PickedTile | undefined;
   #pendingTile: PickedTile | undefined;
@@ -617,8 +624,9 @@ export class WorldView {
 
     this.#revealElement = document.createElement("div");
     this.#revealElement.className = "tile-reveal";
+    this.#revealElement.setAttribute("aria-hidden", "true");
     this.#revealElement.innerHTML =
-      '<span class="reveal-ring"></span><span class="reveal-spark">✦</span><span class="reveal-tag">ĐÃ MỞ TRI THỨC</span>';
+      '<span class="reveal-ring"></span><span class="reveal-spark">✦</span>';
     this.#revealElement.hidden = true;
     host.append(this.#revealElement);
 
@@ -644,6 +652,8 @@ export class WorldView {
     host.addEventListener("pointermove", this.#pointerMove);
     host.addEventListener("pointerup", this.#pointerUp);
     host.addEventListener("pointercancel", this.#pointerUp);
+    host.addEventListener("lostpointercapture", this.#pointerUp);
+    host.addEventListener("contextmenu", this.#contextMenu);
     host.addEventListener("pointerleave", this.#pointerLeave);
     host.addEventListener("wheel", this.#wheel, { passive: false });
     window.addEventListener("resize", this.#render);
@@ -659,6 +669,8 @@ export class WorldView {
     this.#host.removeEventListener("pointermove", this.#pointerMove);
     this.#host.removeEventListener("pointerup", this.#pointerUp);
     this.#host.removeEventListener("pointercancel", this.#pointerUp);
+    this.#host.removeEventListener("lostpointercapture", this.#pointerUp);
+    this.#host.removeEventListener("contextmenu", this.#contextMenu);
     this.#host.removeEventListener("pointerleave", this.#pointerLeave);
     this.#host.removeEventListener("wheel", this.#wheel);
     window.removeEventListener("resize", this.#render);
@@ -681,6 +693,29 @@ export class WorldView {
 
   get cameraMode(): CameraMode {
     return this.#cameraMode;
+  }
+
+  rotateCamera(angle: number, tilt = 0): void {
+    this.#clearObjectHover();
+    this.#azimuth = Math.atan2(
+      Math.sin(this.#azimuth + angle),
+      Math.cos(this.#azimuth + angle),
+    );
+    this.#elevation = Math.max(
+      P.camera.minElevation,
+      Math.min(P.camera.maxElevation, this.#elevation + tilt),
+    );
+    this.#render();
+    this.#onViewChange();
+  }
+
+  resetCamera(): void {
+    this.#clearObjectHover();
+    this.#azimuth = P.camera.azimuth;
+    this.#elevation = P.camera.elevation;
+    this.#cameraMode = "isometric";
+    this.#render();
+    this.#onViewChange();
   }
 
   toggleCameraMode(): CameraMode {
@@ -1109,7 +1144,7 @@ export class WorldView {
     }
     this.#centerX = x;
     this.#centerZ = z;
-    this.#span = Math.max(32, Math.min(1000, span));
+    this.#span = Math.max(P.camera.minSpan, Math.min(P.camera.maxSpan, span));
     this.#clampCenter();
     this.#render();
     this.#onViewChange();
@@ -1131,7 +1166,10 @@ export class WorldView {
     const startSpan = this.#span;
     const clampedTargetX = Math.max(0, Math.min(999, targetX));
     const clampedTargetZ = Math.max(0, Math.min(999, targetZ));
-    const clampedTargetSpan = Math.max(32, Math.min(1000, targetSpan));
+    const clampedTargetSpan = Math.max(
+      P.camera.minSpan,
+      Math.min(P.camera.maxSpan, targetSpan),
+    );
     const startTime = performance.now();
 
     const step = (now: number) => {
@@ -1550,10 +1588,14 @@ export class WorldView {
 
   #pointerDown = (event: PointerEvent): void => {
     if ((event.target as Element).closest(".map-marker")) return;
-    if (event.button !== 0 && event.pointerType === "mouse") return;
+    if (![0, 1, 2].includes(event.button)) return;
+    event.preventDefault();
     this.#clearObjectHover();
+    this.#host.focus({ preventScroll: true });
     this.#host.setPointerCapture(event.pointerId);
-    this.#pointers.set(event.pointerId, {
+    this.#cameraInput.begin({
+      pointerId: event.pointerId,
+      button: event.button,
       x: event.clientX,
       y: event.clientY,
     });
@@ -1561,54 +1603,38 @@ export class WorldView {
       cancelAnimationFrame(this.#animId);
       this.#animId = undefined;
     }
-    if (this.#pointers.size === 1) {
-      this.#drag = {
-        x: event.clientX,
-        y: event.clientY,
-        centerX: this.#centerX,
-        centerZ: this.#centerZ,
-        moved: false,
-      };
-    } else if (this.#pointers.size === 2) {
-      const [p1, p2] = Array.from(this.#pointers.values());
-      if (p1 && p2) {
-        this.#pinchDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-      }
-      this.#drag = undefined;
-    }
   };
 
   #pointerMove = (event: PointerEvent): void => {
-    if (this.#pointers.has(event.pointerId)) {
-      this.#pointers.set(event.pointerId, {
+    if (this.#cameraInput.active) {
+      const motion = this.#cameraInput.move({
+        pointerId: event.pointerId,
+        button: event.button,
         x: event.clientX,
         y: event.clientY,
       });
-    }
-
-    if (this.#pointers.size === 2) {
-      const [p1, p2] = Array.from(this.#pointers.values());
-      if (p1 && p2 && this.#pinchDist > 0) {
-        const newDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-        const factor = this.#pinchDist / Math.max(10, newDist);
-        this.#span = Math.max(32, Math.min(1000, this.#span * factor));
-        this.#pinchDist = newDist;
-        this.#clampCenter();
-        this.#render();
-        this.#onViewChange();
+      if (!motion) return;
+      if (motion.kind === "orbit") {
+        this.rotateCamera(
+          -motion.dx * P.camera.orbitSensitivity,
+          motion.dy * P.camera.orbitSensitivity,
+        );
+        return;
       }
-      return;
-    }
-
-    if (this.#drag) {
-      const dx = event.clientX - this.#drag.x;
-      const dy = event.clientY - this.#drag.y;
-      if (Math.abs(dx) + Math.abs(dy) > 5) this.#drag.moved = true;
-      if (!this.#drag.moved) return;
-      const start = this.#point(this.#drag.x, this.#drag.y);
-      const current = this.#point(event.clientX, event.clientY);
-      this.#centerX = this.#drag.centerX + start.x - current.x;
-      this.#centerZ = this.#drag.centerZ + start.z - current.z;
+      const before = this.#point(motion.from.x, motion.from.y);
+      if (motion.kind === "gesture") {
+        this.#span = Math.max(
+          P.camera.minSpan,
+          Math.min(P.camera.maxSpan, this.#span * motion.zoom),
+        );
+        this.#azimuth = Math.atan2(
+          Math.sin(this.#azimuth - motion.rotation),
+          Math.cos(this.#azimuth - motion.rotation),
+        );
+      }
+      const after = this.#point(motion.to.x, motion.to.y);
+      this.#centerX += before.x - after.x;
+      this.#centerZ += before.z - after.z;
       this.#clampCenter();
       this.#render();
       this.#onViewChange();
@@ -1625,8 +1651,7 @@ export class WorldView {
   #hoverAtPointer = (): void => {
     this.#hoverFrame = undefined;
     const pointer = this.#hoverPointer;
-    if (!pointer || this.#drag || this.#pointers.size > 0 || this.#disposed)
-      return;
+    if (!pointer || this.#cameraInput.active || this.#disposed) return;
     const rect = this.#pointerRay(pointer.x, pointer.y);
     const object = this.#pickBuilding();
     this.#setObjectHover(object, pointer.x - rect.left, pointer.y - rect.top);
@@ -1662,11 +1687,18 @@ export class WorldView {
   };
 
   #pointerUp = (event: PointerEvent): void => {
-    this.#pointers.delete(event.pointerId);
-    const drag = this.#drag;
-    this.#drag = undefined;
-    if (this.#pointers.size === 0) this.#pinchDist = 0;
-    if (!drag || drag.moved || event.type === "pointercancel") return;
+    const click = this.#cameraInput.end(
+      {
+        pointerId: event.pointerId,
+        button: event.button,
+        x: event.clientX,
+        y: event.clientY,
+      },
+      event.type !== "pointerup",
+    );
+    if (this.#host.hasPointerCapture(event.pointerId))
+      this.#host.releasePointerCapture(event.pointerId);
+    if (!click) return;
 
     this.#pointerRay(event.clientX, event.clientY);
     const object = this.#pickBuilding();
@@ -1715,8 +1747,25 @@ export class WorldView {
     }
     const before = this.#point(event.clientX, event.clientY);
     this.#span = Math.max(
-      32,
-      Math.min(1000, this.#span * (event.deltaY > 0 ? 1.16 : 0.86)),
+      P.camera.minSpan,
+      Math.min(
+        P.camera.maxSpan,
+        this.#span *
+          Math.exp(
+            Math.max(
+              -240,
+              Math.min(
+                240,
+                event.deltaY *
+                  (event.deltaMode === 1
+                    ? 16
+                    : event.deltaMode === 2
+                      ? this.#host.clientHeight
+                      : 1),
+              ),
+            ) * 0.0015,
+          ),
+      ),
     );
     const after = this.#point(event.clientX, event.clientY);
     this.#centerX += before.x - after.x;
@@ -1724,6 +1773,10 @@ export class WorldView {
     this.#clampCenter();
     this.#render();
     this.#onViewChange();
+  };
+
+  #contextMenu = (event: Event): void => {
+    event.preventDefault();
   };
 
   #updateReticles(): void {
@@ -1754,7 +1807,13 @@ export class WorldView {
       this.#centerZ,
       this.#span,
       aspect,
+      this.#azimuth,
+      this.#elevation,
     );
+    this.#host.dataset.cameraAzimuth = String(this.#azimuth);
+    this.#host.dataset.cameraElevation = String(this.#elevation);
+    this.#host.dataset.cameraMode = this.#cameraMode;
+    this.#host.dataset.cameraSpan = String(this.#span);
     const sun = this.#sun;
     if (sun) {
       const tx = this.#centerX - 500;

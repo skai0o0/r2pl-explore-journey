@@ -32,7 +32,10 @@ import {
 import { UniStopModal } from "./ui/uniStopModal.ts";
 import type { LootItem } from "./ui/v1Adapters.ts";
 import "./ui/v1.css";
+import { preserveSurface, UiOverlay } from "./ui/overlay.ts";
+import { Icons } from "./ui/icons.ts";
 export class GameplayUI {
+  public onFindExpansion?: () => void;
   private player: DevPlayer | undefined;
   private view: GameView | undefined;
   private generation = 0;
@@ -44,7 +47,8 @@ export class GameplayUI {
       onOpenChest: (id) => void this.command({ action: "open", target: id }),
       onFindKey: (tier) => {
         const stop = this.objects.find(
-          (o) => o.kind === "unistop" && o.tier === tier,
+          (o) =>
+            o.kind === "unistop" && o.tier === tier && this.canShowObject(o),
         );
         if (stop) this.focus(stop.x, stop.z);
       },
@@ -53,6 +57,7 @@ export class GameplayUI {
     return this._chestModal;
   }
   private panel = document.createElement("details");
+  private journey: UiOverlay;
   private seen = new Set<string>();
   private _landmark: LandmarkModal | undefined;
   private get landmark(): LandmarkModal {
@@ -61,6 +66,7 @@ export class GameplayUI {
         void this.command({ action: "contribute", target: id, amount }),
       onGuessLandmark: (id, guess) =>
         void this.command({ action: "guess", target: id, guess }),
+      onRally: (id) => void this.command({ action: "rally", target: id }),
       onFocusLandmark: (x, z) => this.focus(x, z),
       onGuidePath: (x, z) => this.onGuidePath?.(x, z),
     });
@@ -94,14 +100,27 @@ export class GameplayUI {
   ) {
     this.panel.className = "gameplay-menu";
     this.panel.innerHTML =
-      '<summary>Hành trang & nhiệm vụ</summary><div class="gameplay-navigation"><input type="number" min="0" max="999" aria-label="Tọa độ X" placeholder="X"><input type="number" min="0" max="999" aria-label="Tọa độ Z" placeholder="Z"><button type="button">Đi tới ô</button></div><details class="gameplay-guide"><summary>Hướng dẫn chơi</summary><p>Khám phá ô chung cạnh để mở rộng tri thức. Ô mới cần 1 Điểm; giao lưu ô của một trường khác cần 2 Điểm. Ô của trường mình không mất Điểm.</p><p>Chạm ô để xem hành động phù hợp. Bật Mở Nhanh 1 Chạm để tự mở ô trống hợp lệ.</p><p>Tri thức chung miễn duy trì 24 giờ đầu, sau đó cần 1 Điểm mỗi ngày. Theo dõi hạn và góp Điểm trong mục tri thức chung.</p><p>Mở đường tới công trình, giải đố và góp Tinh Thể để thắp Đèn Hiệu cho trường. Nhận tài nguyên tại trạm tiếp tế; Bản Đồ Kho Báu chỉ ra rương riêng của bạn. Mở rương bằng Chìa Khóa cùng cấp.</p><p>Thành tích chạy trong tuần là điều kiện nhận quà hiện vật. Kéo để lia, cuộn để phóng to; H về trụ sở, L đến công trình, O xem toàn bản đồ, I đổi góc nhìn.</p></details><div class="gameplay-content"></div>';
+      '<summary>Hành trình & nhiệm vụ</summary><div class="gameplay-navigation"><input type="number" min="0" max="999" aria-label="Tọa độ X" placeholder="X"><input type="number" min="0" max="999" aria-label="Tọa độ Z" placeholder="Z"><button type="button">Đi tới ô</button></div><details class="gameplay-guide"><summary>Hướng dẫn chơi</summary><p>Khám phá ô chung cạnh để mở rộng tri thức. Ô mới cần 1 Điểm; giao lưu ô của một trường khác cần 2 Điểm. Ô của trường mình không mất Điểm.</p><p>Chạm ô để xem hành động phù hợp. Bật Mở Nhanh 1 Chạm để tự mở ô trống hợp lệ.</p><p>Tri thức chung miễn duy trì 24 giờ đầu, sau đó cần 1 Điểm mỗi ngày. Theo dõi hạn và góp Điểm trong mục tri thức chung.</p><p>Mở đường tới công trình, giải đố và góp Tinh Thể để thắp Đèn Hiệu cho trường. Nhận tài nguyên tại trạm tiếp tế; Bản Đồ Kho Báu chỉ ra rương riêng của bạn. Mở rương bằng Chìa Khóa cùng cấp.</p><p>Thành tích chạy trong tuần là điều kiện nhận quà hiện vật. Kéo để lia, cuộn để phóng to; H về trụ sở, L đến công trình, O xem toàn bản đồ, I đổi góc nhìn.</p></details><div class="gameplay-content"></div>';
     if (!this.devMode) {
       this.panel.querySelector(".gameplay-navigation")?.remove();
-      this.panel.hidden = true;
     }
+    this.panel.hidden = true;
     document.body.append(this.panel);
+    this.journey = new UiOverlay(
+      this.panel,
+      () => this.closeJourney(),
+      "Hành trình của trường",
+    );
+    const close = document.createElement("button");
+    close.className = "icon-button journey-close";
+    close.type = "button";
+    close.setAttribute("aria-label", "Đóng hành trình");
+    close.dataset.autofocus = "true";
+    close.innerHTML = Icons.close(18);
+    close.onclick = () => this.closeJourney();
+    this.panel.append(close);
     this.panel.addEventListener("toggle", () => {
-      if (!this.panel.open && !this.devMode) this.panel.hidden = true;
+      if (!this.panel.open) this.closeJourney();
       if (this.panel.open)
         document
           .querySelector<HTMLDetailsElement>(".operator-menu")
@@ -142,6 +161,12 @@ export class GameplayUI {
     this.panel.hidden = false;
     this.panel.open = true;
     this.render();
+    this.journey.open();
+  }
+  private closeJourney(): void {
+    this.panel.open = false;
+    this.panel.hidden = true;
+    this.journey.close();
   }
   canShowObject(object: WorldObject): boolean {
     return this.devMode || this.visibleObject(object);
@@ -162,10 +187,12 @@ export class GameplayUI {
     );
   }
   select(player: DevPlayer): void {
+    this.closeJourney();
     this.player = player;
     this.view = undefined;
     this.generation++;
     this.busy = false;
+    this._landmark?.setPending(false);
     this._landmark?.close();
     this._unistop?.close();
     this._carousel?.close();
@@ -193,7 +220,18 @@ export class GameplayUI {
       hints: LANDMARK_PUZZLES[id]?.hints,
       category: l.category,
       footprint: GAME_CONFIG.footprints.landmark,
-      buffDescription: l.buffDescription,
+      buffDescription: v.buff
+        ? `${v.buff.name}: ${v.buff.description}`
+        : "Đặc quyền được xác định khi thắp Đèn hiệu.",
+      contributionCapacity: Number(
+        this.view?.contributionCapacity ?? this.view?.crystals ?? 0,
+      ),
+      activeBeaconName:
+        this.view?.activeBeacon && this.view.activeBeacon.landmarkId !== id
+          ? LANDMARKS.find((o) => o.id === this.view!.activeBeacon!.landmarkId)
+              ?.name
+          : undefined,
+      rallied: v.rallied,
       gameplayRole: l.gameplayRole,
       x: this.objects.find((o) => o.id === id)?.x ?? l.x,
       y: this.objects.find((o) => o.id === id)?.z ?? l.z,
@@ -213,8 +251,7 @@ export class GameplayUI {
   }
   pick(o: WorldObject): void {
     if (!this.canShowObject(o)) return;
-    this.panel.open = false;
-    if (!this.devMode) this.panel.hidden = true;
+    this.closeJourney();
     this._landmark?.close();
     this._unistop?.close();
     this._chestModal?.close();
@@ -272,10 +309,12 @@ export class GameplayUI {
       const view = (await r.json()) as GameView;
       if (generation !== this.generation || request !== this.refreshRequest)
         return;
+      const changed = JSON.stringify(this.view) !== JSON.stringify(view);
       this.view = view;
       this.onView(view);
       this.onWallet();
-      if (this.panel.open) this.render();
+      if (this.panel.open && changed) this.render();
+      this.panel.querySelector(".journey-sync-status")?.remove();
       const id = this._landmark?.getCurrentLandmarkId();
       if (id && this.landmark.isVisible()) {
         const d = this.data(id);
@@ -292,6 +331,8 @@ export class GameplayUI {
               : null);
           this.unistop.update({
             id: o.id,
+            x: o.x,
+            z: o.z,
             tier: o.tier,
             ownerSchoolId: ownerId,
             schoolId: SCHOOLS[this.player.slot]!.id,
@@ -315,9 +356,17 @@ export class GameplayUI {
         JSON.stringify([...this.seen].slice(-200)),
       );
     } catch {
-      if (generation === this.generation && request === this.refreshRequest)
-        this.panel.querySelector(".gameplay-content")!.textContent =
-          "Đang đồng bộ hành trang…";
+      if (
+        generation === this.generation &&
+        request === this.refreshRequest &&
+        !this.panel.querySelector(".journey-sync-status")
+      ) {
+        const retry = document.createElement("button");
+        retry.className = "journey-sync-status";
+        retry.textContent = "Chưa cập nhật được hành trình · Thử lại";
+        retry.onclick = () => void this.refresh();
+        this.panel.querySelector(".gameplay-content")!.prepend(retry);
+      }
     }
   }
   private loot(r: RewardOutcome): LootItem {
@@ -366,6 +415,7 @@ export class GameplayUI {
       return;
     }
     sessionStorage.setItem(storage, JSON.stringify(c));
+    this._landmark?.setPending(true);
     try {
       const r = await gameFetch("/api/game", {
         method: "POST",
@@ -476,8 +526,9 @@ export class GameplayUI {
       }
 
       if (c.action === "guess") {
-        if (receipt.status === "applied") {
+        if (!receipt.nextAvailableAtMs) {
           notifyGameEvent("lm_guess_correct", {
+            crystals: GAME_CONFIG.landmark.puzzleBonusCrystals,
             student_name: this.player?.label ?? "Bạn",
             landmark_name:
               this.objects.find((x) => x.id === c.target)?.name ?? "Địa danh",
@@ -491,7 +542,7 @@ export class GameplayUI {
       } else if (c.action === "contribute") {
         notifyActionSuccess(
           "Đóng góp Tinh Thể",
-          `Đã nạp ${c.amount ?? 1} Tinh Thể vào Đèn hiệu công trình!`,
+          `Đã nạp ${receipt.contributed ?? c.amount ?? 1} Tinh Thể vào Đèn hiệu công trình!`,
           undefined,
           "landmark",
           "flame",
@@ -526,11 +577,13 @@ export class GameplayUI {
     } finally {
       if (generation === this.generation) {
         this.busy = false;
+        this._landmark?.setPending(false);
         this._unistop?.finishRequest();
       }
     }
   }
   private render(): void {
+    const restore = preserveSurface(this.panel);
     const content = this.panel.querySelector(".gameplay-content")!;
     const scroll = content.scrollTop;
     const expanded = new Set(
@@ -539,10 +592,76 @@ export class GameplayUI {
       ).map((details) => details.dataset.section),
     );
     content.replaceChildren();
+    const hero = document.createElement("div");
+    hero.className = "journey-hero";
+    const kicker = document.createElement("small");
+    kicker.textContent = "KHÁM PHÁ · TIẾP TẾ · THẮP ĐÈN HIỆU";
+    const heading = document.createElement("h2");
+    heading.textContent =
+      this.view?.rally &&
+      this.view.rally.target !== this.view.activeBeacon?.landmarkId
+        ? "Cùng trường tiến về đèn hiệu"
+        : "Mở đường cho hành trình mới";
+    const intro = document.createElement("p");
+    intro.textContent =
+      "Mở ô chung cạnh với tri thức trường mình. Khám phá trạm và công trình trên đường đi.";
+    hero.append(kicker, heading, intro);
+    if (this.onFindExpansion) {
+      const next = document.createElement("button");
+      next.type = "button";
+      next.textContent = "Tìm ô tiếp theo";
+      next.onclick = () => {
+        this.closeJourney();
+        this.onFindExpansion?.();
+      };
+      hero.append(next);
+    }
+    content.append(hero);
+    if (!this.view) {
+      const empty = document.createElement("p");
+      empty.className = "journey-empty";
+      empty.textContent = "Đang đồng bộ hành trình…";
+      content.append(empty);
+    }
+    if (this.view?.activeBeacon) {
+      const beacon = document.createElement("div");
+      beacon.className = "journey-beacon";
+      const label = document.createElement("small");
+      label.textContent = "ĐÈN HIỆU ĐANG HOẠT ĐỘNG";
+      const title = document.createElement("h3");
+      title.textContent = this.view.activeBeacon.name;
+      const description = document.createElement("p");
+      description.textContent = this.view.activeBeacon.description;
+      beacon.append(label, title, description);
+      content.append(beacon);
+    }
     const storage = this.player
       ? `pending-game-${this.scope}-${this.player.token}`
       : "";
     const pending = sessionStorage.getItem(storage);
+    if (this.view?.rally) {
+      const target = this.objects.find(
+        (o) => o.id === this.view!.rally!.target,
+      );
+      const progress = this.view.landmarks.find((o) => o.id === target?.id);
+      if (
+        target &&
+        progress &&
+        this.view.activeBeacon?.landmarkId !== target.id
+      ) {
+        const rally = document.createElement("button");
+        rally.className = "school-rally";
+        rally.textContent = `Hiệu triệu: ${this.objectName(target)} · ${progress.pot}/${progress.target} Tinh thể`;
+        rally.onclick = () => this.pick(target);
+        content.append(rally);
+        const meter = document.createElement("progress");
+        meter.className = "journey-meter";
+        meter.max = progress.target;
+        meter.value = progress.pot;
+        meter.setAttribute("aria-label", "Tiến trình quỹ hiệu triệu");
+        content.append(meter);
+      }
+    }
     if (pending) {
       const retry = document.createElement("button");
       retry.textContent = "Gửi lại lệnh đang chờ";
@@ -556,40 +675,27 @@ export class GameplayUI {
       (this.view?.treasureMaps ?? "—") +
       " · Chìa Khóa Aspire/Nitro/Predator: " +
       (this.view ? Object.values(this.view.keys).join("/") : "—");
-    content.append(inventory);
+    if (this.devMode) content.append(inventory);
     const gifts = this.view?.gifts ?? [];
     if (gifts.length > 0) {
       const section = document.createElement("div");
       section.className = "gift-inventory-section";
-      section.style.cssText =
-        "margin:10px 0;padding:10px;background:#0d232e;border:1px solid #1a3c4f;border-radius:6px;";
-      const heading = document.createElement("div");
-      heading.style.cssText =
-        "font-weight:700;color:#00e5ff;margin-bottom:8px;font-size:13px;display:flex;align-items:center;gap:6px;";
-      heading.innerHTML = "🎁 <span>Quà hiện vật</span>";
+
+      const heading = document.createElement("h3");
+      heading.textContent = "Quà hiện vật";
       section.append(heading);
 
       for (const gift of gifts) {
         const card = document.createElement("div");
-        card.style.cssText =
-          "background:#142d3b;border-radius:4px;padding:8px;margin-bottom:6px;font-size:12px;border-left:3px solid #ffcc66;";
+        card.className = "gift-card";
         const isRedeemed = !!gift.redeemedAt;
         const code = gift.giftCode || gift.id;
         card.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-weight:700;color:#ffd700;text-transform:uppercase">${gift.tier} · QUÀ HIỆN VẬT</span>
-            <span style="font-size:11px;font-weight:600;color:${isRedeemed ? "#5fffd0" : "#ff9d00"}">
-              ${isRedeemed ? "✓ ĐÃ NHẬN" : "⏳ CHỜ NHẬN QUÀ"}
-            </span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;margin:4px 0">
-            <span style="color:#aaa;font-size:11px">Mã đối soát:</span>
-            <code style="background:#09151c;padding:2px 6px;border-radius:3px;color:#00e5ff;font-weight:700;letter-spacing:1px">${code}</code>
-            <button type="button" class="copy-gift-btn" style="padding:2px 8px;font-size:11px;cursor:pointer">Sao chép</button>
-          </div>
-          <small style="color:#88a">
-            ${isRedeemed ? `Đã nhận quà tại sự kiện (${new Date(Number(gift.redeemedAt)).toLocaleString("vi-VN")})` : "Đưa mã này cho Ban tổ chức tại sự kiện để nhận quà"}
-          </small>
+          <strong>${gift.tier} · Quà hiện vật</strong>
+          <span class="gift-state">${isRedeemed ? "Đã nhận" : "Chờ nhận quà"}</span>
+          <code>${code}</code>
+          <button type="button" class="copy-gift-btn">Sao chép mã</button>
+          <p>${isRedeemed ? `Đã nhận tại sự kiện (${new Date(Number(gift.redeemedAt)).toLocaleString("vi-VN")})` : "Đưa mã này cho Ban tổ chức tại sự kiện để nhận quà."}</p>
         `;
         const copyBtn = card.querySelector(
           ".copy-gift-btn",
@@ -598,7 +704,7 @@ export class GameplayUI {
           if (navigator.clipboard) {
             void navigator.clipboard.writeText(code);
             NotificationBanner.show({
-              title: "Kho đồ",
+              title: "Quà hiện vật",
               body: `Đã sao chép mã quà tặng: ${code}`,
             });
           }
@@ -633,6 +739,7 @@ export class GameplayUI {
     content.append(km);
     for (const cluster of this.view?.shared ?? []) {
       const box = document.createElement("div");
+      box.className = "shared-journey";
       const text = document.createElement("p");
       text.textContent = `${cluster.pair.map((s) => SCHOOLS[s]!.shortName).join(" + ")} · ${cluster.tiles} ô · ${cluster.status === "shared" ? `Duy trì đến ${new Date(cluster.due).toLocaleString()}` : `Góp Điểm giữ tri thức ${cluster.contributed}/${cluster.required} · hết hạn ${new Date(Math.min(cluster.hardUntil, cluster.rollingUntil)).toLocaleString()}`}`;
       const pay = document.createElement("button");
@@ -671,12 +778,21 @@ export class GameplayUI {
       const row = document.createElement("div"),
         focus = document.createElement("button"),
         open = document.createElement("button");
-      focus.textContent = "⌖";
+      row.className = "destination-row";
+      focus.innerHTML = Icons.target(16);
+      focus.setAttribute("aria-label", `Đi tới ${this.objectName(o)}`);
       focus.title = `Đi tới ${this.objectName(o)}`;
       focus.onclick = () => this.focus(o.x, o.z);
       open.textContent = this.devMode
         ? `${o.name} · (${o.x}, ${o.z})`
         : this.objectName(o);
+      open.dataset.objectId = o.id;
+      if (!this.devMode && o.kind === "landmark") {
+        const landmark = this.view?.landmarks.find((l) => l.id === o.id);
+        if (landmark?.holder === this.player?.slot)
+          open.textContent += " · Đang thắp";
+        else if (landmark?.hasPath) open.textContent += " · Có thể nạp";
+      }
       open.onclick = () => this.pick(o);
       row.append(focus, open);
       destinations.append(row);
@@ -694,6 +810,14 @@ export class GameplayUI {
       history.append(row);
     }
     content.append(history);
+    if (!this.view?.events.length) {
+      const empty = document.createElement("p");
+      empty.className = "journey-empty";
+      empty.textContent =
+        "Những hoạt động mới của trường sẽ xuất hiện tại đây.";
+      history.append(empty);
+    }
     content.scrollTop = scroll;
+    restore();
   }
 }

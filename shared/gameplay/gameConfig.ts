@@ -311,6 +311,35 @@ export const LANDMARKS = [
     z: 575,
   },
 ] as const;
+/** Server consumers only. A separate export keeps the private pool out of client bundles. */
+export const BEACON_BUFF_CONFIG = {
+  dayMs: 86400000,
+  dayOffsetMs: 25200000,
+  rankBands: [3, 5],
+  scoutRadius: 3,
+  rates: {
+    vanguard: { every: 2, limit: 10, cap: 5 },
+    assault: { every: 2, limit: 10, cap: 5 },
+    thrift: { every: 20, cap: 5 },
+    breakthrough: { every: 5, cap: 20 },
+    foothold: { every: 2, cap: 10 },
+  },
+  vision: { radius: 3, burstLimit: 20 },
+  scouts: { dailyCap: 1 },
+  crystals: {
+    urgent: { flat: 1, limit: 10, cap: 10 },
+    excavation: { flat: 2, limit: 5, cap: 10 },
+    reserve: { percent: 10, cap: 10 },
+    harvest: { percent: 10, cap: 10 },
+    reinforcement: { percent: 25, cap: 20 },
+    revival: { percent: 25, cap: 20 },
+  },
+  cooldown: { supply: 10, return: 20 },
+  upkeep: { percent: 10, cap: 10 },
+  consolidation: { percent: 10, cap: 10 },
+  cohort: { students: 10, points: 5 },
+  comeback: { tiles: 10, spins: 1, points: 5 },
+} as const;
 export const GAME_CONFIG = {
   editor: {
     maxObjects: 200,
@@ -392,8 +421,10 @@ export const GAME_CONFIG = {
   },
   landmark: {
     baseCrystals: 1000,
-    takeoverStepPercent: 5,
-    puzzleBonusPercent: 10,
+    activationStepCrystals: 100,
+    puzzleBonusCrystals: 100,
+    pointsPerCrystal: 1,
+    rallyCooldownMs: 900000,
     wrongGuessCooldownMs: 600000,
     puzzleEnabled: true,
     contributionSteps: [10, 20, 50],
