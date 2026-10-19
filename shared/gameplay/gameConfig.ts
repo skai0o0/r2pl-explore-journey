@@ -440,6 +440,13 @@ export const GAME_CONFIG = {
       predator: 86400000,
     },
     giftFallback: { unistop: 4, chest: 10 },
+    emptyGiftPoolCrystals: 1,
+    giftPool: {
+      maxItems: 200,
+      maxRemainingPerItem: 100000,
+      maxTotal: 1000000,
+      maxNameLength: 100,
+    },
   },
   running: {
     kmToPointsRate: 10,

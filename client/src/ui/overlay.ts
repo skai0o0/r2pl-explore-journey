@@ -12,16 +12,18 @@ export function preserveSurface(root: HTMLElement): () => void {
     ? (doc.activeElement as HTMLElement)
     : null;
   const body =
-    root.querySelector<HTMLElement>(".unistop-modal-body,.lm-modal-body") ??
-    root;
+    root.querySelector<HTMLElement>(
+      ".unistop-modal-body,.lm-modal-body,.chest-modal-body",
+    ) ?? root;
   const scroll = body?.scrollTop ?? 0;
   const details = Array.from(
     root.querySelectorAll<HTMLDetailsElement>("details"),
   ).map((d) => d.open);
   return () => {
     const nextBody =
-      root.querySelector<HTMLElement>(".unistop-modal-body,.lm-modal-body") ??
-      root;
+      root.querySelector<HTMLElement>(
+        ".unistop-modal-body,.lm-modal-body,.chest-modal-body",
+      ) ?? root;
     if (nextBody) nextBody.scrollTop = scroll;
     root.querySelectorAll<HTMLDetailsElement>("details").forEach((d, i) => {
       if (details[i] !== undefined) d.open = details[i]!;

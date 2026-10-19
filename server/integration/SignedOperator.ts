@@ -1,9 +1,14 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Pool } from "pg";
 import { validateEditorLayout } from "../../shared/gameplay/editor.ts";
-import { SCHOOLS, type WorldObject } from "../../shared/gameplay/gameConfig.ts";
+import {
+  type RewardProfile,
+  SCHOOLS,
+  type WorldObject,
+} from "../../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import { chunkId, localIndex } from "../../shared/world/coordinates.ts";
+import { setLegacyGiftStock } from "./GiftPoolStore.ts";
 import { adjustKnowledgeScore } from "./KnowledgeScore.ts";
 import { PortalError } from "./PortalSignature.ts";
 import type { SchoolPlayFixture } from "./SchoolPlayFixture.ts";
@@ -114,13 +119,11 @@ export class SignedOperator {
           Number(c.amount) > 100000
         )
           throw new TypeError("Invalid Gift stock");
-        await db.query(
-          "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'gift-stock',$2,$3) ON CONFLICT(campaign_id,scope,id) DO UPDATE SET data=EXCLUDED.data",
-          [
-            this.fixture.campaignId,
-            c.tier,
-            JSON.stringify({ remaining: c.amount }),
-          ],
+        await setLegacyGiftStock(
+          db,
+          this.fixture.campaignId,
+          c.tier as RewardProfile,
+          Number(c.amount),
         );
         await db.query(
           "INSERT INTO r2pl_v2.game_events(campaign_id,title,body) VALUES($1,$2,$3)",

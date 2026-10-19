@@ -107,7 +107,8 @@
 
     5. Remove all pre-granted per-school `reward_discoveries` for `dev-aspire-0..7`. A school's available UniStops in the UI/HUD are dynamically determined by which world UniStop instances currently have `ownerSchoolId === student.schoolId` (or are touched by the school's active Knowledge).
 
-  * **Weekly Running Eligibility (`C-10`, `C-11`):** Students **without** synced weekly running km (`weeklyRunningKm <= 0` for the current `Asia/Ho_Chi_Minh` Mon–Sun week) **CAN still spin UniStop and open Chests for in-game rewards**, but if the server RNG lands on a `Gift` slot (or if `Gift` stock is 0), the roll deterministically falls back to the top-tier Crystal reward of that table (`Crystals x4` for UniStop, `Crystals x10` for Chest) so no spin ever errors out or blocks play.
+  * **Weekly Running Eligibility (`C-10`, `C-11`):** Students without synced weekly running km (`weeklyRunningKm <= 0`, current `Asia/Ho_Chi_Minh` Mon–Sun week) can still spin/open for in-game rewards. With stocked Gifts, their Gift weight moves to `Crystals x4` (UniStop) / `Crystals x10` (Chest).
+  * **Real Gift Pool:** AMTECH admins manage named gifts, tiers, remaining quantities and availability in Live Editor. Active stock is shared per campaign and tier; winning consumes one item atomically and preserves its name in the entitlement. When a tier has no active stock, its Gift weight is **0** and transfers entirely to **Crystals x1**, including students without weekly km. Gift remains visible on the carousel at **0%**. Restocking restores the original table odds for eligible students; no rule-version or partner API change.
 
 * **Approved Probability Tables (`C-10` — Exact Weights):**
 

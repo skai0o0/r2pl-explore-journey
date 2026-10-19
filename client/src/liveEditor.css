@@ -451,7 +451,30 @@ body[data-mode="admin"] {
   }
 }
 
-.studio button { min-height:44px; }
-.studio-brand { color:var(--cyan-bright); }
-.studio-inspector h2,.studio-library h1 { font-family:var(--font-display); }
-.studio-primary { color:var(--ink); }
+.studio button {
+  min-height: 44px;
+}
+.studio-brand {
+  color: var(--cyan-bright);
+}
+.studio-inspector h2,
+.studio-library h1 {
+  font-family: var(--font-display);
+}
+.studio-primary {
+  color: var(--ink);
+}
+
+.studio-pool-item {
+  border-top: 1px solid #33454b;
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.studio-pool-item p,
+.studio-gift-pool p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studio-pool-item button {
+  margin: 3px;
+}

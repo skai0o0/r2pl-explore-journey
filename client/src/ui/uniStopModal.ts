@@ -1,7 +1,8 @@
-import { preserveSurface, UiOverlay } from "./overlay.ts";
 // client/src/ui/uniStopModal.ts
 import { GAME_CONFIG } from "../../../shared/gameplay/gameConfig.ts";
+import { effectiveRewardOutcomes } from "../../../shared/gameplay/giftPool.ts";
 import { Icons } from "./icons.ts";
+import { preserveSurface, UiOverlay } from "./overlay.ts";
 import {
   durationText,
   SCHOOL_ROSTER,
@@ -20,6 +21,7 @@ export interface UniStopView {
   cooldownUntil: number;
   profileReady: boolean;
   hasWeeklyRunningPoints: boolean;
+  giftStock?: number;
   distanceToTerritory?: number;
   closestFrontierTile?: { x: number; z: number };
 }
@@ -183,7 +185,12 @@ export class UniStopModal {
           : "#fbbf24";
 
     // Drop table preview
-    const outcomes = GAME_CONFIG.rewards.unistop[d.tier]?.outcomes ?? [];
+    const outcomes = effectiveRewardOutcomes(
+      "unistop",
+      d.tier,
+      d.giftStock ?? 0,
+      d.hasWeeklyRunningPoints,
+    );
     const totalWeight = outcomes.reduce((sum, r) => sum + r.weight, 0);
 
     const lootRows = outcomes

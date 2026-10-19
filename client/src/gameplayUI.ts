@@ -10,6 +10,7 @@ import {
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
+import { effectiveRewardOutcomes } from "../../shared/gameplay/giftPool.ts";
 import {
   LANDMARK_HINTS,
   LANDMARK_PUZZLES,
@@ -32,8 +33,8 @@ import {
 import { UniStopModal } from "./ui/uniStopModal.ts";
 import type { LootItem } from "./ui/v1Adapters.ts";
 import "./ui/v1.css";
-import { preserveSurface, UiOverlay } from "./ui/overlay.ts";
 import { Icons } from "./ui/icons.ts";
+import { preserveSurface, UiOverlay } from "./ui/overlay.ts";
 export class GameplayUI {
   public onFindExpansion?: () => void;
   private player: DevPlayer | undefined;
@@ -275,6 +276,7 @@ export class GameplayUI {
         cooldownUntil: this.view?.cooldowns[o.id] ?? 0,
         profileReady: true,
         hasWeeklyRunningPoints: (this.view?.weeklyKm ?? 0) > 0,
+        giftStock: this.view?.giftStock?.[o.tier] ?? 0,
       });
     } else if (o.kind === "chest" && o.tier && this.player) {
       const keysCount = Number(this.view?.keys[o.tier] ?? 0);
@@ -292,6 +294,8 @@ export class GameplayUI {
         keysCount,
         claimed,
         discovered: true,
+        giftStock: this.view?.giftStock?.[o.tier] ?? 0,
+        hasWeeklyRunningPoints: (this.view?.weeklyKm ?? 0) > 0,
       });
     }
   }
@@ -339,9 +343,14 @@ export class GameplayUI {
             cooldownUntil: view.cooldowns[o.id] ?? 0,
             profileReady: true,
             hasWeeklyRunningPoints: view.weeklyKm > 0,
+            giftStock: view.giftStock?.[o.tier] ?? 0,
           });
         }
       }
+      this._chestModal?.updateAvailability(
+        view.giftStock ?? { aspire: 0, nitro: 0, predator: 0 },
+        view.weeklyKm > 0,
+      );
       const unseen = [...view.events]
         .reverse()
         .filter((e) => !this.seen.has(e.id));
@@ -450,18 +459,19 @@ export class GameplayUI {
           this.objects.find((o) => o.id === c.target) ??
           this.view?.chests.find((o) => o.id === c.target);
         const rows =
-          GAME_CONFIG.rewards[c.action === "open" ? "chest" : "unistop"][
-            o?.tier ?? "aspire"
-          ].outcomes;
-        const winner = this.loot(receipt.reward),
+          receipt.rewardTable ??
+          effectiveRewardOutcomes(
+            c.action === "open" ? "chest" : "unistop",
+            o?.tier ?? "aspire",
+            this.view?.giftStock?.[o?.tier ?? "aspire"] ?? 0,
+            (this.view?.weeklyKm ?? 0) > 0,
+          );
+        const winner = {
+            ...this.loot(receipt.reward),
+            ...(receipt.giftName ? { name: receipt.giftName } : {}),
+          },
           items = Array.from({ length: 30 }, (_, i) =>
-            i === 24
-              ? winner
-              : this.loot(
-                  rows.filter((row) => row.weight > 0)[
-                    i % rows.filter((row) => row.weight > 0).length
-                  ]!,
-                ),
+            i === 24 ? winner : this.loot(rows[i % rows.length]!),
           );
         const giftCode =
           receipt.reward.kind === "gift"
@@ -486,7 +496,7 @@ export class GameplayUI {
         if (receipt.reward.kind === "gift") {
           notifyGameEvent("real_gift_viral", {
             student_name: this.player?.label ?? "Bạn",
-            gift_name: "Quà Hiện Vật Predator",
+            gift_name: receipt.giftName ?? "Quà Hiện Vật Predator",
             gift_code: giftCode ?? "",
           });
         } else if (receipt.reward.kind === "treasure_map") {
@@ -697,6 +707,9 @@ export class GameplayUI {
           <button type="button" class="copy-gift-btn">Sao chép mã</button>
           <p>${isRedeemed ? `Đã nhận tại sự kiện (${new Date(Number(gift.redeemedAt)).toLocaleString("vi-VN")})` : "Đưa mã này cho Ban tổ chức tại sự kiện để nhận quà."}</p>
         `;
+        if (gift.giftName)
+          card.querySelector("strong")!.textContent =
+            `${gift.tier} · ${gift.giftName}`;
         const copyBtn = card.querySelector(
           ".copy-gift-btn",
         ) as HTMLButtonElement;

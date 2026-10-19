@@ -1,20 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { matchMaker } from "@colyseus/core";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
+import { matchMaker } from "@colyseus/core";
 import type { Pool } from "pg";
 import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
 import { EDITOR_CONFIG } from "../../shared/gameplay/editor.ts";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
+import type { BotRole } from "../../shared/simulation/schoolBots.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
+import { DemoAdminStore } from "./DemoAdminPortal.ts";
 import { DevAccountService } from "./DevAccountService.ts";
 import { EditorStore } from "./EditorStore.ts";
+import { GiftPoolStore } from "./GiftPoolStore.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
 import { seedPortalCampaign } from "./PortalCampaign.ts";
 import { type PortalConfig, validatePortalConfig } from "./PortalConfig.ts";
@@ -27,8 +30,6 @@ import {
 import { PortalHttp } from "./PortalHttp.ts";
 import { PortalError } from "./PortalSignature.ts";
 import { PortalStore } from "./PortalStore.ts";
-import { DemoAdminStore } from "./DemoAdminPortal.ts";
-import type { BotRole } from "../../shared/simulation/schoolBots.ts";
 import {
   SCHOOL_PLAY_CAMPAIGN,
   type SchoolPlayActor,
@@ -202,6 +203,7 @@ async function startSchoolPlayServer(
     () => realtime.core.resyncViews(),
   );
   const editor = new EditorStore(pool, fixture.campaignId);
+  const giftPool = new GiftPoolStore(pool, fixture.campaignId);
   const clientRoot = resolve(
     fileURLToPath(new URL("../../dist/client/", import.meta.url)),
   );
@@ -371,6 +373,69 @@ async function startSchoolPlayServer(
       portal ? portalActor : gameplay.actor(token);
     const expectedOrigin =
       authConfig?.publicOrigin ?? `http://${request.headers.host}`;
+    if (path === "/api/admin/gift-pool") {
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      if (!admin) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "ADMIN_REQUIRED" }));
+        return;
+      }
+      try {
+        if (request.method === "GET") {
+          response.end(
+            JSON.stringify(
+              await giftPool.snapshot(admin.actorId, cookieToken!),
+            ),
+          );
+          return;
+        }
+        if (request.method !== "POST") {
+          response.writeHead(405).end();
+          return;
+        }
+        if (!request.headers["content-type"]?.startsWith("application/json"))
+          throw new PortalError(415, "JSON_REQUIRED");
+        let size = 0;
+        const parts: Buffer[] = [];
+        for await (const part of request) {
+          const bytes = Buffer.from(part);
+          size += bytes.length;
+          if (size > EDITOR_CONFIG.maxBodyBytes)
+            throw new PortalError(413, "BODY_TOO_LARGE");
+          parts.push(bytes);
+        }
+        response.end(
+          JSON.stringify(
+            await giftPool.update(
+              admin.actorId,
+              cookieToken!,
+              JSON.parse(Buffer.concat(parts).toString("utf8")),
+            ),
+          ),
+        );
+      } catch (error) {
+        response
+          .writeHead(
+            error instanceof PortalError
+              ? error.status
+              : error instanceof TypeError || error instanceof SyntaxError
+                ? 400
+                : 503,
+          )
+          .end(
+            JSON.stringify({
+              error:
+                error instanceof PortalError
+                  ? error.code
+                  : error instanceof TypeError || error instanceof SyntaxError
+                    ? "INVALID_GIFT_POOL_COMMAND"
+                    : "TEMPORARILY_UNAVAILABLE",
+            }),
+          );
+      }
+      return;
+    }
     if (path === "/api/admin/editor" || path === "/api/admin/editor/draft") {
       response.setHeader("Content-Type", "application/json; charset=utf-8");
       if (!admin) {

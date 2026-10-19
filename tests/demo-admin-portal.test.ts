@@ -4,8 +4,9 @@ import { createServer } from "node:net";
 import test from "node:test";
 import { Pool } from "pg";
 import { R2plPartnerClient } from "../integration/partner-client.mjs";
-import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
 import { validatePortalConfig } from "../server/integration/PortalConfig.ts";
+import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
+import { SignedGameplay } from "../server/integration/SignedGameplay.ts";
 import { migratePortalDatabase } from "../server/persistence/PortalMigrations.ts";
 import { createDummyPortal } from "../server/portal/DummyServer.ts";
 import { AMTECH_ACCOUNTS } from "../shared/integration/identity.ts";
@@ -164,6 +165,96 @@ test("dummy admin → one-use handoff → synthetic Demo editor, while anonymous
     );
     assert.equal(snapshot.status, 200);
     assert(snapshot.data.objects.length > 0);
+    // AMTECH-only pool edits share reward transactions and reject stale forms.
+    assert.equal((await gameCall("/api/admin/gift-pool")).status, 403);
+    const poolCall = (body?: unknown, csrf = bootstrap.data.csrfToken) =>
+      gameCall("/api/admin/gift-pool", body, exchange.cookie, csrf);
+    let gifts = (await poolCall()).data;
+    assert.deepEqual(gifts.totals, { aspire: 0, nitro: 0, predator: 0 });
+    const add = {
+      action: "upsert",
+      expectedRevision: gifts.revision,
+      tier: "predator",
+      name: "Áo chạy giới hạn",
+      remaining: 1,
+    };
+    assert.equal((await poolCall(add, "")).status, 403);
+    assert.equal((await poolCall({ ...add, remaining: -1 })).status, 400);
+    let update = await poolCall(add);
+    assert.equal(update.status, 200);
+    gifts = update.data;
+    const itemId = gifts.items[0].id;
+    assert.equal((await poolCall(add)).status, 409);
+    const gameplay = new SignedGameplay(pool, game.fixture, () => 999);
+    const actors = game.fixture.actors.slice(0, 2);
+    for (const actor of actors)
+      await gameplay.command(actor, {
+        ruleVersion: 1,
+        key: randomUUID(),
+        action: "running",
+        amount: 1000,
+      });
+    const chests = ["chest_predator_1", "chest_predator_2"];
+    for (let i = 0; i < actors.length; i++)
+      await pool.query(
+        "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3)",
+        [adminConfig.campaignId, actors[i]!.actorId, chests[i]],
+      );
+    const commands = chests.map((target) => ({
+      ruleVersion: 1 as const,
+      key: randomUUID(),
+      action: "open" as const,
+      target,
+    }));
+    const results = await Promise.all(
+      actors.map((actor, i) => gameplay.command(actor, commands[i]!)),
+    );
+    assert.equal(results.filter((r) => r.reward?.kind === "gift").length, 1);
+    assert(results.every((r) => r.status === "applied"));
+    const winner = results.findIndex((r) => r.reward?.kind === "gift");
+    assert.equal(results[winner]!.giftName, "Áo chạy giới hạn");
+    assert.deepEqual(
+      await gameplay.command(actors[winner]!, commands[winner]!),
+      results[winner],
+    );
+    gifts = (await poolCall()).data;
+    assert.equal(gifts.totals.predator, 0);
+    assert.equal(gifts.items[0].awarded, 1);
+    assert.equal((await poolCall({ ...add, id: itemId })).status, 409);
+    update = await poolCall({
+      ...add,
+      id: itemId,
+      expectedRevision: gifts.revision,
+      name: "Áo phiên bản mới",
+      remaining: 2,
+    });
+    assert.equal(update.status, 200);
+    gifts = update.data;
+    assert.equal(gifts.totals.predator, 2);
+    const awarded = await gameplay.findGiftByCode(results[winner]!.giftCode!);
+    assert.equal(
+      awarded!.giftName,
+      "Áo chạy giới hạn",
+      "catalog changes cannot rename an already awarded gift",
+    );
+    update = await poolCall({
+      action: "archive",
+      id: itemId,
+      expectedRevision: gifts.revision,
+    });
+    assert.equal(update.status, 200);
+    assert.equal(update.data.totals.predator, 0);
+    assert.equal(update.data.items[0].remaining, 2);
+    assert.equal(update.data.items[0].awarded, 1);
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT count(*)::integer n FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='gift-pool'",
+          [portalConfig.campaignId],
+        )
+      ).rows[0].n,
+      0,
+    );
     const draft = {
       objects: snapshot.data.objects,
       baseRevision: snapshot.data.revision,
@@ -237,6 +328,11 @@ test("dummy admin → one-use handoff → synthetic Demo editor, while anonymous
     assert.equal(
       (await gameCall("/api/admin/editor", undefined, exchange.cookie)).status,
       403,
+    );
+    assert.equal(
+      (await poolCall()).status,
+      403,
+      "logged-out sessions cannot manage pool",
     );
   } finally {
     await portal?.close();

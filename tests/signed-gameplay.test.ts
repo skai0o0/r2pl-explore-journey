@@ -238,7 +238,7 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
       { web: 0, websocket: 0 },
       campaign,
     );
-    let roll = 999;
+    let roll = 729;
     const g = new SignedGameplay(pool, server.fixture, () => roll);
     const a = server.fixture.actors[0]!,
       b = server.fixture.actors[1]!,
@@ -269,8 +269,8 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
     let result = await g.command(a, cmd("spin", "unistop_predator_1"));
     assert.deepEqual(result.reward, {
       kind: "crystals",
-      quantity: 4,
-      weight: 5,
+      quantity: 1,
+      weight: 255,
     });
     // Student a immediately spins again -> rejected with COOLDOWN
     assert.equal(
@@ -295,6 +295,7 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
       "INSERT INTO r2pl_v2.game_chest_discoveries(campaign_id,actor_id,object_id) VALUES($1,$2,$3),($1,$4,$3)",
       [campaign, a.actorId, predatorChest, b.actorId],
     );
+    roll = 730;
     const winners = await Promise.all([
       g.command(a, cmd("open", predatorChest)),
       g.command(b, cmd("open", predatorChest)),
@@ -302,7 +303,7 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
     assert.equal(winners.filter((r) => r.status === "applied").length, 1);
     assert.equal(
       winners.find((r) => r.status === "applied")!.reward!.quantity,
-      10,
+      1,
     );
     assert.equal(
       winners.find((r) => r.status === "rejected")!.reason,

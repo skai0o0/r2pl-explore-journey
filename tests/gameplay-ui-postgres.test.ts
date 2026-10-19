@@ -20,7 +20,7 @@ test("real inventory buttons spin -> private discovery -> chest -> authoritative
     max: 16,
   });
   const campaign = randomUUID();
-  const draws = [969, 999];
+  const draws = [969, 800];
   const play = await createSchoolPlayServer(
     pool,
     { web: 0, websocket: 0 },
@@ -40,6 +40,7 @@ test("real inventory buttons spin -> private discovery -> chest -> authoritative
   const vite = await createServer({
     configFile: false,
     root: "client",
+    cacheDir: "../.vite/gift-pool-ui",
     server: { middlewareMode: true, hmr: false, ws: false, watch: null },
   });
   try {
@@ -91,6 +92,17 @@ test("real inventory buttons spin -> private discovery -> chest -> authoritative
       }
     };
     await until(() => !!view?.chests.length);
+    assert(
+      w.document.querySelector(
+        '.carousel-card.is-predator-gift[data-weight="0"]',
+      ),
+      "zero-probability Gift remains on the actual carousel strip",
+    );
+    assert(
+      w.document
+        .querySelector(".carousel-card.is-predator-gift")!
+        .textContent.includes("0%"),
+    );
     const chest = view!.chests[0]!;
     assert.equal(view!.treasureMaps, "1");
     const other = await (
@@ -108,8 +120,8 @@ test("real inventory buttons spin -> private discovery -> chest -> authoritative
     assert.equal(view!.chests.length, 0);
     assert.equal(
       view!.crystals,
-      "1010",
-      "Gift fallback is selected by the server for a player with no weekly km",
+      "1001",
+      "Empty Gift pool transfers its probability to x1 crystal on the server",
     );
     assert.equal(draws.length, 0);
     await new Promise(setImmediate);

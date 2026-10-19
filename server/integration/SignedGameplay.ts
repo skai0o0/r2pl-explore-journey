@@ -19,6 +19,7 @@ import {
   SCHOOLS,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
+import { effectiveRewardOutcomes } from "../../shared/gameplay/giftPool.ts";
 import {
   selectedTileAction,
   type TileAction,
@@ -47,6 +48,7 @@ import {
 } from "./BeaconBuffs.ts";
 import { scoutFrontier } from "./BeaconScout.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
+import { claimGiftPoolItem, readGiftPool } from "./GiftPoolStore.ts";
 import { campaignProviderFromEnv } from "./HttpCampaignProvider.ts";
 import type {
   SchoolPlayActor,
@@ -438,6 +440,7 @@ export class SignedGameplay {
           id: string;
           data: {
             tier: string;
+            giftName?: string;
             giftCode?: string;
             redeemedAt?: number | null;
             createdAt?: number;
@@ -450,6 +453,7 @@ export class SignedGameplay {
       ).rows.map((r) => ({
         id: r.id,
         tier: r.data.tier,
+        giftName: r.data.giftName,
         giftCode:
           r.data.giftCode ?? `R2PL-GIFT-${r.id.slice(0, 6).toUpperCase()}`,
         redeemedAt: r.data.redeemedAt ?? null,
@@ -493,8 +497,10 @@ export class SignedGameplay {
           ?.id === "scout" &&
         ((await dailyBuff(db, this.fixture.campaignId, actor.schoolSlot)).data
           .earned.scout ?? 0) < BEACON_BUFF_CONFIG.scouts.dailyCap;
+      const giftPool = await readGiftPool(db, this.fixture.campaignId);
       await db.query("COMMIT");
       return {
+        giftStock: giftPool.totals,
         activeBeacon: activeView(ownBeacon),
         beaconTarget: nextBeaconTarget(initialBeacon(), ownBeacon),
         rally,
@@ -1028,7 +1034,20 @@ export class SignedGameplay {
       );
       await this.save(db, "chest-claim", o.id, { actorId: a.actorId });
     }
-    const table = GAME_CONFIG.rewards[kind][o.tier];
+    const running = await this.state<{ week?: number; weeklyMeters?: number }>(
+      db,
+      "running",
+      a.actorId,
+      {},
+    );
+    const pool = await readGiftPool(db, this.fixture.campaignId);
+    const outcomes = effectiveRewardOutcomes(
+      kind,
+      o.tier,
+      pool.totals[o.tier],
+      running.week === campaignWeekStart(now) &&
+        (running.weeklyMeters ?? 0) > 0,
+    );
     let roll = this.draw();
     if (
       !Number.isInteger(roll) ||
@@ -1037,7 +1056,7 @@ export class SignedGameplay {
     )
       throw new Error("Invalid RNG");
     let reward: RewardOutcome | undefined;
-    for (const r of table.outcomes) {
+    for (const r of outcomes) {
       if (roll < r.weight) {
         reward = r;
         break;
@@ -1045,58 +1064,41 @@ export class SignedGameplay {
       roll -= r.weight;
     }
     if (!reward) throw new Error("Empty reward");
-    const running = await this.state<{ week?: number; weeklyMeters?: number }>(
-      db,
-      "running",
-      a.actorId,
-      {},
-    );
     let giftCode: string | undefined;
+    let giftName: string | undefined;
     if (reward.kind === "gift") {
-      const stock = await this.state<{ remaining: number }>(
+      const item = await claimGiftPoolItem(
         db,
-        "gift-stock",
+        this.fixture.campaignId,
+        pool,
         o.tier,
-        { remaining: GAME_CONFIG.staging.initialGiftStock },
       );
-      if (
-        running.week !== campaignWeekStart(now) ||
-        (running.weeklyMeters ?? 0) <= 0 ||
-        stock.remaining <= 0
-      )
-        reward = {
-          kind: "crystals",
-          quantity: GAME_CONFIG.rewards.giftFallback[kind],
-          weight: reward.weight,
-        };
-      else {
-        // Retry random-code collisions without aborting the reward transaction.
-        for (;;) {
-          giftCode =
-            "R2PL-GIFT-" + randomBytes(3).toString("hex").toUpperCase();
-          const inserted = await db.query(
-            "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'gift-entitlement',$2,$3) ON CONFLICT DO NOTHING RETURNING id",
-            [
-              this.fixture.campaignId,
-              a.actorId + ":" + c.key,
-              JSON.stringify({
-                actorId: a.actorId,
-                schoolSlot: a.schoolSlot,
-                schoolName:
-                  this.fixture.schools[a.schoolSlot]?.label ?? "Unknown",
-                tier: o.tier,
-                giftCode,
-                sourceKind: kind,
-                sourceId: o.id,
-                createdAt: now,
-                redeemedAt: null,
-              }),
-            ],
-          );
-          if (inserted.rowCount) break;
-        }
-        stock.remaining--;
-        await this.save(db, "gift-stock", o.tier, stock);
+      giftName = item.name;
+      // Retry random-code collisions without aborting the reward transaction.
+      for (;;) {
+        giftCode = "R2PL-GIFT-" + randomBytes(3).toString("hex").toUpperCase();
+        const inserted = await db.query(
+          "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'gift-entitlement',$2,$3) ON CONFLICT DO NOTHING RETURNING id",
+          [
+            this.fixture.campaignId,
+            a.actorId + ":" + c.key,
+            JSON.stringify({
+              actorId: a.actorId,
+              schoolSlot: a.schoolSlot,
+              schoolName:
+                this.fixture.schools[a.schoolSlot]?.label ?? "Unknown",
+              tier: o.tier,
+              giftName: item.name,
+              giftPoolItemId: item.id,
+              giftCode,
+              sourceKind: kind,
+              sourceId: o.id,
+              createdAt: now,
+              redeemedAt: null,
+            }),
+          ],
+        );
+        if (inserted.rowCount) break;
       }
     }
     const benefit = await rewardBuff(
@@ -1147,6 +1149,8 @@ export class SignedGameplay {
       status: "applied",
       reason: null,
       reward,
+      rewardTable: outcomes,
+      ...(giftName ? { giftName } : {}),
       ...(giftCode ? { giftCode } : {}),
       ...(discovery ? { discovery } : {}),
       ...(nextAvailableAtMs ? { nextAvailableAtMs } : {}),
@@ -1161,6 +1165,7 @@ export class SignedGameplay {
     schoolName: string;
     tier: string;
     giftCode: string;
+    giftName: string;
     createdAt: number;
     redeemedAt: number | null;
   } | null> {
@@ -1182,6 +1187,7 @@ export class SignedGameplay {
       schoolSlot: (data.schoolSlot as number) ?? 0,
       schoolName: (data.schoolName as string) ?? "Unknown",
       tier: (data.tier as string) ?? "aspire",
+      giftName: (data.giftName as string) ?? "Quà hiện vật",
       createdAt: (data.createdAt as number) ?? 0,
       redeemedAt: (data.redeemedAt as number | null) ?? null,
     };
@@ -1195,6 +1201,7 @@ export class SignedGameplay {
       schoolName: string;
       tier: string;
       giftCode: string;
+      giftName: string;
       createdAt: number;
       redeemedAt: number | null;
     }>
@@ -1217,6 +1224,7 @@ export class SignedGameplay {
         schoolSlot: (data.schoolSlot as number) ?? 0,
         schoolName: (data.schoolName as string) ?? "Unknown",
         tier: (data.tier as string) ?? "aspire",
+        giftName: (data.giftName as string) ?? "Quà hiện vật",
         createdAt: (data.createdAt as number) ?? 0,
         redeemedAt: (data.redeemedAt as number | null) ?? null,
       };

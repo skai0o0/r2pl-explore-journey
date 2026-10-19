@@ -1,4 +1,8 @@
-import type { RewardOutcome, WorldObject } from "./gameConfig.ts";
+import type {
+  RewardOutcome,
+  RewardProfile,
+  WorldObject,
+} from "./gameConfig.ts";
 export interface GameCommand {
   readonly ruleVersion: 1;
   readonly key: string;
@@ -35,12 +39,14 @@ export interface ActiveBeaconView {
 export interface GiftEntitlementView {
   readonly id: string;
   readonly tier: string;
+  readonly giftName?: string | undefined;
   readonly giftCode?: string | undefined;
   readonly redeemedAt?: number | null | undefined;
   readonly createdAt?: number | undefined;
   readonly schoolName?: string | undefined;
 }
 export interface GameView {
+  readonly giftStock?: Readonly<Record<RewardProfile, number>>;
   readonly activeBeacon?: ActiveBeaconView | undefined;
   readonly beaconTarget?: number | undefined;
   readonly rally?: { target: string; createdAt: number } | undefined;
@@ -74,6 +80,8 @@ export interface GameView {
   readonly events: readonly { id: string; title: string; body: string }[];
 }
 export interface GameReceipt {
+  readonly rewardTable?: readonly RewardOutcome[];
+  readonly giftName?: string;
   readonly contributed?: number | undefined;
   readonly status: "applied" | "rejected";
   readonly reason: string | null;

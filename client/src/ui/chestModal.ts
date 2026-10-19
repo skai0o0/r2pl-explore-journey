@@ -1,4 +1,3 @@
-import { UiOverlay } from "./overlay.ts";
 // client/src/ui/chestModal.ts
 /**
  * Dedicated Chest Modal with Predator HUD Requirements Checklist & Loot Preview
@@ -7,7 +6,9 @@ import {
   GAME_CONFIG,
   type WorldObject,
 } from "../../../shared/gameplay/gameConfig.ts";
+import { effectiveRewardOutcomes } from "../../../shared/gameplay/giftPool.ts";
 import { Icons } from "./icons.ts";
+import { preserveSurface, UiOverlay } from "./overlay.ts";
 
 export interface ChestView {
   id: string;
@@ -17,6 +18,8 @@ export interface ChestView {
   keysCount: number;
   claimed: boolean;
   discovered: boolean;
+  giftStock?: number;
+  hasWeeklyRunningPoints?: boolean;
 }
 
 export interface ChestModalCallbacks {
@@ -82,6 +85,26 @@ export class ChestModal {
   public isVisible(): boolean {
     return this.isOpen;
   }
+  public updateAvailability(
+    stock: Readonly<Record<"aspire" | "nitro" | "predator", number>>,
+    weeklyEligible: boolean,
+  ): void {
+    if (!this.isOpen || !this.currentData) return;
+    const remaining = stock[this.currentData.tier];
+    if (
+      this.currentData.giftStock === remaining &&
+      this.currentData.hasWeeklyRunningPoints === weeklyEligible
+    )
+      return;
+    const restore = preserveSurface(this.overlay);
+    this.currentData = {
+      ...this.currentData,
+      giftStock: remaining,
+      hasWeeklyRunningPoints: weeklyEligible,
+    };
+    this.render();
+    restore();
+  }
 
   private render(): void {
     if (!this.currentData) return;
@@ -103,7 +126,12 @@ export class ChestModal {
     const canOpen = hasKey && !d.claimed && d.discovered;
 
     // Drop table preview
-    const outcomes = GAME_CONFIG.rewards.chest[d.tier]?.outcomes ?? [];
+    const outcomes = effectiveRewardOutcomes(
+      "chest",
+      d.tier,
+      d.giftStock ?? 0,
+      d.hasWeeklyRunningPoints ?? false,
+    );
     const totalWeight = outcomes.reduce((sum, r) => sum + r.weight, 0);
 
     const lootRows = outcomes

@@ -12,6 +12,7 @@ import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import { finishBoot } from "./bootScreen.ts";
 import { EditorScene } from "./editorScene.ts";
 import { gameFetch } from "./gameHttp.ts";
+import { mountGiftPoolEditor } from "./giftPoolEditor.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 import { returnToEventPortal } from "./portalSession.ts";
 import "./liveEditor.css";
@@ -44,7 +45,7 @@ export async function mountLiveEditor(
   app.innerHTML = `<header class="studio-header"><a class="studio-brand" href="/">R² <span>STUDIO<small>KHÔNG GIAN QUẢN TRỊ</small></span></a><span class="studio-environment"></span><div class="studio-actions"><button data-action="undo" title="Ctrl+Z">↶ Hoàn tác</button><button data-action="redo" title="Ctrl+Shift+Z">↷ Làm lại</button><button data-action="save">Lưu bản nháp</button><button data-action="publish" class="studio-primary">Xuất bản ↗</button><button data-action="logout">Đăng xuất</button></div></header>
   <aside class="studio-library"><p class="studio-eyebrow">THƯ VIỆN VẬT THỂ</p><h1>Thiết kế hành trình</h1><p class="studio-muted">Kéo vật thể vào bản đồ hoặc chọn rồi bấm nơi muốn đặt.</p><div class="studio-palette"></div><label>Tìm trên bản đồ<input type="search" class="studio-search" placeholder="Tên trường, công trình…"></label><div class="studio-filters" role="group" aria-label="Loại vật thể"></div><div class="studio-object-list"></div></aside>
   <section class="studio-viewport" aria-label="Không gian chỉnh sửa"><div class="studio-map"></div><div class="studio-map-toolbar"><button data-action="overview">Toàn bản đồ</button><button data-action="camera">Đổi góc nhìn</button><button data-action="zoom-in" aria-label="Phóng to">＋</button><button data-action="zoom-out" aria-label="Thu nhỏ">−</button><button data-action="cancel">Bỏ chọn / Esc</button></div><div class="studio-map-caption">BẢN NHÁP · Kéo vật thể để di chuyển · Cuộn để zoom · Kéo nền để xem bản đồ</div></section>
-  <aside class="studio-inspector"><p class="studio-eyebrow">THUỘC TÍNH</p><div class="studio-properties"></div><hr><details open><summary>Phiên bản & bản nháp</summary><p class="studio-version"></p><button data-action="load">Tải bản đang chạy</button><button data-action="recover">Mở bản nháp đã lưu</button><div class="studio-history"></div></details><hr><details><summary>Thông báo campaign</summary><form class="studio-notify"><label>Tiêu đề<input name="title" maxlength="100" required></label><label>Nội dung<textarea name="body" maxlength="500" required></textarea></label><button type="submit">Gửi thông báo</button></form></details><hr><details><summary>Tra cứu & phát quà</summary><form class="studio-gifts"><label>Mã quà<input name="code" placeholder="R2PL-GIFT-…" required></label><button type="submit">Tra cứu</button></form><button data-action="gifts">Quà gần đây</button><div class="studio-gift-results"></div></details>${environment === "staging" ? '<hr><details><summary>Kho quà thử nghiệm</summary><form class="studio-stock"><label>Hạng<select name="tier"><option>aspire</option><option>nitro</option><option>predator</option></select></label><label>Số lượng<input name="amount" type="number" min="0" max="100000" required></label><button type="submit">Cập nhật kho staging</button></form></details>' : ""}</aside>
+  <aside class="studio-inspector"><p class="studio-eyebrow">THUỘC TÍNH</p><div class="studio-properties"></div><hr><details open><summary>Phiên bản & bản nháp</summary><p class="studio-version"></p><button data-action="load">Tải bản đang chạy</button><button data-action="recover">Mở bản nháp đã lưu</button><div class="studio-history"></div></details><hr><details><summary>Thông báo campaign</summary><form class="studio-notify"><label>Tiêu đề<input name="title" maxlength="100" required></label><label>Nội dung<textarea name="body" maxlength="500" required></textarea></label><button type="submit">Gửi thông báo</button></form></details><hr><details><summary>Tra cứu & phát quà</summary><form class="studio-gifts"><label>Mã quà<input name="code" placeholder="R2PL-GIFT-…" required></label><button type="submit">Tra cứu</button></form><button data-action="gifts">Quà gần đây</button><div class="studio-gift-results"></div></details><hr><details><summary>Pool quà thật</summary><div class="studio-gift-pool"></div></details></aside>
   <footer class="studio-footer"><span class="studio-user"></span><span class="studio-status" role="status" aria-live="polite">Đang tải bản đồ…</span><span class="studio-count"></span></footer>`;
   document.querySelector(".game-shell")?.remove();
   document.querySelector(".map-tools")?.remove();
@@ -514,20 +515,7 @@ export async function mountLiveEditor(
       status("Đã gửi thông báo campaign.");
     });
   };
-  const stock = app.querySelector<HTMLFormElement>(".studio-stock");
-  if (stock)
-    stock.onsubmit = (e) => {
-      e.preventDefault();
-      const data = new FormData(stock);
-      void action(async () => {
-        await request("/api/admin", {
-          action: "gift-stock",
-          tier: data.get("tier"),
-          amount: Number(data.get("amount")),
-        });
-        status("Đã cập nhật kho quà thử nghiệm.");
-      });
-    };
+  mountGiftPoolEditor(el(".studio-gift-pool"), request);
   function renderGifts(gifts: Record<string, unknown>[]): void {
     const list = el(".studio-gift-results");
     list.replaceChildren();
@@ -537,7 +525,7 @@ export async function mountLiveEditor(
         code = document.createElement("strong"),
         note = document.createElement("p");
       code.textContent = String(gift.giftCode ?? gift.id);
-      note.textContent = `${gift.schoolName ?? ""} · ${gift.tier ?? ""} · ${gift.redeemedAt ? "Đã phát" : "Chưa phát"}`;
+      note.textContent = `${gift.giftName ?? "Quà hiện vật"} · ${gift.schoolName ?? ""} · ${gift.tier ?? ""} · ${gift.redeemedAt ? "Đã phát" : "Chưa phát"}`;
       row.append(code, note);
       if (!gift.redeemedAt) {
         const b = document.createElement("button");

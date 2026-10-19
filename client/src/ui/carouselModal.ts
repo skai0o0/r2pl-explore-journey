@@ -1,6 +1,6 @@
-import { UiOverlay } from "./overlay.ts";
 // client/src/ui/carouselModal.ts
 import { Icons } from "./icons.ts";
+import { UiOverlay } from "./overlay.ts";
 import type { LootItem, LootRarity } from "./v1Adapters.ts";
 
 export interface CarouselSpinOptions {
@@ -339,6 +339,7 @@ export class CarouselModal {
       card.className = `carousel-card rarity-${item.rarity} ${isRealGift ? "is-predator-gift" : ""} ${isCrystal ? "is-crystal-card" : ""}`;
       card.dataset.index = index.toString();
       card.dataset.rarity = item.rarity;
+      card.dataset.weight = String(item.weight);
 
       const rarityColor = this.getRarityColor(item.rarity);
       card.style.setProperty("--rarity-color", rarityColor);
@@ -355,7 +356,7 @@ export class CarouselModal {
           legendary: "HUYỀN THOẠI",
         }[item.rarity] ?? "PHẦN THƯỞNG";
       if (isRealGift) {
-        badgeLabel = "QUÀ HIỆN VẬT";
+        badgeLabel = item.weight === 0 ? "QUÀ HIỆN VẬT · 0%" : "QUÀ HIỆN VẬT";
       } else if (isCrystal && item.amount) {
         badgeLabel = `+${item.amount} TINH THỂ`;
       }
@@ -368,9 +369,12 @@ export class CarouselModal {
         </div>
         <div class="card-info">
           <span class="card-rarity-label ${isRealGift ? "brand-label" : ""}">${badgeLabel}</span>
-          <span class="card-item-name" title="${item.name}">${item.name}</span>
+          <span class="card-item-name"></span>
         </div>
       `;
+      const itemName = card.querySelector<HTMLElement>(".card-item-name")!;
+      itemName.textContent = item.name;
+      itemName.title = item.name;
 
       if (isWinner) {
         card.classList.add("is-target-winner");
