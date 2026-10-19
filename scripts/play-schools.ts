@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
 import { migratePortalDatabase } from "../server/persistence/PortalMigrations.ts";
 import { botDatabase } from "./simulation/config.ts";
+import { demoAdminConfigFromEnv } from "../server/integration/DemoAdminPortal.ts";
 import { migrateBotFixture } from "./simulation/fixture.ts";
 
 const database = botDatabase(
@@ -14,6 +15,7 @@ migrateBotFixture(database, workspace);
 const pool = new Pool({ connectionString: database, max: 16 });
 await migratePortalDatabase(pool);
 const port = Number(process.env.PORT ?? 4176);
+const adminPortal = demoAdminConfigFromEnv();
 const wsPort = Number(process.env.WS_PORT ?? 2568);
 if (!Number.isInteger(wsPort) || wsPort < 1 || wsPort > 65535)
   throw new TypeError("Invalid WS_PORT");
@@ -28,6 +30,7 @@ const play = await createSchoolPlayServer(
   undefined,
   {
     actorsPerSchool: Number(process.env.ACTORS_PER_SCHOOL ?? 27),
+    ...(adminPortal ? { adminPortal } : {}),
   },
 );
 console.log(`Eight-school playable fixture: http://127.0.0.1:${port}`);
@@ -38,7 +41,9 @@ console.log(
   "16 students + 200 bots; signed ruleVersion 1 Points/Crystal/Keys. Persistent isolated campaign; no reset on restart.",
 );
 if (process.env.ENABLE_BOTS === "1") {
-  console.log("Starting 200 WebSocket simulation bots in realistic human pacing mode...");
+  console.log(
+    "Starting 200 WebSocket simulation bots in realistic human pacing mode...",
+  );
   void play.startBots({ count: 200, speed: "realistic" });
 } else {
   console.log("Bots standby (can be started on-demand via in-game UI or CLI).");

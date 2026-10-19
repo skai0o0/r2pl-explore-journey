@@ -27,6 +27,7 @@ import {
 import { PortalHttp } from "./PortalHttp.ts";
 import { PortalError } from "./PortalSignature.ts";
 import { PortalStore } from "./PortalStore.ts";
+import { DemoAdminStore } from "./DemoAdminPortal.ts";
 import type { BotRole } from "../../shared/simulation/schoolBots.ts";
 import {
   SCHOOL_PLAY_CAMPAIGN,
@@ -43,6 +44,7 @@ interface PlayServerOptions {
   readonly campaignProvider?: CampaignProvider;
   readonly actorsPerSchool?: number;
   readonly portal?: PortalConfig;
+  readonly adminPortal?: PortalConfig;
 }
 
 /** One local dev writer per persistent campaign. Not distributed lease/fencing. */
@@ -56,6 +58,17 @@ export async function createSchoolPlayServer(
     validatePortalConfig(options.portal);
     if (campaignId !== options.portal.campaignId)
       throw new Error("Portal campaign mismatch");
+  }
+  if (options.adminPortal) {
+    validatePortalConfig(options.adminPortal);
+    if (
+      options.portal ||
+      options.adminPortal.mode !== "staging" ||
+      options.adminPortal.campaignId !== campaignId
+    )
+      throw new Error(
+        "Admin bridge requires its own synthetic staging campaign",
+      );
   }
   const writer = await pool.connect();
   const key = `school-play:${campaignId}`;
@@ -120,7 +133,14 @@ async function startSchoolPlayServer(
   const portal = options.portal
     ? new PortalStore(pool, options.portal)
     : undefined;
-  const portalHttp = portal ? new PortalHttp(portal) : undefined;
+  const adminPortal = options.adminPortal
+    ? new DemoAdminStore(pool, options.adminPortal)
+    : undefined;
+  const authConfig = options.portal ?? options.adminPortal;
+  const portalHttp =
+    portal || adminPortal
+      ? new PortalHttp((portal ?? adminPortal)!)
+      : undefined;
   const rewardHttp = new SchoolRewardHttp(pool, fixture);
   const gameplay = new SignedGameplay(
     pool,
@@ -178,7 +198,7 @@ async function startSchoolPlayServer(
   const operator = new SignedOperator(
     pool,
     fixture,
-    options.portal?.adminKey ?? process.env.ADMIN_KEY ?? "dev-map-admin",
+    authConfig?.adminKey ?? process.env.ADMIN_KEY ?? "dev-map-admin",
     () => realtime.core.resyncViews(),
   );
   const editor = new EditorStore(pool, fixture.campaignId);
@@ -230,7 +250,9 @@ async function startSchoolPlayServer(
         return;
       }
       if (request.method !== "POST") {
-        response.writeHead(405).end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
+        response
+          .writeHead(405)
+          .end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
         return;
       }
       try {
@@ -250,13 +272,56 @@ async function startSchoolPlayServer(
       }
       return;
     }
+    const cookieToken = authConfig
+      ? readCookie(request, gameCookieName(authConfig))
+      : undefined;
     const token = options.portal
-      ? readCookie(request, gameCookieName(options.portal))
-      : request.headers.authorization?.replace(/^Bearer /, "");
+      ? cookieToken
+      : (request.headers.authorization?.replace(/^Bearer /, "") ?? cookieToken);
+    if (
+      adminPortal &&
+      path === "/api/portal/config" &&
+      url.searchParams.get("entry") !== "admin"
+    ) {
+      response.writeHead(404).end();
+      return;
+    }
     if (portalHttp && (await portalHttp.handle(request, response, url, token)))
       return;
     let portalActor: Awaited<ReturnType<PortalStore["authenticate"]>>;
     let admin: AdminPrincipal | undefined;
+    if (adminPortal) {
+      try {
+        admin = await adminPortal.authenticateAdmin(cookieToken);
+      } catch {
+        response.writeHead(503).end();
+        return;
+      }
+      if (
+        admin &&
+        (path === "/api/game" ||
+          path.startsWith("/api/game/") ||
+          [
+            "/api/fixture/me",
+            "/api/fixture/chests",
+            "/api/fixture/receipts",
+            "/api/fixture/rewards",
+          ].includes(path))
+      ) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "ADMIN_CANNOT_PLAY" }));
+        return;
+      }
+      if (
+        path.startsWith("/api/admin") &&
+        request.method !== "GET" &&
+        !validGameCsrf(request, authConfig!, cookieToken)
+      ) {
+        response.writeHead(403).end(JSON.stringify({ error: "CSRF_REJECTED" }));
+        return;
+      }
+    }
     if (portal) {
       try {
         portalActor = await portal.authenticate(token);
@@ -305,7 +370,7 @@ async function startSchoolPlayServer(
     const actorForRequest = () =>
       portal ? portalActor : gameplay.actor(token);
     const expectedOrigin =
-      options.portal?.publicOrigin ?? `http://${request.headers.host}`;
+      authConfig?.publicOrigin ?? `http://${request.headers.host}`;
     if (path === "/api/admin/editor" || path === "/api/admin/editor/draft") {
       response.setHeader("Content-Type", "application/json; charset=utf-8");
       if (!admin) {
@@ -385,9 +450,9 @@ async function startSchoolPlayServer(
       }
       const profile = token ? await accounts.profile(token) : null;
       response.setHeader("Content-Type", "application/json; charset=utf-8");
-      response.writeHead(
-        200,
-      ).end(JSON.stringify(getBotTelemetry(profile?.schoolSlot)));
+      response
+        .writeHead(200)
+        .end(JSON.stringify(getBotTelemetry(profile?.schoolSlot)));
       return;
     }
     if (path === "/api/fixture/bots/start" && request.method === "POST") {
@@ -401,7 +466,9 @@ async function startSchoolPlayServer(
           speed: opts.speed ?? "realistic",
           durationSeconds: Number(opts.durationSeconds ?? 3600),
         });
-        response.writeHead(200).end(JSON.stringify({ ok: true, ...getBotTelemetry() }));
+        response
+          .writeHead(200)
+          .end(JSON.stringify({ ok: true, ...getBotTelemetry() }));
       } catch (err: any) {
         response.writeHead(400).end(JSON.stringify({ error: err.message }));
       }
@@ -411,7 +478,9 @@ async function startSchoolPlayServer(
       response.setHeader("Content-Type", "application/json; charset=utf-8");
       try {
         await stopBots();
-        response.writeHead(200).end(JSON.stringify({ ok: true, ...getBotTelemetry() }));
+        response
+          .writeHead(200)
+          .end(JSON.stringify({ ok: true, ...getBotTelemetry() }));
       } catch (err: any) {
         response.writeHead(500).end(JSON.stringify({ error: err.message }));
       }
@@ -419,7 +488,7 @@ async function startSchoolPlayServer(
     }
     if (path === "/api/admin") {
       if (
-        !(portal
+        !(portal || adminPortal
           ? !!admin
           : operator.authorized(
               typeof request.headers["x-admin-key"] === "string"
@@ -510,7 +579,7 @@ async function startSchoolPlayServer(
     }
     if (path === "/api/admin/gifts") {
       if (
-        !(portal
+        !(portal || adminPortal
           ? !!admin
           : operator.authorized(
               typeof request.headers["x-admin-key"] === "string"
@@ -540,7 +609,7 @@ async function startSchoolPlayServer(
     }
     if (path === "/api/admin/gifts/redeem") {
       if (
-        !(portal
+        !(portal || adminPortal
           ? !!admin
           : operator.authorized(
               typeof request.headers["x-admin-key"] === "string"
@@ -724,18 +793,19 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/bootstrap") {
+        if (admin) {
+          json({
+            mode: "admin",
+            version: 1,
+            campaignId: fixture.campaignId,
+            principal: admin,
+            csrfToken: gameCsrf(token!),
+            environment: authConfig!.mode,
+            ...(adminPortal ? { demoAdminBridge: true } : {}),
+          });
+          return;
+        }
         if (portal) {
-          if (admin) {
-            json({
-              mode: "admin",
-              version: 1,
-              campaignId: fixture.campaignId,
-              principal: admin,
-              csrfToken: gameCsrf(token!),
-              environment: options.portal!.mode,
-            });
-            return;
-          }
           if (!portalActor) {
             response.writeHead(401).end();
             return;
@@ -780,10 +850,7 @@ async function startSchoolPlayServer(
         });
         return;
       }
-      if (
-        path === "/api/fixture/me" ||
-        path === "/api/fixture/receipts"
-      ) {
+      if (path === "/api/fixture/me" || path === "/api/fixture/receipts") {
         const actorAccounts =
           portal && portalActor
             ? new DevAccountService(pool, fixture.campaignId, [portalActor])
@@ -938,16 +1005,21 @@ async function startSchoolPlayServer(
     actionsPerSecond = 0;
   };
 
-  const startBots = async (params?: number | {
-    count?: number;
-    speed?: "slow" | "realistic" | "fast";
-    durationSeconds?: number;
-  }): Promise<void> => {
+  const startBots = async (
+    params?:
+      | number
+      | {
+          count?: number;
+          speed?: "slow" | "realistic" | "fast";
+          durationSeconds?: number;
+        },
+  ): Promise<void> => {
     if (portal) throw new Error("Bots are disabled in portal campaigns");
     if (botStatus === "running" || botStatus === "starting") return;
     botStopRequested = false;
     botStatus = "starting";
-    const opts = typeof params === "number" ? { durationSeconds: params } : params;
+    const opts =
+      typeof params === "number" ? { durationSeconds: params } : params;
     const requestedCount = Math.max(1, Math.min(opts?.count ?? 200, 200));
     const speed = opts?.speed ?? "realistic";
     const durationSeconds = opts?.durationSeconds ?? 3600;
@@ -996,7 +1068,11 @@ async function startSchoolPlayServer(
 
       await Promise.all(
         peers.map(async (peer) => {
-          while (!botStopRequested && !stopped && performance.now() < deadline) {
+          while (
+            !botStopRequested &&
+            !stopped &&
+            performance.now() < deadline
+          ) {
             const intent = peer.planner.next(peer.role);
             if (!intent) break;
             const begun = performance.now();
@@ -1023,7 +1099,9 @@ async function startSchoolPlayServer(
                   : 1200 + peer.planner.random() * 1600;
             const elapsed = performance.now() - begun;
             const sleepMs = Math.max(50, baseWait - elapsed);
-            await pause(Math.min(sleepMs, Math.max(0, deadline - performance.now())));
+            await pause(
+              Math.min(sleepMs, Math.max(0, deadline - performance.now())),
+            );
           }
         }),
       );

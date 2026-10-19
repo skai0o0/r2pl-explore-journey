@@ -9,6 +9,7 @@ import type { PortalConfig } from "../integration/PortalConfig.ts";
 import { readCookie } from "../integration/PortalCookies.ts";
 import { PortalError } from "../integration/PortalSignature.ts";
 import { DummyStore } from "./DummyStore.ts";
+import { R2plPartnerClient } from "../../integration/partner-client.mjs";
 
 const csrf = (token: string) =>
   createHash("sha256").update(`dummy-csrf:${token}`).digest("hex");
@@ -36,6 +37,7 @@ export async function createDummyPortal(
   pool: Pool,
   config: PortalConfig,
   port = Number(new URL(config.portalLoginUrl).port || 4180),
+  adminConfig?: PortalConfig,
 ) {
   if (
     config.mode !== "staging" ||
@@ -46,6 +48,18 @@ export async function createDummyPortal(
   )
     throw new Error("Dummy portal only runs on loopback staging");
   const store = new DummyStore(pool, config);
+  if (adminConfig && adminConfig.mode !== "staging")
+    throw new Error("Dummy admin handoff is staging only");
+  const adminKey = adminConfig && Object.entries(adminConfig.keys)[0]!;
+  const adminPartner =
+    adminConfig && adminKey
+      ? new R2plPartnerClient({
+          origin: adminConfig.publicOrigin,
+          campaignId: adminConfig.campaignId,
+          keyId: adminKey[0],
+          secret: adminKey[1],
+        })
+      : undefined;
   await store.initialize();
   const root = resolve(
     fileURLToPath(new URL("../../dist/portal/", import.meta.url)),
@@ -170,14 +184,34 @@ export async function createDummyPortal(
       }
       if (path === "/api/dummy/v1/play") {
         const value = body as Record<string, unknown>;
+        const adminHandoff =
+          student.school_id === "amtech" && !!adminConfig && !!adminPartner;
+        const destination = adminHandoff ? adminConfig! : config;
         if (
           !value ||
-          value.gameCampaign !== config.campaignId ||
-          value.gameReturn !== `${config.publicOrigin}/` ||
+          value.gameCampaign !== destination.campaignId ||
+          value.gameReturn !== `${destination.publicOrigin}/` ||
           typeof value.gameChallenge !== "string" ||
           !/^[A-Za-z0-9_-]{43}$/.test(value.gameChallenge)
         )
           throw new PortalError(400, "INVALID_GAME_HANDOFF");
+        if (adminHandoff) {
+          await adminPartner!.request("members", {
+            externalStudentId: student.id,
+            schoolId: "amtech",
+            displayName: student.display_name,
+            eduVerified: true,
+            active: true,
+            email: student.email,
+            emailVerified: true,
+          });
+          const launch = await adminPartner!.request("launches", {
+            externalStudentId: student.id,
+            codeChallenge: value.gameChallenge,
+          });
+          response.end(JSON.stringify(launch));
+          return;
+        }
         await store.provision(student);
         const launch = await store.partner.request("launches", {
           externalStudentId: student.id,

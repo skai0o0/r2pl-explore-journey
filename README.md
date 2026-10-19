@@ -48,6 +48,8 @@ Nếu server cũ còn chạy, dừng bằng **Ctrl+C** rồi chạy lại để 
 
 ### Kiểm thử client qua Cloudflare trên Demo
 
+Admin AMTECH đăng nhập tại `https://portal.skai0o0.id.vn/`, bấm **Mở Live Editor** để đi qua `https://play.skai0o0.id.vn/?entry=admin` và nhận phiên Editor của campaign Demo. Người chơi ẩn danh vẫn vào Demo trực tiếp. Cầu nối admin dùng bộ biến `DEMO_ADMIN_*` riêng trên hai service Portal/Demo; không dùng credentials hay campaign Production. Quyền do server xác thực, không lấy từ query URL. Khi chưa bật cầu nối, đường `entry=admin` dừng ở thông báo kết nối thay vì cho vào giao diện người chơi.
+
 Chạy từ máy người kiểm thử, không SSH vào server để chạy. Dừng bot trong game trước: bộ bot nội bộ và bộ client này dùng chung tài khoản synthetic.
 
 ```powershell

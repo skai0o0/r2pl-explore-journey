@@ -32,13 +32,54 @@ async function request(
     ...options,
   });
 }
+async function openAdminBootstrap(
+  raw: Record<string, unknown>,
+): Promise<never> {
+  const p = raw.principal as Record<string, unknown> | undefined;
+  if (
+    raw.version !== 1 ||
+    !p ||
+    p.role !== "admin" ||
+    p.organizationId !== "amtech" ||
+    p.playable !== false ||
+    typeof p.actorId !== "string" ||
+    typeof p.name !== "string" ||
+    typeof raw.csrfToken !== "string" ||
+    !/^[a-f0-9]{64}$/.test(raw.csrfToken) ||
+    !["staging", "production"].includes(String(raw.environment))
+  )
+    throw new Error("Invalid admin bootstrap");
+  configureGameHttp(raw.csrfToken);
+  const { mountLiveEditor } = await import("./liveEditor.ts");
+  await mountLiveEditor(
+    {
+      actorId: p.actorId,
+      name: p.name,
+      organizationId: "amtech",
+      role: "admin",
+      playable: false,
+    },
+    raw.environment as "staging" | "production",
+  );
+  return new Promise<never>(() => {});
+}
 export async function loadGameSession(): Promise<
   DevSessionConfig | PortalSessionConfig
 > {
   loadingStage(0);
   try {
-    const response = await request("/api/portal/config");
+    const adminEntry =
+      new URLSearchParams(location.search).get("entry") === "admin";
+    if (adminEntry) sessionStorage.setItem("r2pl-demo-admin-entry", "1");
+    const returningAdmin =
+      new URLSearchParams(location.hash.slice(1)).has("launch") &&
+      sessionStorage.getItem("r2pl-demo-admin-entry") === "1";
+    const response = await request(
+      `/api/portal/config${adminEntry || returningAdmin ? "?entry=admin" : ""}`,
+    );
     if (response.status === 404) {
+      if (adminEntry || returningAdmin)
+        throw new Error("Admin handoff unavailable");
       const bootstrap = await request("/api/fixture/bootstrap");
       if (bootstrap.status === 404) {
         completeStage(0);
@@ -47,7 +88,9 @@ export async function loadGameSession(): Promise<
       if (!bootstrap.ok) throw new Error("Session unavailable");
       completeStage(0);
       loadingStage(1);
-      return parseDevSession(await bootstrap.json());
+      const raw = (await bootstrap.json()) as Record<string, unknown>;
+      if (raw.mode === "admin") return openAdminBootstrap(raw);
+      return parseDevSession(raw);
     }
     if (!response.ok) throw new Error("Portal unavailable");
     const config = (await response.json()) as {
@@ -93,7 +136,8 @@ export async function loadGameSession(): Promise<
     }
     if (
       !ticket &&
-      new URLSearchParams(location.search).get("entry") === "portal"
+      (adminEntry ||
+        new URLSearchParams(location.search).get("entry") === "portal")
     ) {
       history.replaceState(null, "", location.pathname);
       await login();
@@ -109,33 +153,7 @@ export async function loadGameSession(): Promise<
     if (!bootstrap.ok) throw new Error("Bootstrap unavailable");
     const raw = (await bootstrap.json()) as Record<string, unknown>;
     if (raw.mode === "admin") {
-      const p = raw.principal as Record<string, unknown> | undefined;
-      if (
-        raw.version !== 1 ||
-        !p ||
-        p.role !== "admin" ||
-        p.organizationId !== "amtech" ||
-        p.playable !== false ||
-        typeof p.actorId !== "string" ||
-        typeof p.name !== "string" ||
-        typeof raw.csrfToken !== "string" ||
-        !/^[a-f0-9]{64}$/.test(raw.csrfToken) ||
-        !["staging", "production"].includes(String(raw.environment))
-      )
-        throw new Error("Invalid admin bootstrap");
-      configureGameHttp(raw.csrfToken);
-      const { mountLiveEditor } = await import("./liveEditor.ts");
-      await mountLiveEditor(
-        {
-          actorId: p.actorId,
-          name: p.name,
-          organizationId: "amtech",
-          role: "admin",
-          playable: false,
-        },
-        raw.environment as "staging" | "production",
-      );
-      return new Promise<never>(() => {});
+      return openAdminBootstrap(raw);
     }
     const session = parsePortalSession(raw);
     configureGameHttp(session.csrfToken);
@@ -152,7 +170,9 @@ export async function loadGameSession(): Promise<
 
 /** Leave the game session without immediately auto-signing back in on reload. */
 export async function returnToEventPortal(): Promise<void> {
-  const response = await request("/api/portal/config");
+  let response = await request("/api/portal/config");
+  if (response.status === 404)
+    response = await request("/api/portal/config?entry=admin");
   if (!response.ok) throw new Error("Portal unavailable");
   const config = (await response.json()) as { portalLoginUrl: string };
   const logout = await gameFetch("/api/portal/logout", {
@@ -164,5 +184,6 @@ export async function returnToEventPortal(): Promise<void> {
     throw new Error("Logout unavailable");
   sessionStorage.removeItem("r2pl-portal-verifier");
   sessionStorage.removeItem("r2pl-portal-session");
+  sessionStorage.removeItem("r2pl-demo-admin-entry");
   location.assign(config.portalLoginUrl);
 }

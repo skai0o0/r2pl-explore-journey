@@ -220,7 +220,9 @@ async function play(): Promise<void> {
   button.disabled = true;
   try {
     if (!query.get("game_challenge")) {
-      location.assign(`${data.gameOrigin}/?entry=portal`);
+      location.assign(
+        `${data.gameOrigin}/?entry=${data.student?.role === "admin" ? "admin" : "portal"}`,
+      );
       return;
     }
     const result = await api("play", {

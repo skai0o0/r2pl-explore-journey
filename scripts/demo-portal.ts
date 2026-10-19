@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { portalConfigFromEnv } from "../server/integration/PortalConfig.ts";
 import { createDummyPortal } from "../server/portal/DummyServer.ts";
+import { demoAdminConfigFromEnv } from "../server/integration/DemoAdminPortal.ts";
 
 const config = portalConfigFromEnv();
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
@@ -16,7 +17,12 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 try {
-  const portal = await createDummyPortal(pool, config);
+  const portal = await createDummyPortal(
+    pool,
+    config,
+    undefined,
+    demoAdminConfigFromEnv(),
+  );
   console.log(`Student sandbox portal: ${portal.origin}`);
   let stopping = false;
   const stop = async () => {
