@@ -31,7 +31,9 @@
 
   * Publicly visible on map: Terrain, 8 School HQs, 10 Landmarks (with current active Beacon school & threshold), and UniStop positions.
 
-  * School-private: Own school active Knowledge, remembered fog geography (5x5 reveal kernel around explored tiles), own Shared/Contest timers, and own Landmark Crystal pot.
+* Public active Knowledge overlay: every registered school sees active Knowledge membership for every subscribed map chunk, including tiles outside its own discovery. Shared tiles show all active member-school colors; this overlay contains no fog, exploration history, actor identity, wallet, timer, or private object data.
+
+* School-private: Own school remembered fog geography (5x5 reveal kernel around explored tiles), own Shared/Contest timers, and own Landmark Crystal pot. Public Knowledge never changes exploration, adjacency, interaction eligibility, or any server-side action validation.
 
   * Player-private: Personal wallet (Points, Crystals, Keys, Treasure Maps), personal UniStop cooldowns, personal discovered Chest coordinates, and personal Gift entitlements.
 

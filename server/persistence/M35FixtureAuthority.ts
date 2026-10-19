@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import type { EvaluateDevExplore } from "../../shared/gameplay/devContract.ts";
 import { BEACON_BUFF_CONFIG } from "../../shared/gameplay/gameConfig.ts";
-import type { Snapshot } from "../../shared/protocol/m2.ts";
+import type { PublicSnapshot, Snapshot } from "../../shared/protocol/m2.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import {
   decodeFogChunk,
@@ -42,7 +42,9 @@ export interface CommittedFixtureDelta {
   readonly viewRevision: bigint;
   readonly localIndex: number;
   readonly mask: number;
+  readonly publicMask: number;
   readonly discovered: boolean;
+  readonly publicRevision: bigint;
   readonly committedAtMs?: number;
   readonly claimReturnedAtMs: number;
   readonly projectedAtMs: number;
@@ -200,6 +202,39 @@ export class M35FixtureAuthority {
     };
   }
 
+  /** Shared map overlay: active school membership only, never fog or private views. */
+  async publicSnapshot(id: number): Promise<PublicSnapshot> {
+    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+    const result = await this.#pool.query<{
+      head_revision: string;
+      chunk_revision: string;
+      mask: Buffer;
+      mask_crc: string;
+    }>(
+      "SELECT h.revision AS head_revision,w.revision AS chunk_revision,w.mask,w.mask_crc FROM r2pl_v2.world_chunk_heads h JOIN r2pl_v2.world_chunks w ON w.campaign_id=h.campaign_id AND w.chunk_id=h.chunk_id WHERE h.campaign_id=$1 AND h.chunk_id=$2",
+      [this.#campaignId, id],
+    );
+    const row = result.rows[0];
+    if (!row)
+      return { chunkId: id, revision: 0n, mask: Uint8Array.from(ZERO_MASK) };
+    if (row.head_revision !== row.chunk_revision)
+      throw new Error("Full-chunk checkpoint is stale");
+    const mask = decodeKnowledgeChunk({
+      formatVersion: WORLD_FORMAT_VERSION,
+      chunkX,
+      chunkZ,
+      revision: BigInt(row.chunk_revision),
+      checksum: Number(row.mask_crc),
+      payload: row.mask,
+    });
+    const bytes = new Uint8Array(CHUNK_MASK_BYTES),
+      data = new DataView(bytes.buffer);
+    mask.forEach((value, local) => {
+      data.setUint16(local * 2, value, true);
+    });
+    return { chunkId: id, revision: BigInt(row.head_revision), mask: bytes };
+  }
+
   drain(
     publish: (delta: CommittedFixtureDelta) => Promise<void>,
     recoverSubscribers: () => Promise<void>,
@@ -295,7 +330,9 @@ export class M35FixtureAuthority {
     const schoolSlot = Number(payload.schoolSlot);
     const localIndex = Number(payload.localIndex);
     const mask = Number(payload.mask);
-    const revision = payload.viewRevision;
+    const revision = payload.viewRevision,
+      publicRevision = payload.publicRevision,
+      publicMask = Number(payload.publicMask);
     if (
       !Number.isInteger(chunkId) ||
       chunkId < 0 ||
@@ -310,8 +347,13 @@ export class M35FixtureAuthority {
       mask < 0 ||
       mask > 0xffff ||
       mask !== schoolBit(schoolSlot) ||
+      !Number.isInteger(publicMask) ||
+      publicMask < 0 ||
+      publicMask > 0xffff ||
       typeof revision !== "string" ||
+      typeof publicRevision !== "string" ||
       !/^[1-9][0-9]*$/.test(revision) ||
+      !/^[1-9][0-9]*$/.test(publicRevision) ||
       payload.discovered !== true
     )
       throw new InvalidOutboxProjection("Invalid M3.5 outbox projection");
@@ -331,8 +373,10 @@ export class M35FixtureAuthority {
       chunkId,
       schoolSlot,
       viewRevision: BigInt(revision),
+      publicRevision: BigInt(publicRevision),
       localIndex,
       mask,
+      publicMask,
       discovered: true,
       claimReturnedAtMs: event.claimReturnedAtMs,
       projectedAtMs: Number(process.hrtime.bigint()) / 1e6,

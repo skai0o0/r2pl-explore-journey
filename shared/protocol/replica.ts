@@ -5,7 +5,7 @@ import {
 } from "../world/constants.ts";
 import { chunkBounds, chunkCoordinatesForId } from "../world/coordinates.ts";
 import { schoolBit } from "../world/registry.ts";
-import type { Delta, Snapshot } from "./m2.ts";
+import type { Delta, PublicDelta, PublicSnapshot, Snapshot } from "./m2.ts";
 
 interface ReplicaChunk {
   readonly mask: Uint8Array;
@@ -121,5 +121,62 @@ export class ProjectionReplica {
     )
       throw new RangeError("Unknown chunk or local index");
     return !!(chunk.fog[localIndex >> 3]! & (1 << (localIndex & 7)));
+  }
+}
+
+/** Public active-Knowledge layer. It is intentionally mask-only and cannot reveal fog. */
+export class PublicKnowledgeReplica {
+  readonly #chunks = new Map<number, { mask: Uint8Array; revision: bigint }>();
+  hasChunk(id: number): boolean {
+    return this.#chunks.has(id);
+  }
+  remove(id: number): void {
+    this.#chunks.delete(id);
+  }
+  revision(id: number): bigint | undefined {
+    return this.#chunks.get(id)?.revision;
+  }
+  applySnapshot(snapshot: PublicSnapshot): void {
+    if (snapshot.mask.byteLength !== CHUNK_MASK_BYTES)
+      throw new Error("Invalid public snapshot size");
+    const { chunkX, chunkZ } = chunkCoordinatesForId(snapshot.chunkId),
+      bounds = chunkBounds(chunkX, chunkZ),
+      data = new DataView(
+        snapshot.mask.buffer,
+        snapshot.mask.byteOffset,
+        snapshot.mask.byteLength,
+      );
+    for (let local = 0; local < 4096; local++) {
+      const x = local % CHUNK_SIZE,
+        z = Math.floor(local / CHUNK_SIZE);
+      if (
+        (x >= bounds.width || z >= bounds.height) &&
+        data.getUint16(local * 2, true) !== 0
+      )
+        throw new Error("Padded public snapshot data");
+    }
+    this.#chunks.set(snapshot.chunkId, {
+      mask: Uint8Array.from(snapshot.mask),
+      revision: snapshot.revision,
+    });
+  }
+  applyDelta(delta: PublicDelta): DeltaResult {
+    const chunk = this.#chunks.get(delta.chunkId);
+    if (!chunk) return "resync";
+    if (delta.nextRevision <= chunk.revision) return "duplicate";
+    if (delta.baseRevision !== chunk.revision) return "resync";
+    new DataView(chunk.mask.buffer).setUint16(
+      delta.localIndex * 2,
+      delta.mask,
+      true,
+    );
+    chunk.revision = delta.nextRevision;
+    return "applied";
+  }
+  maskAt(id: number, local: number): number {
+    const chunk = this.#chunks.get(id);
+    if (!chunk || local < 0 || local >= 4096)
+      throw new RangeError("Unknown public chunk or local index");
+    return new DataView(chunk.mask.buffer).getUint16(local * 2, true);
   }
 }

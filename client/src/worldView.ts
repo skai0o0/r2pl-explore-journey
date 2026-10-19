@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { SCHOOLS, type WorldObject } from "../../shared/gameplay/gameConfig.ts";
-import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import type {
+  ProjectionReplica,
+  PublicKnowledgeReplica,
+} from "../../shared/protocol/replica.ts";
 import {
   CHUNK_SIZE,
   WORLD_HEIGHT,
@@ -341,6 +344,7 @@ export class WorldView {
   readonly #landscape: LandscapeEffects;
   #shared: ReadonlyMap<number, readonly number[]> = new Map();
   #replica: ProjectionReplica | undefined;
+  #publicKnowledge: PublicKnowledgeReplica | undefined;
   readonly #editorPreview = new THREE.Group();
   readonly #tileIndicators = new TileIndicatorLayer((x, z) =>
     this.#terrain.getTerrainHeight(x, z),
@@ -1317,6 +1321,25 @@ export class WorldView {
     this.#render();
   }
 
+  paintPublicChunk(
+    id: number,
+    replica: ProjectionReplica,
+    publicKnowledge: PublicKnowledgeReplica,
+  ): void {
+    this.#publicKnowledge = publicKnowledge;
+    if (!this.#chunkLayers.has(id) || !replica.hasChunk(id)) return;
+    this.paintChunk(id, replica);
+  }
+  paintPublicTile(
+    id: number,
+    local: number,
+    replica: ProjectionReplica,
+    publicKnowledge: PublicKnowledgeReplica,
+  ): void {
+    this.#publicKnowledge = publicKnowledge;
+    this.paintTile(id, local, replica);
+  }
+
   paintTile(id: number, local: number, replica: ProjectionReplica): void {
     this.#terrainChunks.discoveryFog.paintTile(id, local, replica);
     this.#replica = replica;
@@ -1385,6 +1408,7 @@ export class WorldView {
       this.#terrain,
       this.#schoolSlot,
       this.#shared,
+      this.#publicKnowledge,
     );
   }
 

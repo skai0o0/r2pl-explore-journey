@@ -8,6 +8,8 @@ import {
   type ExploreCommand,
   encodeAck,
   encodeDelta,
+  encodePublicDelta,
+  encodePublicSnapshot,
   encodeError,
   encodeHello,
   encodeSnapshot,
@@ -47,6 +49,7 @@ interface Session {
   readonly outbound: OutboundQueue;
   readonly subscriptions: Map<number, number>;
   readonly revisions: Map<number, bigint>;
+  readonly publicRevisions: Map<number, bigint>;
   generation: number;
   tokens: number;
   lastRefill: number;
@@ -155,6 +158,7 @@ export class DurableRealtimeCore {
         const generation = ++session.generation;
         session.subscriptions.set(id, generation);
         session.revisions.delete(id);
+        session.publicRevisions.delete(id);
         await this.#queues.enqueue(
           this.#sectorForChunk(id),
           () => this.#sendSnapshot(session, id, generation),
@@ -190,6 +194,7 @@ export class DurableRealtimeCore {
       ),
       subscriptions: new Map(),
       revisions: new Map(),
+      publicRevisions: new Map(),
       generation: 0,
       tokens: 20,
       lastRefill: performance.now(),
@@ -205,6 +210,7 @@ export class DurableRealtimeCore {
     for (const id of session.subscriptions.keys()) this.#unindex(session, id);
     session.subscriptions.clear();
     session.revisions.clear();
+    session.publicRevisions.clear();
     session.outbound.close("left");
     this.#sessions.delete(sessionId);
     this.metrics.count("disconnects");
@@ -280,6 +286,7 @@ export class DurableRealtimeCore {
       if (!wanted.has(id)) {
         session.subscriptions.delete(id);
         session.revisions.delete(id);
+        session.publicRevisions.delete(id);
         this.#unindex(session, id);
       }
     for (const id of ids) {
@@ -314,6 +321,7 @@ export class DurableRealtimeCore {
     const generation = ++session.generation;
     session.subscriptions.set(id, generation);
     session.revisions.delete(id);
+    session.publicRevisions.delete(id);
     await this.#queues.enqueue(
       this.#sectorForChunk(id),
       () => this.#sendSnapshot(session, id, generation),
@@ -342,6 +350,16 @@ export class DurableRealtimeCore {
       session.revisions.set(id, snapshot.viewRevision);
       this.metrics.count("snapshots_enqueued");
     }
+    const publicSnapshot = await this.#authority.publicSnapshot(id);
+    if (
+      session.subscriptions.get(id) === generation &&
+      !session.outbound.closed &&
+      session.outbound.enqueue(
+        encodePublicSnapshot(publicSnapshot),
+        () => session.subscriptions.get(id) === generation,
+      )
+    )
+      session.publicRevisions.set(id, publicSnapshot.revision);
   }
 
   async #explore(
@@ -477,6 +495,43 @@ export class DurableRealtimeCore {
       trace.outboxClaimReturnedMs = event.claimReturnedAtMs;
       trace.projectionDecodedMs = event.projectedAtMs;
     }
+    await this.#queues.enqueue(
+      this.#sectorForChunk(event.chunkId),
+      async () => {
+        const bytes = encodePublicDelta({
+          chunkId: event.chunkId,
+          baseRevision: event.publicRevision - 1n,
+          nextRevision: event.publicRevision,
+          localIndex: event.localIndex,
+          mask: event.publicMask,
+        });
+        for (const session of this.#sessions.values()) {
+          const generation = session.subscriptions.get(event.chunkId);
+          if (generation === undefined || session.outbound.closed) continue;
+          const current = session.publicRevisions.get(event.chunkId);
+          if (current === undefined || event.publicRevision !== current + 1n) {
+            const snapshot = await this.#authority.publicSnapshot(
+              event.chunkId,
+            );
+            if (
+              session.subscriptions.get(event.chunkId) === generation &&
+              session.outbound.enqueue(
+                encodePublicSnapshot(snapshot),
+                () => session.subscriptions.get(event.chunkId) === generation,
+              )
+            )
+              session.publicRevisions.set(event.chunkId, snapshot.revision);
+          } else if (
+            session.outbound.enqueue(
+              bytes,
+              () => session.subscriptions.get(event.chunkId) === generation,
+            )
+          )
+            session.publicRevisions.set(event.chunkId, event.publicRevision);
+        }
+      },
+      "relay",
+    );
     if (this.#authority.fogRevealRadius > 0) {
       // Signed exploration reveals a square of fog, possibly across chunk boundaries.
       // A single-tile delta cannot represent it. Read one private snapshot per affected

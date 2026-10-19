@@ -19,6 +19,8 @@ import {
   ACK_STATUS,
   decodeAck,
   decodeDelta,
+  decodePublicDelta,
+  decodePublicSnapshot,
   decodeFrame,
   decodeSnapshot,
   encodeExplore,
@@ -27,7 +29,10 @@ import {
   M2_KIND,
   REASON,
 } from "../../shared/protocol/m2.ts";
-import { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import {
+  ProjectionReplica,
+  PublicKnowledgeReplica,
+} from "../../shared/protocol/replica.ts";
 import {
   chunkCoordinatesForIndex,
   chunkId,
@@ -80,6 +85,7 @@ const publicWorld: WorldObject[] =
 loadingStage(2);
 await fetchModelManifest();
 const miniMap = new MiniMap();
+const publicKnowledge = new PublicKnowledgeReplica();
 miniMap.setObjects(publicWorld);
 
 const uiMode =
@@ -1025,6 +1031,27 @@ function handleFrame(raw: Uint8Array): void {
         }
         break;
       }
+      case M2_KIND.PUBLIC_SNAPSHOT: {
+        const snapshot = decodePublicSnapshot(frame.payload);
+        publicKnowledge.applySnapshot(snapshot);
+        if (replica.hasChunk(snapshot.chunkId))
+          world.paintPublicChunk(snapshot.chunkId, replica, publicKnowledge);
+        break;
+      }
+      case M2_KIND.PUBLIC_DELTA: {
+        const delta = decodePublicDelta(frame.payload),
+          result = publicKnowledge.applyDelta(delta);
+        if (result === "resync")
+          room?.sendBytes("m2", encodeResync(delta.chunkId));
+        else if (result === "applied" && replica.hasChunk(delta.chunkId))
+          world.paintPublicTile(
+            delta.chunkId,
+            delta.localIndex,
+            replica,
+            publicKnowledge,
+          );
+        break;
+      }
       case M2_KIND.ERROR:
         activity("Chưa thể thực hiện thao tác. Vui lòng thử lại.", "error");
         break;
@@ -1224,10 +1251,18 @@ if (fogSlider && fogVal) {
 }
 
 // Bot simulation elements in Dev Tools section
-const btnStartBots = document.getElementById("btn-start-bots") as HTMLButtonElement | null;
-const btnStopBots = document.getElementById("btn-stop-bots") as HTMLButtonElement | null;
-const botCountSelect = document.getElementById("bot-count-select") as HTMLSelectElement | null;
-const botSpeedSelect = document.getElementById("bot-speed-select") as HTMLSelectElement | null;
+const btnStartBots = document.getElementById(
+  "btn-start-bots",
+) as HTMLButtonElement | null;
+const btnStopBots = document.getElementById(
+  "btn-stop-bots",
+) as HTMLButtonElement | null;
+const botCountSelect = document.getElementById(
+  "bot-count-select",
+) as HTMLSelectElement | null;
+const botSpeedSelect = document.getElementById(
+  "bot-speed-select",
+) as HTMLSelectElement | null;
 const botStatusTag = document.getElementById("bot-status-tag");
 const botActiveCount = document.getElementById("bot-active-count");
 const botRateVal = document.getElementById("bot-rate-val");
@@ -1238,13 +1273,31 @@ const hudBotBtn = document.getElementById("hud-bot-sim-btn");
 const hudBotTag = document.getElementById("hud-bot-tag");
 const hudBotPopover = document.getElementById("hud-bot-popover");
 const closeBotPopover = document.getElementById("close-bot-popover");
-const popoverStartBtn = document.getElementById("popover-btn-start") as HTMLButtonElement | null;
-const popoverStopBtn = document.getElementById("popover-btn-stop") as HTMLButtonElement | null;
-const popoverCountSelect = document.getElementById("popover-bot-count") as HTMLSelectElement | null;
-const popoverSpeedSelect = document.getElementById("popover-bot-speed") as HTMLSelectElement | null;
+const popoverStartBtn = document.getElementById(
+  "popover-btn-start",
+) as HTMLButtonElement | null;
+const popoverStopBtn = document.getElementById(
+  "popover-btn-stop",
+) as HTMLButtonElement | null;
+const popoverCountSelect = document.getElementById(
+  "popover-bot-count",
+) as HTMLSelectElement | null;
+const popoverSpeedSelect = document.getElementById(
+  "popover-bot-speed",
+) as HTMLSelectElement | null;
 const popoverActiveCount = document.getElementById("popover-bot-active");
 const popoverRateVal = document.getElementById("popover-bot-rate");
 const popoverTilesVal = document.getElementById("popover-bot-tiles");
+// This comes from the signed server session, never from URL/hostname heuristics.
+const botRuntimeEnabled = session.fixtureOnly === true;
+if (!botRuntimeEnabled) {
+  hudBotBtn?.setAttribute("hidden", "");
+  hudBotPopover?.setAttribute("hidden", "");
+  document
+    .getElementById("dev-tools-section")
+    ?.querySelector(".bot-simulation")
+    ?.setAttribute("hidden", "");
+}
 
 if (hudBotBtn && hudBotPopover) {
   hudBotBtn.addEventListener("click", () => {
@@ -1261,7 +1314,8 @@ const updateAllBotUI = (telemetry: {
   actionsPerSecond?: number;
   totalActions?: number;
 }) => {
-  const isRunning = telemetry.status === "running" || telemetry.status === "starting";
+  const isRunning =
+    telemetry.status === "running" || telemetry.status === "starting";
   if (btnStartBots) btnStartBots.disabled = isRunning;
   if (btnStopBots) btnStopBots.disabled = !isRunning;
   if (botCountSelect) botCountSelect.disabled = isRunning;
@@ -1321,6 +1375,7 @@ const updateAllBotUI = (telemetry: {
 };
 
 const pollAllBotStatus = async () => {
+  if (!botRuntimeEnabled) return;
   try {
     const res = await gameFetch("/api/fixture/bots");
     if (res.ok) {
@@ -1333,6 +1388,7 @@ const pollAllBotStatus = async () => {
 };
 
 const doStartBots = async (count: number, speed: string) => {
+  if (!botRuntimeEnabled) return;
   activity("Đang khởi động bot mô phỏng...", "normal");
   try {
     const res = await gameFetch("/api/fixture/bots/start", {
@@ -1343,7 +1399,10 @@ const doStartBots = async (count: number, speed: string) => {
     if (res.ok) {
       const data = await res.json();
       updateAllBotUI(data);
-      activity("200 bot đã bắt đầu khám phá bản đồ!", "success");
+      activity(
+        `${data.activeBots ?? count} bot đã bắt đầu khám phá bản đồ!`,
+        "success",
+      );
     } else {
       activity("Chưa thể khởi động bot.", "error");
     }
@@ -1353,6 +1412,7 @@ const doStartBots = async (count: number, speed: string) => {
 };
 
 const doStopBots = async () => {
+  if (!botRuntimeEnabled) return;
   activity("Đang dừng toàn bộ bot...", "normal");
   try {
     const res = await gameFetch("/api/fixture/bots/stop", { method: "POST" });
@@ -1380,8 +1440,10 @@ popoverStartBtn?.addEventListener("click", () => {
 });
 popoverStopBtn?.addEventListener("click", () => void doStopBots());
 
-window.setInterval(pollAllBotStatus, 2000);
-void pollAllBotStatus();
+if (botRuntimeEnabled) {
+  window.setInterval(pollAllBotStatus, 2000);
+  void pollAllBotStatus();
+}
 
 get("landmark-button").addEventListener("click", () => {
   const first = homeLandmark();

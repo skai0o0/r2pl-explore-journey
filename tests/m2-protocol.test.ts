@@ -9,17 +9,24 @@ import {
   decodeExplore,
   decodeFrame,
   decodeSnapshot,
+  decodePublicDelta,
+  decodePublicSnapshot,
   encodeAck,
   encodeDelta,
   encodeExplore,
   encodeFrame,
   encodeResync,
   encodeSnapshot,
+  encodePublicDelta,
+  encodePublicSnapshot,
   encodeSubscribe,
   M2_KIND,
   REASON,
 } from "../shared/protocol/m2.ts";
-import { ProjectionReplica } from "../shared/protocol/replica.ts";
+import {
+  ProjectionReplica,
+  PublicKnowledgeReplica,
+} from "../shared/protocol/replica.ts";
 import { chunkId, localIndex, tileIndex } from "../shared/world/coordinates.ts";
 import { SchoolRegistry } from "../shared/world/registry.ts";
 import { WorldState } from "../shared/world/world.ts";
@@ -167,5 +174,63 @@ test("replica ignores duplicate deltas and requests resync on gaps or reorder", 
   assert.throws(
     () => encodeFrame(M2_KIND.DELTA, new Uint8Array(65_536)),
     /large/,
+  );
+});
+
+test("public Knowledge is mask-only, supports shared membership, and recovers gaps", () => {
+  const id = chunkId(0, 0),
+    publicReplica = new PublicKnowledgeReplica();
+  const privateA = new ProjectionReplica(0),
+    privateB = new ProjectionReplica(1);
+  privateA.applySnapshot({
+    chunkId: id,
+    viewRevision: 0n,
+    mask: new Uint8Array(8192),
+    fog: new Uint8Array(512),
+  });
+  privateB.applySnapshot({
+    chunkId: id,
+    viewRevision: 0n,
+    mask: new Uint8Array(8192),
+    fog: new Uint8Array(512),
+  });
+  const snapshot = { chunkId: id, revision: 0n, mask: new Uint8Array(8192) };
+  publicReplica.applySnapshot(
+    decodePublicSnapshot(decodeFrame(encodePublicSnapshot(snapshot)).payload),
+  );
+  const first = {
+    chunkId: id,
+    baseRevision: 0n,
+    nextRevision: 1n,
+    localIndex: 3,
+    mask: 3,
+  };
+  assert.equal(
+    publicReplica.applyDelta(
+      decodePublicDelta(decodeFrame(encodePublicDelta(first)).payload),
+    ),
+    "applied",
+  );
+  assert.equal(
+    publicReplica.maskAt(id, 3),
+    3,
+    "both schools are visible without choosing an owner",
+  );
+  assert.equal(privateA.isDiscovered(id, 3), false);
+  assert.equal(
+    privateB.isDiscovered(id, 3),
+    false,
+    "public membership cannot alter private fog",
+  );
+  assert.equal(
+    publicReplica.applyDelta({ ...first, baseRevision: 2n, nextRevision: 3n }),
+    "resync",
+  );
+  assert.equal(publicReplica.applyDelta(first), "duplicate");
+  publicReplica.remove(id);
+  assert.equal(
+    publicReplica.hasChunk(id),
+    false,
+    "campaign/session reset drops old public state",
   );
 });

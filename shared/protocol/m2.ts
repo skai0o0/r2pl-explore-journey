@@ -19,6 +19,8 @@ export const M2_KIND = {
   SNAPSHOT: 18,
   DELTA: 19,
   ERROR: 20,
+  PUBLIC_SNAPSHOT: 21,
+  PUBLIC_DELTA: 22,
 } as const;
 export const ACK_STATUS = {
   TEST_APPLIED: 1,
@@ -71,6 +73,19 @@ export interface Delta {
   readonly localIndex: number;
   readonly mask: number;
   readonly discovered: boolean;
+}
+/** Active Knowledge membership only: deliberately excludes every school's fog. */
+export interface PublicSnapshot {
+  readonly chunkId: number;
+  readonly revision: bigint;
+  readonly mask: Uint8Array;
+}
+export interface PublicDelta {
+  readonly chunkId: number;
+  readonly baseRevision: bigint;
+  readonly nextRevision: bigint;
+  readonly localIndex: number;
+  readonly mask: number;
 }
 
 function view(bytes: Uint8Array): DataView {
@@ -350,6 +365,67 @@ export function decodeDelta(payload: Uint8Array): Delta {
     mask,
     discovered: payload[22] === 1,
   };
+}
+
+export function encodePublicSnapshot(snapshot: PublicSnapshot): Uint8Array {
+  assertChunkId(snapshot.chunkId);
+  assertRevision(snapshot.revision);
+  if (snapshot.mask.byteLength !== CHUNK_MASK_BYTES)
+    throw new RangeError("Invalid public chunk length");
+  const payload = new Uint8Array(10 + CHUNK_MASK_BYTES);
+  view(payload).setUint16(0, snapshot.chunkId, true);
+  view(payload).setBigUint64(2, snapshot.revision, true);
+  payload.set(snapshot.mask, 10);
+  return encodeFrame(M2_KIND.PUBLIC_SNAPSHOT, payload);
+}
+export function decodePublicSnapshot(payload: Uint8Array): PublicSnapshot {
+  if (payload.byteLength !== 10 + CHUNK_MASK_BYTES)
+    throw new Error("Invalid public snapshot payload length");
+  const data = view(payload),
+    chunkId = data.getUint16(0, true);
+  assertChunkId(chunkId);
+  return {
+    chunkId,
+    revision: data.getBigUint64(2, true),
+    mask: Uint8Array.from(payload.subarray(10)),
+  };
+}
+export function encodePublicDelta(delta: PublicDelta): Uint8Array {
+  assertChunkId(delta.chunkId);
+  assertRevision(delta.baseRevision);
+  assertRevision(delta.nextRevision);
+  if (
+    delta.nextRevision !== delta.baseRevision + 1n ||
+    delta.localIndex < 0 ||
+    delta.localIndex >= 4096 ||
+    !Number.isInteger(delta.localIndex) ||
+    delta.mask < 0 ||
+    delta.mask > 0xffff ||
+    !Number.isInteger(delta.mask)
+  )
+    throw new RangeError("Invalid public delta");
+  const payload = new Uint8Array(22),
+    data = view(payload);
+  data.setUint16(0, delta.chunkId, true);
+  data.setBigUint64(2, delta.baseRevision, true);
+  data.setBigUint64(10, delta.nextRevision, true);
+  data.setUint16(18, delta.localIndex, true);
+  data.setUint16(20, delta.mask, true);
+  return encodeFrame(M2_KIND.PUBLIC_DELTA, payload);
+}
+export function decodePublicDelta(payload: Uint8Array): PublicDelta {
+  if (payload.byteLength !== 22)
+    throw new Error("Invalid public delta payload length");
+  const data = view(payload),
+    chunkId = data.getUint16(0, true),
+    baseRevision = data.getBigUint64(2, true),
+    nextRevision = data.getBigUint64(10, true),
+    localIndex = data.getUint16(18, true),
+    mask = data.getUint16(20, true);
+  assertChunkId(chunkId);
+  if (nextRevision !== baseRevision + 1n || localIndex >= 4096)
+    throw new Error("Invalid public delta values");
+  return { chunkId, baseRevision, nextRevision, localIndex, mask };
 }
 
 export function encodeError(reason: Reason): Uint8Array {

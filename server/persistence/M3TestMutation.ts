@@ -682,7 +682,9 @@ export class M3TestMutationService {
                 ...(this.#realtimeViews
                   ? {
                       viewRevision: viewRevision.toString(),
+                      publicRevision: next.toString(),
                       mask: newMask & schoolBit(command.schoolSlot),
+                      publicMask: newMask,
                       discovered: true,
                     }
                   : { revision: next.toString() }),

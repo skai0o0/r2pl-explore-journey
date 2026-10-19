@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
-import type { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import type {
+  ProjectionReplica,
+  PublicKnowledgeReplica,
+} from "../../shared/protocol/replica.ts";
 import {
   chunkCoordinatesForId,
   chunkId,
@@ -435,6 +438,7 @@ export function writeTerrainTile(
   field: TerrainBiomes,
   schoolSlot: number,
   shared: ReadonlyMap<number, readonly number[]>,
+  publicKnowledge?: PublicKnowledgeReplica,
 ): void {
   const { chunkX, chunkZ } = chunkCoordinatesForId(id);
   const x = chunkX * 64 + (local % 64);
@@ -445,7 +449,10 @@ export function writeTerrainTile(
     return;
   }
 
-  if (!replica.isDiscovered(id, local)) {
+  const publicMask = publicKnowledge?.hasChunk(id)
+    ? publicKnowledge.maskAt(id, local)
+    : 0;
+  if (!replica.isDiscovered(id, local) && !publicMask) {
     pixels[offset + 3] = 0;
     return;
   }
@@ -454,7 +461,9 @@ export function writeTerrainTile(
   const slots =
     pair?.length === 2
       ? pair
-      : SCHOOLS.flatMap((_, slot) => (mask & (1 << slot) ? [slot] : []));
+      : SCHOOLS.flatMap((_, slot) =>
+          (mask | publicMask) & (1 << slot) ? [slot] : [],
+        );
   const hex = terrainTileColor(field.sample(x, z).color, slots);
   pixels[offset] = (hex >> 16) & 255;
   pixels[offset + 1] = (hex >> 8) & 255;
