@@ -3,6 +3,28 @@
   .game-shell {
     background: var(--ink);
   }
+  .demo-disclaimer {
+    position: fixed;
+    top: max(3px, env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    z-index: var(--layer-hud);
+    margin: 0;
+    color: #e5f1f2b3;
+    font: 10px/14px var(--font-main);
+    text-align: center;
+    text-shadow: 0 1px 4px #080d10;
+    pointer-events: none;
+    user-select: none;
+  }
+  body[data-demo-notice="true"] .hud {
+    top: calc(max(16px, env(safe-area-inset-top)) + 20px);
+  }
+  @media (max-width: 600px) {
+    body[data-demo-notice="true"] .hud {
+      top: calc(max(10px, env(safe-area-inset-top)) + 34px);
+    }
+  }
   .vignette {
     position: fixed;
     inset: 0;

@@ -73,6 +73,10 @@ import {
 import { loadGameSession, returnToEventPortal } from "./portalSession.ts";
 
 // Codex-owned transport bootstrap contract; existing presentation stays intact.
+const showDemoDisclaimer = location.hostname === "play.skai0o0.id.vn";
+document.body.dataset.demoNotice = String(showDemoDisclaimer);
+const demoDisclaimer = document.getElementById("demo-disclaimer");
+if (demoDisclaimer) demoDisclaimer.hidden = !showDemoDisclaimer;
 const session = await loadGameSession();
 const publicWorld: WorldObject[] =
   session === LEGACY_DEV_SESSION
