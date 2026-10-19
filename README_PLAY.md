@@ -12,13 +12,19 @@ Mở URL **Eight-school playable fixture** do lệnh in ra (mặc định **http
 
 Portal giả lập chỉ mở khi chủ động chạy `npm run build:portal` và `npm run demo:portal` cùng server tích hợp `npm run start:portal`, theo phần sandbox bên dưới. `npm run build` chỉ dựng game; `npm run build:all` dựng thêm giao diện portal giả lập.
 
-## AMTECH Live Editor — local/staging
+## Quản trị tài khoản & Live Editor
+
+Mở `/admin` để vào dashboard: BXH, Live Editor, thông báo, kho/trao quà, lịch sử và tài khoản/phân quyền. Email AMTECH đăng nhập qua web giải, mặc định đủ quyền và có thể thu hồi. Email Acer/Dava thuộc AMTECH, mặc định chỉ xem BXH; admin ngoài tổ chức có thể được tạo tài khoản email/mật khẩu riêng tại Game. Quản trị viên chỉ cấp/sửa các quyền mình có; không tự sửa quyền bản thân. Đổi quyền/khóa/reset mật khẩu thu hồi phiên cũ; Portal không thể ghi đè khóa quản trị của Game.
+
+Migration 009 bổ sung phân quyền và thông tin đăng nhập riêng. Tạo duy nhất tài khoản gốc `admin@amtech.vn` bằng `scripts/bootstrap-root-admin.ts` (đọc mật khẩu từ stdin, dùng DATABASE_URL/PORTAL_CAMPAIGN_ID). Tài khoản gốc không đăng nhập qua Portal, không thể sửa/khóa/đổi quyền từ dashboard; chạy bootstrap lại không thay mật khẩu đã có. Không ghi mật khẩu vào repository hoặc handoff.
+
+### Live Editor — local/staging
 
 Chạy `npm run play:editor`, mở **http://127.0.0.1:4177/** và đăng nhập tài khoản local `acer@amtech.vn` với mật khẩu `Amtech-local-test-only`. Lệnh này build game/Portal, kiểm tra migration 1–8 và khởi chạy campaign thử nghiệm riêng cho thao tác editor. Migration chuẩn hóa mã trường áp dụng chung database, giữ nguyên tiến trình các campaign. Có thể cấu hình `EDITOR_PORT`, `EDITOR_WS_PORT`, `EDITOR_LOGIN_PORT`, `EDITOR_CAMPAIGN_ID`, `EDITOR_TEST_PASSWORD`. Mật khẩu chỉ được dùng lúc tạo tài khoản thử nghiệm lần đầu; chạy lại không reset mật khẩu cũ.
 
 Danh sách 12 tài khoản AMTECH được seed vào Portal giả lập qua CLI, không qua đăng ký sinh viên. Người dùng chọn AMTECH hoặc nhập email công ty qua form đăng ký tự do sẽ không được cấp admin. Production nhận danh tính có chữ ký và email đã xác thực từ backend Portal theo `integration/openapi.json`; các vRace ID có trong ảnh được giữ làm dữ liệu đối chiếu trong `shared/integration/identity.ts`, không thay thế externalStudentId của Portal.
 
-AMTECH chỉ có role `admin`, không có school slot/HQ, ví, thành tích chạy hoặc quyền chơi. Tám trường thi đấu có role `user`; schoolId thống nhất là `hcmut`, `ou`, `dtu`, `hpuni`, `hsu`, `huce`, `ntu`, `hcmiu`, giữ slots 0–7. Migration 008 chuyển mã cũ trong tài khoản, running binding, HQ, bản nháp và lịch sử editor, giữ nguyên ví/fog/tiến trình. API chỉ nhận mã mới; backend Portal phải cập nhật mapping cùng đợt triển khai. Editor có kéo thả 3D, bám lưới/kiểm tra chồng lấn, chỉnh thuộc tính, hoàn tác/làm lại, lưu và mở lại bản nháp, xuất bản có kiểm tra phiên bản, khôi phục lịch sử, thông báo và xác nhận phát quà. Kho quà thử nghiệm chỉ mở ở staging. Bản nháp không ảnh hưởng người chơi; sau xuất bản, bản đồ đang mở tự nhận thay đổi trong khoảng 3 giây.
+AMTECH chỉ có role `admin`, không có school slot/HQ, ví, thành tích chạy hoặc quyền chơi. Tám trường thi đấu có role `user`; schoolId thống nhất là `hcmut`, `ou`, `dtu`, `hpuni`, `hsu`, `huce`, `ntu`, `hcmiu`, giữ slots 0–7. Migration 008 chuyển mã cũ trong tài khoản, running binding, HQ, bản nháp và lịch sử editor, giữ nguyên ví/fog/tiến trình. API chỉ nhận mã mới; backend Portal phải cập nhật mapping cùng đợt triển khai. Editor có kéo thả 3D, bám lưới/kiểm tra chồng lấn, chỉnh thuộc tính, hoàn tác/làm lại, lưu và mở lại bản nháp, xuất bản có kiểm tra phiên bản, khôi phục lịch sử, thông báo và xác nhận phát quà. Kho quà thật cần quyền `gifts.manage`; lệnh kho quà legacy qua operator key chỉ phục vụ staging. Bản nháp không ảnh hưởng người chơi; sau xuất bản, bản đồ đang mở tự nhận thay đổi trong khoảng 3 giây.
 
 ## Hợp đồng Partner API v1
 

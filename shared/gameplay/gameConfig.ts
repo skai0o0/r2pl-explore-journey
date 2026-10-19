@@ -341,6 +341,15 @@ export const BEACON_BUFF_CONFIG = {
   comeback: { tiles: 10, spins: 1, points: 5 },
 } as const;
 export const GAME_CONFIG = {
+  adminAccess: {
+    minPasswordLength: 10,
+    maxPasswordLength: 128,
+    loginWindowMs: 15 * 60 * 1000,
+    maxEmailAttempts: 10,
+    maxOriginAttempts: 100,
+    accountLimit: 500,
+    auditLimit: 100,
+  },
   editor: {
     maxObjects: 200,
     maxUndo: 60,

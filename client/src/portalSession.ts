@@ -1,9 +1,14 @@
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import {
+  type AdminPermission,
+  canAdmin,
+} from "../../shared/integration/adminAccess.ts";
+import {
   type DevSessionConfig,
   LEGACY_DEV_SESSION,
   parseDevSession,
 } from "../../shared/integration/devSession.ts";
+import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import {
   type PortalSessionConfig,
   parsePortalSession,
@@ -50,17 +55,34 @@ async function openAdminBootstrap(
   )
     throw new Error("Invalid admin bootstrap");
   configureGameHttp(raw.csrfToken);
-  const { mountLiveEditor } = await import("./liveEditor.ts");
-  await mountLiveEditor(
-    {
-      actorId: p.actorId,
-      name: p.name,
-      organizationId: "amtech",
-      role: "admin",
-      playable: false,
-    },
-    raw.environment as "staging" | "production",
-  );
+  const principal: AdminPrincipal = {
+    actorId: p.actorId,
+    name: p.name,
+    organizationId: "amtech",
+    role: "admin",
+    playable: false,
+    email: typeof p.email === "string" ? p.email : "",
+    permissions: Array.isArray(p.permissions)
+      ? (p.permissions as AdminPermission[])
+      : [],
+    protectedRoot: p.protectedRoot === true,
+  };
+  if (
+    location.pathname === "/admin/editor" &&
+    canAdmin(principal, "map.view")
+  ) {
+    const { mountLiveEditor } = await import("./liveEditor.ts");
+    await mountLiveEditor(
+      principal,
+      raw.environment as "staging" | "production",
+    );
+  } else {
+    const { mountAdminDashboard } = await import("./adminDashboard.ts");
+    await mountAdminDashboard(
+      principal,
+      raw.environment as "staging" | "production",
+    );
+  }
   return new Promise<never>(() => {});
 }
 export async function loadGameSession(): Promise<
@@ -68,6 +90,19 @@ export async function loadGameSession(): Promise<
 > {
   loadingStage(0);
   try {
+    if (
+      ["/admin", "/admin/login", "/admin/editor"].includes(location.pathname)
+    ) {
+      const bootstrap = await request("/api/fixture/bootstrap");
+      if (bootstrap.ok) {
+        const raw = (await bootstrap.json()) as Record<string, unknown>;
+        if (raw.mode === "admin") return openAdminBootstrap(raw);
+      } else if (![401, 403].includes(bootstrap.status))
+        throw new Error("Admin unavailable");
+      const { mountAdminLogin } = await import("./adminDashboard.ts");
+      await mountAdminLogin();
+      return new Promise<never>(() => {});
+    }
     const adminEntry =
       new URLSearchParams(location.search).get("entry") === "admin";
     if (adminEntry) sessionStorage.setItem("r2pl-demo-admin-entry", "1");

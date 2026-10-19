@@ -8,6 +8,7 @@ import {
 } from "../../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../../shared/world/checksum.ts";
 import { chunkId, localIndex } from "../../shared/world/coordinates.ts";
+import { requireAdminPermission } from "./AdminAccessStore.ts";
 import { setLegacyGiftStock } from "./GiftPoolStore.ts";
 import { adjustKnowledgeScore } from "./KnowledgeScore.ts";
 import { PortalError } from "./PortalSignature.ts";
@@ -83,6 +84,22 @@ export class SignedOperator {
           ).rowCount
         )
           throw new PortalError(403, "ADMIN_REQUIRED");
+        const permission =
+          c.action === "notify"
+            ? "notifications.send"
+            : c.action === "gift-stock"
+              ? "gifts.manage"
+              : ["publish", "rollback"].includes(String(c.action))
+                ? "map.publish"
+                : undefined;
+        if (!permission) throw new PortalError(403, "ADMIN_COMMAND_DISABLED");
+        await requireAdminPermission(
+          db,
+          this.fixture.campaignId,
+          actorId,
+          sessionToken ?? "",
+          permission,
+        );
         revision = (
           await db.query<{ revision: number }>(
             "SELECT COALESCE(max(revision),0)::integer AS revision FROM r2pl_v2.editor_versions WHERE campaign_id=$1",

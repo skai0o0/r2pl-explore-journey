@@ -46,14 +46,15 @@
 | --- | --- |
 | `externalStudentId` | ID Portal ổn định; không dùng email; regex `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$` |
 | Sinh viên | `eduVerified: true`, một `schoolId` trong bảng; trả `role: user`, `playable: true` |
-| Admin AMTECH | Email đã xác minh thuộc `amtech.vn`, `amtech-vn.com` hoặc danh sách được duyệt; trả `role: admin`, `playable: false` |
+| Admin AMTECH | Email đã xác minh thuộc `amtech.vn`, `amtech-vn.com`, `acer.com`, `dava.vn` hoặc danh sách được duyệt; trả `role: admin`, `playable: false` |
 | `revision`, mét, điểm | Chuỗi số nguyên; `delta` có thể âm |
 | Trường thời gian `*Ms` | Unix milliseconds dạng number |
 | `earnedRunningPoints` | Điểm chạy cho BXH; tiêu/thưởng game không thay đổi, điều chỉnh vRace có thể thay đổi |
 | `spendablePoints` | Số dư tiêu trong game; ví mới bắt đầu từ 0 |
 
 - Portal xác minh và ánh xạ trường; chọn `schoolId: amtech` đơn thuần không cấp admin.
-- Admin dùng đăng nhập Portal → Live Editor; không gửi mật khẩu sang Game, không gọi `running`/`accounts` cho admin.
+- Admin Portal → dashboard Game; AMTECH mặc định đủ quyền, Acer/Dava mặc định chỉ xem BXH; Game quản lý phân quyền, không gửi mật khẩu hoặc gọi `running`/`accounts` cho admin.
+- Tài khoản quản trị riêng của Game dùng `/admin`, không cần tạo bên Portal; không thay đổi luồng SSO/API sinh viên.
 - Đổi trường hoặc đổi ID của danh tính đã liên kết cần đối soát với đội Game.
 
 ## 3. Gọi API

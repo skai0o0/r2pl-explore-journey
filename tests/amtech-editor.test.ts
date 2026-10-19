@@ -238,7 +238,7 @@ test("signed staff provisioning → PKCE admin-only editor → draft/publish/his
       ).status,
       200,
     );
-    const admin = await login("staff-0");
+    const admin = await login("staff-1");
     assert.equal(admin.page.mode, "admin");
     assert.equal(admin.page.principal.playable, false);
     assert(!("players" in admin.page));
@@ -264,13 +264,13 @@ test("signed staff provisioning → PKCE admin-only editor → draft/publish/his
       403,
     );
     assert.equal(
-      (await signed("accounts", { externalStudentId: "staff-0" })).status,
+      (await signed("accounts", { externalStudentId: "staff-1" })).status,
       403,
     );
     assert.equal(
       (
         await signed("running", {
-          externalStudentId: "staff-0",
+          externalStudentId: "staff-1",
           revision: "1",
           cumulativeMeters: "1000",
           weeklyMeters: "1000",
@@ -462,7 +462,7 @@ test("signed staff provisioning → PKCE admin-only editor → draft/publish/his
     assert.equal((await signed("members", player)).status, 403);
     // The HTTP identity check may precede body parsing/lock waits. Transactions
     // must independently reject a session that has expired since that check.
-    const expiring = await login("staff-0");
+    const expiring = await login("staff-1");
     const expiredToken = expiring.headers.Cookie.split("=")[1]!;
     await pool.query(
       "UPDATE r2pl_v2.portal_admin_sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE campaign_id=$1 AND token_hash=$2",
@@ -498,11 +498,11 @@ test("signed staff provisioning → PKCE admin-only editor → draft/publish/his
       ),
       { code: "ADMIN_REQUIRED" },
     );
-    const staff = AMTECH_ACCOUNTS[0]!;
+    const staff = AMTECH_ACCOUNTS[1]!;
     assert.equal(
       (
         await signed("members", {
-          externalStudentId: "staff-0",
+          externalStudentId: "staff-1",
           schoolId: "amtech",
           displayName: staff.name,
           active: false,

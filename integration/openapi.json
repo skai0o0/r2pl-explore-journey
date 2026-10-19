@@ -29,7 +29,7 @@
       "post": {
         "operationId": "upsertMember",
         "summary": "Provision verified student/staff or suspend access",
-        "description": "Only the signed portal backend calls this after verified identity and campaign eligibility checks. Competitive students use the eight existing IDs and receive role=user/playable=true. Company staff use schoolId=amtech plus email/emailVerified=true; approved exact emails override schoolId. Verified staff resolve to organizationId=amtech, schoolId=null, role=admin, playable=false. AMTECH has no competitive slot, HQ, wallet, running conversion, or ranking. Staff launch into Live Editor. Self-service school selection must never provision staff. externalStudentId is a stable opaque portal ID, never an email. schoolId is mapped from the portal school registry, never guessed from an email suffix. Repeated requests do not reset a wallet. Competitive school change returns 409. Upgrading a verified staff identity revokes existing player sessions and running bindings while preserving historical wallets; it never grants a new wallet. active=false invalidates sessions/tickets; open sockets are checked every 5 seconds and before commands. Initial Points/Crystals/Keys are zero.",
+        "description": "Only the signed portal backend calls this after verified identity and campaign eligibility checks. Competitive students use the eight existing IDs and receive role=user/playable=true. Company staff use schoolId=amtech plus email/emailVerified=true; approved exact emails override schoolId. Verified staff resolve to organizationId=amtech, schoolId=null, role=admin, playable=false. AMTECH has no competitive slot, HQ, wallet, running conversion, or ranking. Staff launch into the Game admin dashboard; Game-managed permissions determine available tools. Verified amtech.vn/amtech-vn.com default to full access; acer.com/dava.vn default to rankings-only access. Self-service school selection must never provision staff. externalStudentId is a stable opaque portal ID, never an email. schoolId is mapped from the portal school registry, never guessed from an email suffix. Repeated requests do not reset a wallet. Competitive school change returns 409. Upgrading a verified staff identity revokes existing player sessions and running bindings while preserving historical wallets; it never grants a new wallet. active=false invalidates sessions/tickets; open sockets are checked every 5 seconds and before commands. Initial Points/Crystals/Keys are zero.",
         "requestBody": {
           "required": true,
           "content": {
@@ -398,7 +398,7 @@
           },
           "emailVerified": {
             "type": "boolean",
-            "description": "Must be true for staff. Exact approved staff emails override schoolId; verified amtech.vn/amtech-vn.com domains also resolve to admin."
+            "description": "Must be true for staff. Exact approved staff emails override schoolId; verified amtech.vn/amtech-vn.com/acer.com/dava.vn domains also resolve to admin. Acer/Dava default to rankings-only access; Game manages granular permissions."
           }
         },
         "anyOf": [

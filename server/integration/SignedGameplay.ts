@@ -34,6 +34,7 @@ import {
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
 import { recordLedger } from "../persistence/WalletLedger.ts";
+import { requireAdminPermission } from "./AdminAccessStore.ts";
 import {
   activeView,
   chooseBuff,
@@ -1264,6 +1265,13 @@ export class SignedGameplay {
           ).rowCount
         )
           throw new TypeError("ADMIN_REQUIRED");
+        await requireAdminPermission(
+          db,
+          this.fixture.campaignId,
+          adminId,
+          sessionToken ?? "",
+          "gifts.redeem",
+        );
         await db.query(
           "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,'gift-redeem',$3)",
           [

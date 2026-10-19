@@ -6,6 +6,8 @@ import {
   validateEditorLayout,
 } from "../../shared/gameplay/editor.ts";
 import type { WorldObject } from "../../shared/gameplay/gameConfig.ts";
+import type { AdminPermission } from "../../shared/integration/adminAccess.ts";
+import { requireAdminPermission } from "./AdminAccessStore.ts";
 import { PortalError } from "./PortalSignature.ts";
 import { portalObject } from "./PortalStore.ts";
 
@@ -20,6 +22,7 @@ export class EditorStore {
     actorId: string,
     token: string,
     work: (db: PoolClient) => Promise<T>,
+    permission: AdminPermission = "map.view",
   ): Promise<T> {
     const db = await this.pool.connect();
     try {
@@ -40,6 +43,13 @@ export class EditorStore {
         ).rowCount
       )
         throw new PortalError(403, "ADMIN_REQUIRED");
+      await requireAdminPermission(
+        db,
+        this.campaignId,
+        actorId,
+        token,
+        permission,
+      );
       const result = await work(db);
       await db.query("COMMIT");
       return result;
@@ -112,35 +122,40 @@ export class EditorStore {
       Number(value.draftRevision) < 0
     )
       throw new TypeError("Invalid draft version");
-    return this.transaction(actorId, token, async (db) => {
-      const live = (
-        await db.query<{ revision: number }>(
-          "SELECT COALESCE(max(revision),0)::integer AS revision FROM r2pl_v2.editor_versions WHERE campaign_id=$1",
-          [this.campaignId],
-        )
-      ).rows[0]!.revision;
-      if (Number(value.baseRevision) > live)
-        throw new TypeError("Invalid base version");
-      const old = (
-        await db.query<{ revision: number }>(
-          "SELECT revision FROM r2pl_v2.editor_drafts WHERE campaign_id=$1 AND actor_id=$2 FOR UPDATE",
-          [this.campaignId, actorId],
-        )
-      ).rows[0];
-      if ((old?.revision ?? 0) !== value.draftRevision)
-        throw new PortalError(409, "DRAFT_VERSION_CONFLICT");
-      const revision = (old?.revision ?? 0) + 1;
-      await db.query(
-        "INSERT INTO r2pl_v2.editor_drafts(campaign_id,actor_id,revision,base_revision,objects) VALUES($1,$2,$3,$4,$5) ON CONFLICT(campaign_id,actor_id) DO UPDATE SET revision=EXCLUDED.revision,base_revision=EXCLUDED.base_revision,objects=EXCLUDED.objects,updated_at=clock_timestamp()",
-        [
-          this.campaignId,
-          actorId,
-          revision,
-          value.baseRevision,
-          JSON.stringify(value.objects),
-        ],
-      );
-      return { revision };
-    });
+    return this.transaction(
+      actorId,
+      token,
+      async (db) => {
+        const live = (
+          await db.query<{ revision: number }>(
+            "SELECT COALESCE(max(revision),0)::integer AS revision FROM r2pl_v2.editor_versions WHERE campaign_id=$1",
+            [this.campaignId],
+          )
+        ).rows[0]!.revision;
+        if (Number(value.baseRevision) > live)
+          throw new TypeError("Invalid base version");
+        const old = (
+          await db.query<{ revision: number }>(
+            "SELECT revision FROM r2pl_v2.editor_drafts WHERE campaign_id=$1 AND actor_id=$2 FOR UPDATE",
+            [this.campaignId, actorId],
+          )
+        ).rows[0];
+        if ((old?.revision ?? 0) !== value.draftRevision)
+          throw new PortalError(409, "DRAFT_VERSION_CONFLICT");
+        const revision = (old?.revision ?? 0) + 1;
+        await db.query(
+          "INSERT INTO r2pl_v2.editor_drafts(campaign_id,actor_id,revision,base_revision,objects) VALUES($1,$2,$3,$4,$5) ON CONFLICT(campaign_id,actor_id) DO UPDATE SET revision=EXCLUDED.revision,base_revision=EXCLUDED.base_revision,objects=EXCLUDED.objects,updated_at=clock_timestamp()",
+          [
+            this.campaignId,
+            actorId,
+            revision,
+            value.baseRevision,
+            JSON.stringify(value.objects),
+          ],
+        );
+        return { revision };
+      },
+      "map.edit",
+    );
   }
 }

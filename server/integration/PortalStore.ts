@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { GAME_CONFIG, SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
+import { ROOT_ADMIN_EMAIL } from "../../shared/integration/adminAccess.ts";
 import {
   type AdminPrincipal,
   isAmtechIdentity,
@@ -10,6 +11,7 @@ import {
   parseRunningSnapshot,
   snapshotWire,
 } from "../../shared/integration/running.ts";
+import { authenticateAdminAccess } from "./AdminAccessStore.ts";
 import type { PortalConfig } from "./PortalConfig.ts";
 import { PortalError } from "./PortalSignature.ts";
 import type { SchoolPlayActor } from "./SchoolPlayFixture.ts";
@@ -238,14 +240,35 @@ export class PortalStore {
       throw new PortalError(400, "INVALID_VERIFIED_MEMBER");
     return this.transaction(async (db) => {
       const email = (value.email as string).trim().toLowerCase();
+      // The recovery account can only authenticate locally, never via partner identity.
+      if (email === ROOT_ADMIN_EMAIL)
+        throw new PortalError(403, "ROOT_ADMIN_PROTECTED");
       const old = (
-        await db.query<{ actor_id: string; external_student_id: string }>(
-          "SELECT actor_id,external_student_id FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND (external_student_id=$2 OR email=$3) FOR UPDATE",
+        await db.query<{
+          actor_id: string;
+          external_student_id: string;
+          protected_root: boolean;
+        }>(
+          "SELECT actor_id,external_student_id,protected_root FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND (external_student_id=$2 OR email=$3) FOR UPDATE",
           [this.config.campaignId, value.externalStudentId, email],
         )
       ).rows;
-      if (old.some((a) => a.external_student_id !== value.externalStudentId))
+      if (old.some((a) => a.protected_root))
+        throw new PortalError(403, "ROOT_ADMIN_PROTECTED");
+      if (
+        old.some(
+          (a) =>
+            a.external_student_id !== value.externalStudentId &&
+            !a.external_student_id.startsWith("local-admin:"),
+        )
+      )
         throw new PortalError(409, "IDENTITY_ALREADY_BOUND");
+      if (old.length > 1) throw new PortalError(409, "IDENTITY_ALREADY_BOUND");
+      if (old[0]?.external_student_id.startsWith("local-admin:"))
+        await db.query(
+          "UPDATE r2pl_v2.portal_admins SET external_student_id=$3 WHERE campaign_id=$1 AND actor_id=$2",
+          [this.config.campaignId, old[0].actor_id, value.externalStudentId],
+        );
       const player = (
         await db.query<Member>(
           "SELECT * FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
@@ -304,23 +327,7 @@ export class PortalStore {
     });
   }
   async authenticateAdmin(token: unknown): Promise<AdminPrincipal | undefined> {
-    if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token))
-      return undefined;
-    const row = (
-      await this.pool.query<{ actor_id: string; display_name: string }>(
-        "SELECT a.actor_id,a.display_name FROM r2pl_v2.portal_admin_sessions s JOIN r2pl_v2.portal_admins a USING(campaign_id,actor_id) WHERE s.campaign_id=$1 AND s.token_hash=$2 AND s.expires_at>clock_timestamp() AND a.active",
-        [this.config.campaignId, digest(token)],
-      )
-    ).rows[0];
-    return row
-      ? {
-          actorId: row.actor_id,
-          name: row.display_name,
-          organizationId: "amtech",
-          role: "admin",
-          playable: false,
-        }
-      : undefined;
+    return authenticateAdminAccess(this.pool, this.config.campaignId, token);
   }
   async running(input: unknown): Promise<unknown> {
     const value = portalObject(input, [
@@ -468,7 +475,7 @@ export class PortalStore {
       assertIdentifier(value.externalStudentId);
       const admin = (
         await db.query<{ actor_id: string; active: boolean }>(
-          "SELECT actor_id,active FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
+          "SELECT actor_id,(active AND access_enabled AND NOT protected_root) AS active FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND external_student_id=$2 FOR UPDATE",
           [this.config.campaignId, value.externalStudentId],
         )
       ).rows[0];
@@ -530,7 +537,7 @@ export class PortalStore {
     return this.transaction(async (db) => {
       const adminLaunch = (
         await db.query<{ actor_id: string; challenge: string }>(
-          "SELECT l.actor_id,l.challenge FROM r2pl_v2.portal_admin_launches l JOIN r2pl_v2.portal_admins a USING(campaign_id,actor_id) WHERE l.campaign_id=$1 AND l.ticket_hash=$2 AND l.expires_at>clock_timestamp() AND a.active FOR UPDATE OF l,a",
+          "SELECT l.actor_id,l.challenge FROM r2pl_v2.portal_admin_launches l JOIN r2pl_v2.portal_admins a USING(campaign_id,actor_id) WHERE l.campaign_id=$1 AND l.ticket_hash=$2 AND l.expires_at>clock_timestamp() AND a.active AND a.access_enabled AND NOT a.protected_root FOR UPDATE OF l,a",
           [this.config.campaignId, digest(value.ticket as string)],
         )
       ).rows[0];

@@ -9,10 +9,12 @@ import type { Pool } from "pg";
 import { BotPeer, pause } from "../../scripts/simulation/BotPeer.ts";
 import { EDITOR_CONFIG } from "../../shared/gameplay/editor.ts";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import { canAdmin } from "../../shared/integration/adminAccess.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
 import type { BotRole } from "../../shared/simulation/schoolBots.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
+import { AdminHttp } from "./AdminHttp.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { DemoAdminStore } from "./DemoAdminPortal.ts";
 import { DevAccountService } from "./DevAccountService.ts";
@@ -138,6 +140,7 @@ async function startSchoolPlayServer(
     ? new DemoAdminStore(pool, options.adminPortal)
     : undefined;
   const authConfig = options.portal ?? options.adminPortal;
+  const adminHttp = authConfig ? new AdminHttp(pool, authConfig) : undefined;
   const portalHttp =
     portal || adminPortal
       ? new PortalHttp((portal ?? adminPortal)!)
@@ -238,7 +241,21 @@ async function startSchoolPlayServer(
       const method = parts[1];
       const roomName = parts[2] ?? "";
       response.setHeader("Content-Type", "application/json; charset=utf-8");
-      response.setHeader("Access-Control-Allow-Origin", "*");
+      const origin = request.headers.origin;
+      if (portal && origin && origin !== portal.config.publicOrigin) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "ORIGIN_REJECTED" }));
+        return;
+      }
+      response.setHeader(
+        "Access-Control-Allow-Origin",
+        portal?.config.publicOrigin ?? "*",
+      );
+      if (portal) {
+        response.setHeader("Access-Control-Allow-Credentials", "true");
+        response.setHeader("Vary", "Origin");
+      }
       response.setHeader(
         "Access-Control-Allow-Headers",
         "Origin, X-Requested-With, Content-Type, Accept, Authorization",
@@ -258,19 +275,39 @@ async function startSchoolPlayServer(
         return;
       }
       try {
+        if (
+          url.search ||
+          parts.length !== 3 ||
+          !["joinOrCreate", "join", "joinById", "reconnect"].includes(
+            method ?? "",
+          )
+        )
+          throw new PortalError(404, "NOT_FOUND");
+        if (!request.headers["content-type"]?.startsWith("application/json"))
+          throw new PortalError(415, "JSON_REQUIRED");
         let bodyBytes = "";
-        for await (const chunk of request) bodyBytes += chunk;
+        let size = 0;
+        for await (const chunk of request) {
+          size += Buffer.byteLength(chunk);
+          if (size > GAME_CONFIG.integration.maxBodyBytes)
+            throw new PortalError(413, "BODY_TOO_LARGE");
+          bodyBytes += chunk;
+        }
         const options = bodyBytes ? JSON.parse(bodyBytes) : {};
         const result = await matchMaker.controller.invokeMethod(
-          method as any,
+          method!,
           roomName,
           options,
+          { headers: new Headers(), ip: request.socket.remoteAddress },
         );
         response.writeHead(200).end(JSON.stringify(result));
-      } catch (err: any) {
-        response
-          .writeHead(err.code || 500)
-          .end(JSON.stringify({ error: err.message }));
+      } catch (err) {
+        response.writeHead(err instanceof PortalError ? err.status : 400).end(
+          JSON.stringify({
+            error:
+              err instanceof PortalError ? err.code : "MATCHMAKING_REJECTED",
+          }),
+        );
       }
       return;
     }
@@ -280,6 +317,11 @@ async function startSchoolPlayServer(
     const token = options.portal
       ? cookieToken
       : (request.headers.authorization?.replace(/^Bearer /, "") ?? cookieToken);
+    if (
+      adminHttp &&
+      (await adminHttp.handle(request, response, url, cookieToken))
+    )
+      return;
     if (
       adminPortal &&
       path === "/api/portal/config" &&
@@ -567,6 +609,8 @@ async function startSchoolPlayServer(
       response.setHeader("Content-Type", "application/json; charset=utf-8");
       try {
         if (request.method === "GET") {
+          if (admin && !canAdmin(admin, "map.view"))
+            throw new PortalError(403, "PERMISSION_DENIED");
           response.end(JSON.stringify({ objects: await operator.layout() }));
           return;
         }
@@ -643,6 +687,12 @@ async function startSchoolPlayServer(
       return;
     }
     if (path === "/api/admin/gifts") {
+      if (admin && !canAdmin(admin, "gifts.view")) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "PERMISSION_DENIED" }));
+        return;
+      }
       if (
         !(portal || adminPortal
           ? !!admin
@@ -673,6 +723,12 @@ async function startSchoolPlayServer(
       return;
     }
     if (path === "/api/admin/gifts/redeem") {
+      if (admin && !canAdmin(admin, "gifts.redeem")) {
+        response
+          .writeHead(403)
+          .end(JSON.stringify({ error: "PERMISSION_DENIED" }));
+        return;
+      }
       if (
         !(portal || adminPortal
           ? !!admin
@@ -722,7 +778,14 @@ async function startSchoolPlayServer(
         }
         response.end(JSON.stringify(result));
       } catch (e) {
-        response.writeHead(500).end(JSON.stringify({ error: String(e) }));
+        response
+          .writeHead(e instanceof PortalError ? e.status : 503)
+          .end(
+            JSON.stringify({
+              error:
+                e instanceof PortalError ? e.code : "TEMPORARILY_UNAVAILABLE",
+            }),
+          );
       }
       return;
     }
@@ -846,6 +909,14 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/world") {
+        if (admin && !canAdmin(admin, "map.view")) {
+          response.writeHead(403).end();
+          return;
+        }
+        if (portal && !portalActor && !admin) {
+          response.writeHead(401).end();
+          return;
+        }
         await gameplay.syncStops();
         const rows = await pool.query<{ data: unknown }>(
           "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind' <> 'chest' ORDER BY id",
@@ -968,7 +1039,9 @@ async function startSchoolPlayServer(
       }
       const file = resolve(
         clientRoot,
-        path === "/" ? "index.html" : `.${decodeURIComponent(path)}`,
+        ["/", "/admin", "/admin/login", "/admin/editor"].includes(path)
+          ? "index.html"
+          : `.${decodeURIComponent(path)}`,
       );
       if (!file.startsWith(clientRoot + sep) && file !== clientRoot) {
         response.writeHead(403).end();

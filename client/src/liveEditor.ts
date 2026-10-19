@@ -8,13 +8,13 @@ import {
   GAME_CONFIG,
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
+import { canAdmin } from "../../shared/integration/adminAccess.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import { finishBoot } from "./bootScreen.ts";
 import { EditorScene } from "./editorScene.ts";
 import { gameFetch } from "./gameHttp.ts";
 import { mountGiftPoolEditor } from "./giftPoolEditor.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
-import { returnToEventPortal } from "./portalSession.ts";
 import "./liveEditor.css";
 
 const labels = {
@@ -53,6 +53,17 @@ export async function mountLiveEditor(
   const el = <T extends HTMLElement>(selector: string) =>
     app.querySelector<T>(selector)!;
   el(".studio-user").textContent = `${principal.name} · AMTECH · Admin`;
+  const back = document.createElement("a");
+  back.href = "/admin";
+  back.textContent = "← Bảng điều khiển";
+  back.style.color = "#82dce8";
+  el(".studio-actions").prepend(back);
+  if (!canAdmin(principal, "notifications.send"))
+    el(".studio-notify").closest("details")!.hidden = true;
+  if (!canAdmin(principal, "gifts.view"))
+    el(".studio-gifts").closest("details")!.hidden = true;
+  if (!canAdmin(principal, "gifts.manage"))
+    el(".studio-gift-pool").closest("details")!.hidden = true;
   el(".studio-environment").textContent =
     environment === "staging" ? "● THỬ NGHIỆM" : "● CAMPAIGN CHÍNH THỨC";
   let objects: WorldObject[] = [],
@@ -171,6 +182,10 @@ export async function mountLiveEditor(
     status,
   );
   function mutate(next: WorldObject[]): void {
+    if (!canAdmin(principal, "map.edit")) {
+      scene.setObjects(objects);
+      return;
+    }
     if (busy) return;
     try {
       validateEditorLayout(next);
@@ -190,6 +205,11 @@ export async function mountLiveEditor(
     status("Đã chỉnh sửa bản nháp. Bấm Xuất bản để áp dụng cho người chơi.");
   }
   function renderControls(): void {
+    if (!canAdmin(principal, "map.publish"))
+      for (const b of Array.from(
+        app.querySelectorAll<HTMLButtonElement>(".studio-history button"),
+      ))
+        b.disabled = true;
     el<HTMLButtonElement>('[data-action="undo"]').disabled =
       busy || !undo.length;
     el<HTMLButtonElement>('[data-action="redo"]').disabled =
@@ -197,6 +217,21 @@ export async function mountLiveEditor(
     el(".studio-version").textContent =
       `Bản nền v${baseRevision} · ${dirty ? "Có thay đổi chưa xuất bản" : "Đã đồng bộ"}`;
     el(".studio-count").textContent = `${objects.length} vật thể · 8 trường`;
+    for (const action of ["undo", "redo", "save", "recover"])
+      if (!canAdmin(principal, "map.edit"))
+        el<HTMLButtonElement>(`[data-action="${action}"]`).disabled = true;
+    el<HTMLButtonElement>('[data-action="publish"]').disabled =
+      busy || !canAdmin(principal, "map.publish");
+    if (!canAdmin(principal, "map.edit")) {
+      for (const input of Array.from(
+        app.querySelectorAll<
+          HTMLInputElement | HTMLSelectElement | HTMLButtonElement
+        >(
+          ".studio-properties input,.studio-properties select,.studio-properties button,.studio-palette button",
+        ),
+      ))
+        input.disabled = true;
+    }
   }
   function refresh(): void {
     scene.setObjects(objects);
@@ -324,6 +359,7 @@ export async function mountLiveEditor(
     for (const v of snapshot?.history ?? []) {
       const b = document.createElement("button");
       b.textContent = `v${v.revision} · ${v.actor}`;
+      b.disabled = !canAdmin(principal, "map.publish");
       b.title = new Date(v.createdAt).toLocaleString("vi-VN");
       b.onclick = async () => {
         if (
@@ -501,7 +537,10 @@ export async function mountLiveEditor(
       !unsaved ||
       (await ask("Bản nháp chưa được lưu. Bạn vẫn muốn đăng xuất?"))
     )
-      void action(returnToEventPortal);
+      void action(async () => {
+        await request("/api/portal/logout", {});
+        location.assign("/admin/login");
+      });
   });
   el<HTMLFormElement>(".studio-notify").onsubmit = (e) => {
     e.preventDefault();
@@ -515,7 +554,8 @@ export async function mountLiveEditor(
       status("Đã gửi thông báo campaign.");
     });
   };
-  mountGiftPoolEditor(el(".studio-gift-pool"), request);
+  if (canAdmin(principal, "gifts.manage"))
+    mountGiftPoolEditor(el(".studio-gift-pool"), request);
   function renderGifts(gifts: Record<string, unknown>[]): void {
     const list = el(".studio-gift-results");
     list.replaceChildren();
@@ -527,7 +567,7 @@ export async function mountLiveEditor(
       code.textContent = String(gift.giftCode ?? gift.id);
       note.textContent = `${gift.giftName ?? "Quà hiện vật"} · ${gift.schoolName ?? ""} · ${gift.tier ?? ""} · ${gift.redeemedAt ? "Đã phát" : "Chưa phát"}`;
       row.append(code, note);
-      if (!gift.redeemedAt) {
+      if (!gift.redeemedAt && canAdmin(principal, "gifts.redeem")) {
         const b = document.createElement("button");
         b.textContent = "Xác nhận đã phát quà";
         b.onclick = async () => {

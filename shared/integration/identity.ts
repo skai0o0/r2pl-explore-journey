@@ -1,10 +1,11 @@
+import type { AdminAccess } from "./adminAccess.ts";
 /** Organization membership is independent of the eight competitive school slots. */
 export const AMTECH = Object.freeze({
   id: "amtech",
   name: "Đại học AMTECH",
   role: "admin" as const,
   playable: false as const,
-  emailDomains: ["amtech-vn.com", "amtech.vn"] as const,
+  emailDomains: ["amtech-vn.com", "amtech.vn", "dava.vn", "acer.com"] as const,
 });
 
 /** Server-side provisioning reference. Never used to authorize a browser claim. */
@@ -38,7 +39,7 @@ export function isAmtechIdentity(
   );
 }
 
-export interface AdminPrincipal {
+export interface AdminPrincipal extends AdminAccess {
   readonly actorId: string;
   readonly name: string;
   readonly organizationId: "amtech";

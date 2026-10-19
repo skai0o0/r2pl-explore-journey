@@ -11,6 +11,8 @@ import {
   giftPoolTotals,
   parseGiftPoolCommand,
 } from "../../shared/gameplay/giftPool.ts";
+import type { AdminPermission } from "../../shared/integration/adminAccess.ts";
+import { requireAdminPermission } from "./AdminAccessStore.ts";
 import { PortalError } from "./PortalSignature.ts";
 
 /** Call under signed-game:<campaign> transaction lock, shared by rewards and admin edits. */
@@ -134,6 +136,7 @@ export class GiftPoolStore {
     actor: string,
     token: string,
     body: (db: PoolClient) => Promise<GiftPoolSnapshot>,
+    permission: AdminPermission = "gifts.view",
   ): Promise<GiftPoolSnapshot> {
     const db = await this.pool.connect();
     try {
@@ -146,6 +149,7 @@ export class GiftPoolStore {
         [this.campaign, actor, createHash("sha256").update(token).digest()],
       );
       if (!valid.rowCount) throw new PortalError(403, "ADMIN_REQUIRED");
+      await requireAdminPermission(db, this.campaign, actor, token, permission);
       const result = await body(db);
       await db.query("COMMIT");
       return result;
@@ -167,50 +171,55 @@ export class GiftPoolStore {
     input: unknown,
   ): Promise<GiftPoolSnapshot> {
     const command = parseGiftPoolCommand(input);
-    return this.transaction(actor, token, async (db) => {
-      const current = await readGiftPool(db, this.campaign);
-      if (current.revision !== command.expectedRevision)
-        throw new PortalError(409, "GIFT_POOL_CHANGED");
-      const id = command.id ?? randomUUID(),
-        previous = current.items.find((item) => item.id === id);
-      if (command.id && !previous)
-        throw new PortalError(404, "GIFT_POOL_ITEM_NOT_FOUND");
-      if (
-        previous &&
-        command.tier !== undefined &&
-        command.tier !== previous.tier
-      )
-        throw new PortalError(400, "GIFT_POOL_TIER_IMMUTABLE");
-      const item: GiftPoolItem =
-        command.action === "archive"
-          ? { ...previous!, active: false }
-          : {
-              id,
-              tier: command.tier!,
-              name: command.name!,
-              remaining: command.remaining!,
-              awarded: previous?.awarded ?? 0,
-              active: true,
-            };
-      const next = await saveGiftPool(db, this.campaign, current, [
-        ...current.items.filter((item) => item.id !== id),
-        item,
-      ]);
-      await db.query(
-        "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,$3,$4)",
-        [
-          this.campaign,
-          actor,
-          "gift-pool",
-          JSON.stringify({
-            action: command.action,
-            itemId: id,
-            remaining: item.remaining,
-            revision: next.revision,
-          }),
-        ],
-      );
-      return next;
-    });
+    return this.transaction(
+      actor,
+      token,
+      async (db) => {
+        const current = await readGiftPool(db, this.campaign);
+        if (current.revision !== command.expectedRevision)
+          throw new PortalError(409, "GIFT_POOL_CHANGED");
+        const id = command.id ?? randomUUID(),
+          previous = current.items.find((item) => item.id === id);
+        if (command.id && !previous)
+          throw new PortalError(404, "GIFT_POOL_ITEM_NOT_FOUND");
+        if (
+          previous &&
+          command.tier !== undefined &&
+          command.tier !== previous.tier
+        )
+          throw new PortalError(400, "GIFT_POOL_TIER_IMMUTABLE");
+        const item: GiftPoolItem =
+          command.action === "archive"
+            ? { ...previous!, active: false }
+            : {
+                id,
+                tier: command.tier!,
+                name: command.name!,
+                remaining: command.remaining!,
+                awarded: previous?.awarded ?? 0,
+                active: true,
+              };
+        const next = await saveGiftPool(db, this.campaign, current, [
+          ...current.items.filter((item) => item.id !== id),
+          item,
+        ]);
+        await db.query(
+          "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,$3,$4)",
+          [
+            this.campaign,
+            actor,
+            "gift-pool",
+            JSON.stringify({
+              action: command.action,
+              itemId: id,
+              remaining: item.remaining,
+              revision: next.revision,
+            }),
+          ],
+        );
+        return next;
+      },
+      "gifts.manage",
+    );
   }
 }
