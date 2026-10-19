@@ -353,11 +353,8 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
     nature.group.traverse((o) => {
       if (o instanceof THREE.InstancedMesh) stale++;
     });
-    assert.equal(
-      stale,
-      0,
-      "Replacement fog must remove old crowns before the async rebuild",
-    );
+    assert(stale > 0, "Public scenery must stay mounted while replacement builds");
+    assert(!nature.group.getObjectByName("BorderFlags"), "revoked private flags are removed immediately");
     frames.drain();
     nature.group.traverse((o) => {
       if (o instanceof THREE.InstancedMesh) stale++;
@@ -375,6 +372,30 @@ test("viewport LOD builds bounded detail incrementally, hides small props beyond
     nature?.dispose();
     terrain?.dispose();
     assert.equal(frames.callbacks.size, 0);
+    frames.restore();
+  }
+});
+
+test("replacement snapshots keep scenery mounted until the next complete build", () => {
+  const frames = frameHarness();
+  const replica = new ProjectionReplica(0);
+  replica.applySnapshot({chunkId: 0, viewRevision: 0n,
+    mask: new Uint8Array(8192), fog: new Uint8Array(512)});
+  const nature = new LandscapeEffects([], undefined, new TerrainBiomes());
+  try {
+    nature.rebuild(0, replica);
+    frames.drain();
+    const trees = nature.group.getObjectByName("OakTrees") ?? nature.group.getObjectByName("BirchTrees");
+    assert(trees);
+    const mounted = trees.parent!;
+    nature.rebuild(0, replica);
+    nature.rebuild(0, replica);
+    assert(trees.parent, "in-flight updates must not remove existing scenery");
+    frames.drain();
+    assert.equal(mounted.parent, null, "the old group is disposed after replacement is ready");
+    assert(nature.group.getObjectByName("OakTrees") ?? nature.group.getObjectByName("BirchTrees"));
+  } finally {
+    nature.dispose();
     frames.restore();
   }
 });

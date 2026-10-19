@@ -46,6 +46,20 @@ npm run play:school
 
 Nếu server cũ còn chạy, dừng bằng **Ctrl+C** rồi chạy lại để nhận thay đổi. Xem cách thiết lập database test và biến môi trường tại [`README_PLAY.md`](README_PLAY.md).
 
+### Kiểm thử client qua Cloudflare trên Demo
+
+Chạy từ máy người kiểm thử, không SSH vào server để chạy. Dừng bot trong game trước: bộ bot nội bộ và bộ client này dùng chung tài khoản synthetic.
+
+```powershell
+# Thử nhỏ trước, sau đó 200 phiên HTTPS/WSS qua domain công khai
+npm run simulate:public -- --count=20 --duration=30 --ramp=10 --assets=none
+npm run simulate:public -- --count=200 --duration=60 --ramp=60 --assets=none
+```
+
+Mỗi client có phiên HTTP/2 và WebSocket riêng; tự mở ô, nhận bản đồ và gọi API định kỳ; tự đóng khi hết thời gian hoặc Ctrl+C. Sau giai đoạn khởi tạo, các client bắt đầu chơi cùng nhau. Chỉ nhận domain `https://play.skai0o0.id.vn`, kiểm tra campaign synthetic và không dùng database/secret Production. Nút bot trong game vẫn điều khiển bot chạy nội bộ server; các client bên ngoài không hiện trong bộ đếm đó.
+
+Kết quả JSON ở `artifacts/public-clients/`: số client kết nối thành công, lỗi/mã ngắt, ACK p50/p95/p99, thời gian nhận trạng thái ô, byte M2 và lưu lượng HTTP. `--assets=shell` tải thêm HTML và entry JS/CSS cho từng client; cả hai chế độ chưa mô phỏng tải model 3D, cache trình duyệt, FPS hoặc người dùng từ nhiều mạng khác nhau. Byte M2 không gồm overhead mạng; HTTP ghi riêng body trước/sau giải nén, không gồm header và TLS/TCP. Kết quả là tải thực tế của tuyến đang thử, không phải giới hạn tổng của Cloudflare. Các ô đã mở trên Demo được giữ lại sau lượt thử.
+
 ### Chế độ C: Portal giả lập — chỉ bật khi cần kiểm thử tích hợp
 
 Dùng để tự tạo tài khoản sinh viên, thêm hoạt động chạy giả lập, đồng bộ Điểm và kiểm tra nút **Chơi game**. Chuẩn bị `.env.portal`, database test và khóa tích hợp theo [hướng dẫn sandbox](README_PLAY.md#chạy-sandbox-để-webdev-thử-ngay).

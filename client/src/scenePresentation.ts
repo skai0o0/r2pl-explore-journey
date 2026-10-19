@@ -17,6 +17,7 @@ export const SCENE_PRESENTATION = {
     maxSpan: 1000,
   },
   territoryTint: 0.08,
+  publicKnowledgeTint: 0.48,
   cliffFill: 0.45,
   groundCover: { retention: 0.15, scale: 0.6 },
   borderFlags: { interval: 24, scale: 0.4 },

@@ -346,7 +346,7 @@ export class M35FixtureAuthority {
       !Number.isInteger(mask) ||
       mask < 0 ||
       mask > 0xffff ||
-      mask !== schoolBit(schoolSlot) ||
+      (mask !== 0 && mask !== schoolBit(schoolSlot)) ||
       !Number.isInteger(publicMask) ||
       publicMask < 0 ||
       publicMask > 0xffff ||
@@ -362,7 +362,8 @@ export class M35FixtureAuthority {
     if (
       localIndex % CHUNK_SIZE >= bounds.width ||
       Math.floor(localIndex / CHUNK_SIZE) >= bounds.height ||
-      BigInt(revision) > MAX_REVISION
+      BigInt(revision) > MAX_REVISION ||
+      BigInt(publicRevision) > MAX_REVISION
     )
       throw new InvalidOutboxProjection("Invalid M3.5 outbox edge or revision");
     const committedAtMs = this.#commitTimes.get(event.id);

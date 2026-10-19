@@ -1108,6 +1108,7 @@ export class WorldView {
   }
 
   setSchool(slot: number): void {
+    this.#publicKnowledge = undefined;
     this.#clearObjectHover();
     this.#schoolSlot = slot;
     this.#selectedObject = undefined;
@@ -1328,7 +1329,12 @@ export class WorldView {
   ): void {
     this.#publicKnowledge = publicKnowledge;
     if (!this.#chunkLayers.has(id) || !replica.hasChunk(id)) return;
-    this.paintChunk(id, replica);
+    const layer = this.#layer(id);
+    for (let local = 0; local < 4096; local++)
+      this.#paintLocal(layer.pixels, id, local, replica);
+    layer.texture.needsUpdate = true;
+    // Public membership changes colors only, never private fog or scenery.
+    this.#render();
   }
   paintPublicTile(
     id: number,
@@ -1337,7 +1343,11 @@ export class WorldView {
     publicKnowledge: PublicKnowledgeReplica,
   ): void {
     this.#publicKnowledge = publicKnowledge;
-    this.paintTile(id, local, replica);
+    if (!replica.hasChunk(id)) return;
+    const layer = this.#layer(id);
+    this.#paintLocal(layer.pixels, id, local, replica);
+    layer.texture.needsUpdate = true;
+    this.#render();
   }
 
   paintTile(id: number, local: number, replica: ProjectionReplica): void {

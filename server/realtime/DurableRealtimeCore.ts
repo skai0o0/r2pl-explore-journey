@@ -505,14 +505,16 @@ export class DurableRealtimeCore {
           localIndex: event.localIndex,
           mask: event.publicMask,
         });
+        let recovery: Awaited<ReturnType<M35FixtureAuthority["publicSnapshot"]>> | undefined;
         for (const session of this.#sessions.values()) {
           const generation = session.subscriptions.get(event.chunkId);
           if (generation === undefined || session.outbound.closed) continue;
           const current = session.publicRevisions.get(event.chunkId);
+          // A fresh snapshot can already include this outbox event (or an entire
+          // pending batch). Replaying it must not resend a full chunk per peer.
+          if (current !== undefined && event.publicRevision <= current) continue;
           if (current === undefined || event.publicRevision !== current + 1n) {
-            const snapshot = await this.#authority.publicSnapshot(
-              event.chunkId,
-            );
+            const snapshot = recovery ??= await this.#authority.publicSnapshot(event.chunkId);
             if (
               session.subscriptions.get(event.chunkId) === generation &&
               session.outbound.enqueue(

@@ -240,11 +240,14 @@ export class LandscapeEffects {
     this.#queueRebuild(id, replica);
   }
   rebuild(id: number, replica: ProjectionReplica): void {
-    // Rebuild private border flags from replacement snapshots; scenery stays public.
-    const previous = this.#chunks.get(id);
-    if (previous) this.#dispose(previous.group);
-    this.#chunks.delete(id);
-    if (this.#active?.id === id) this.#active = undefined;
+    // Keep the current scenery mounted while its replacement builds across frames.
+    // Frequent snapshots must not erase trees or restart an in-progress builder.
+    // #finish swaps and disposes the previous group in one synchronous frame.
+    const flags = this.#chunks.get(id)?.group.getObjectByName("BorderFlags");
+    if (flags instanceof THREE.InstancedMesh) {
+      flags.removeFromParent();
+      flags.dispose();
+    }
     this.#queueRebuild(id, replica);
   }
   #queueRebuild(id: number, replica: ProjectionReplica): void {

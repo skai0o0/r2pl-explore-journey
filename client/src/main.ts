@@ -210,6 +210,14 @@ let subscribeTimer: number | undefined;
 let balanceTimer: number | undefined;
 let reconnectTimer: number | undefined;
 let subscribed = "";
+const resyncRequestedAt = new Map<number, number>();
+function requestChunkResync(id: number): void {
+  if (!room) return;
+  const now = performance.now();
+  if (now - (resyncRequestedAt.get(id) ?? -Infinity) < 1000) return;
+  resyncRequestedAt.set(id, now);
+  room.sendBytes("m2", encodeResync(id));
+}
 const selectedTilePanel = new SelectedTilePanel(document);
 let profileBalance: string | undefined;
 let profileCost: string | undefined;
@@ -1022,7 +1030,7 @@ function handleFrame(raw: Uint8Array): void {
         const delta = decodeDelta(frame.payload);
         const result = replica.applyDelta(delta);
         if (result === "resync") {
-          room?.sendBytes("m2", encodeResync(delta.chunkId));
+          requestChunkResync(delta.chunkId);
         } else if (result === "applied") {
           world.paintTile(delta.chunkId, delta.localIndex, replica);
           miniMap.paintProjection(delta.chunkId, replica);
@@ -1042,7 +1050,7 @@ function handleFrame(raw: Uint8Array): void {
         const delta = decodePublicDelta(frame.payload),
           result = publicKnowledge.applyDelta(delta);
         if (result === "resync")
-          room?.sendBytes("m2", encodeResync(delta.chunkId));
+          requestChunkResync(delta.chunkId);
         else if (result === "applied" && replica.hasChunk(delta.chunkId))
           world.paintPublicTile(
             delta.chunkId,
@@ -1059,11 +1067,12 @@ function handleFrame(raw: Uint8Array): void {
   } catch {
     activity("Đang đồng bộ lại bản đồ…", "error");
     for (const id of world.visibleChunkIds(selected?.chunk))
-      room?.sendBytes("m2", encodeResync(id));
+      requestChunkResync(id);
   }
 }
 
 async function connect(nextPlayer: Player): Promise<void> {
+  const resetWorld = generation === 0 || player.token !== nextPlayer.token || player.slot !== nextPlayer.slot;
   const attempt = ++generation;
   window.clearTimeout(reconnectTimer);
   if (player.token !== nextPlayer.token) {
@@ -1076,43 +1085,51 @@ async function connect(nextPlayer: Player): Promise<void> {
   const previous = room;
   room = undefined;
   subscribed = "";
+  resyncRequestedAt.clear();
   if (previous) void previous.leave();
   player = nextPlayer;
-  privateObjects = [];
-  world.setPrivateObjects([]);
-  miniMap.setObjects(publicWorld);
-  gameplay.select(player);
-  ui.balance.textContent = "—";
+  if (resetWorld) {
+    privateObjects = [];
+    world.setPrivateObjects([]);
+    miniMap.setObjects(publicWorld);
+    gameplay.select(player);
+    ui.balance.textContent = "—";
+  }
   ui.player.textContent = player.label;
   ui.school.textContent = player.schoolName;
-  profileBalance = undefined;
-  profileCost = undefined;
-  selectedTilePanel.reset();
+  if (resetWorld) {
+    profileBalance = undefined;
+    profileCost = undefined;
+    selectedTilePanel.reset();
+  }
   sessionStorage.setItem("r2pl-fixture-player", player.token);
   localStorage.setItem("r2pl-fixture-player", player.token);
   if (ui.select.value !== player.token) {
     ui.select.value = player.token;
   }
-  replica = new ProjectionReplica(player.slot);
-  loadedChunks.clear();
-  selected = undefined;
-  selectedBuilding = undefined;
-  contextSignature = "";
-  tileContext = undefined;
-  contextAbort?.abort();
-  contextRequest++;
-  world.setSchool(player.slot);
-  miniMap.setSchool(player.slot);
-  miniMap.setPlayerHQ(
-    SCHOOLS[player.slot]?.id ?? "",
-    player.home.x,
-    player.home.z,
-  );
-  world.focus(
-    player.home.x,
-    player.home.z,
-    session === LEGACY_DEV_SESSION ? 275 : P.homeSpan,
-  );
+  if (resetWorld) {
+    replica = new ProjectionReplica(player.slot);
+    publicKnowledge.clear();
+    loadedChunks.clear();
+    selected = undefined;
+    selectedBuilding = undefined;
+    contextSignature = "";
+    tileContext = undefined;
+    contextAbort?.abort();
+    contextRequest++;
+    world.setSchool(player.slot);
+    miniMap.setSchool(player.slot);
+    miniMap.setPlayerHQ(
+      SCHOOLS[player.slot]?.id ?? "",
+      player.home.x,
+      player.home.z,
+    );
+    world.focus(
+      player.home.x,
+      player.home.z,
+      session === LEGACY_DEV_SESSION ? 275 : P.homeSpan,
+    );
+  }
   updateTile();
   status("Đang kết nối…", false);
   void refreshProfile();
@@ -1290,6 +1307,8 @@ const popoverRateVal = document.getElementById("popover-bot-rate");
 const popoverTilesVal = document.getElementById("popover-bot-tiles");
 // This comes from the signed server session, never from URL/hostname heuristics.
 const botRuntimeEnabled = session.fixtureOnly === true;
+if (hudBotBtn) hudBotBtn.hidden = !botRuntimeEnabled || !isDev;
+if (hudBotPopover && !isDev) hudBotPopover.hidden = true;
 if (!botRuntimeEnabled) {
   hudBotBtn?.setAttribute("hidden", "");
   hudBotPopover?.setAttribute("hidden", "");
@@ -1301,6 +1320,7 @@ if (!botRuntimeEnabled) {
 
 if (hudBotBtn && hudBotPopover) {
   hudBotBtn.addEventListener("click", () => {
+    if (!botRuntimeEnabled || !isDev) return;
     hudBotPopover.hidden = !hudBotPopover.hidden;
   });
   closeBotPopover?.addEventListener("click", () => {

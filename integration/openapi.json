@@ -8,11 +8,11 @@
   "servers": [
     {
       "url": "https://skai0o0.id.vn",
-      "description": "Production — separate campaign and credentials"
+      "description": "Main game (Production) — awaiting partner Portal API integration; separate campaign and credentials"
     },
     {
       "url": "https://play.skai0o0.id.vn",
-      "description": "Sandbox — simulated identity and running data"
+      "description": "Demo (Sandbox) — simulated identity and running data from https://portal.skai0o0.id.vn/"
     }
   ],
   "security": [
@@ -133,7 +133,7 @@
       "post": {
         "operationId": "createLaunch",
         "summary": "Issue one-use browser-bound game login ticket",
-        "description": "Start at game origin. Game generates a verifier in tab sessionStorage, sends its S256 challenge to PORTAL_LOGIN_URL using game_campaign, game_challenge, game_return query parameters. Portal authenticates its current student, verifies exact registered game_return, then calls this endpoint with that student and challenge. Redirect same browser tab using HTTP 303 to the returned launchUrl. Do not put tokens in query strings or iframe postMessage. Ticket lasts 60 seconds; stored hashed; consumed once. This custom partner handoff is not an OAuth implementation.",
+        "description": "Start at game origin. The configured Portal login URL must use HTTPS with no pre-existing query string or fragment; Game adds the handoff parameters. Game generates a verifier in tab sessionStorage, sends its S256 challenge to PORTAL_LOGIN_URL using game_campaign, game_challenge, game_return query parameters. Portal authenticates its current student, verifies exact registered game_return, then calls this endpoint with that student and challenge. Redirect same browser tab using HTTP 303 to the returned launchUrl. Do not put tokens in query strings or iframe postMessage. Ticket lasts 60 seconds; stored hashed; consumed once. This custom partner handoff is not an OAuth implementation.",
         "requestBody": {
           "required": true,
           "content": {
@@ -334,6 +334,11 @@
         "pattern": "^(0|[1-9][0-9]{0,18})$",
         "description": "Canonical unsigned decimal string; wire strings prevent JSON precision loss. revision <= PostgreSQL bigint max; cumulative meters <= JS safe integer."
       },
+      "RunningRevision": {
+        "type": "string",
+        "pattern": "^[1-9][0-9]{0,18}$",
+        "description": "Positive decimal string, starting at 1 and increasing per student per campaign; maximum 9223372036854775807. An account with no running snapshot reports revision 0."
+      },
       "StudentRef": {
         "type": "object",
         "additionalProperties": false,
@@ -436,7 +441,7 @@
             "$ref": "#/components/schemas/Identifier"
           },
           "revision": {
-            "$ref": "#/components/schemas/Decimal"
+            "$ref": "#/components/schemas/RunningRevision"
           },
           "cumulativeMeters": {
             "$ref": "#/components/schemas/Decimal"
@@ -470,7 +475,7 @@
             "type": "string"
           },
           "revision": {
-            "$ref": "#/components/schemas/Decimal"
+            "$ref": "#/components/schemas/RunningRevision"
           },
           "earnedRunningPoints": {
             "$ref": "#/components/schemas/Decimal"

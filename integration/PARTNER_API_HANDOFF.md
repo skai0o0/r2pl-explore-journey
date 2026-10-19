@@ -1,12 +1,12 @@
 # R2PL Game — Partner API v1.1
 
-> Cập nhật 17/10/2026 · Portal = website giải chạy · Game = R2PL.
+> Cập nhật 19/10/2026 · Portal = website giải chạy · Game = R2PL.
 
 [OpenAPI](openapi.json) · [Client Node.js](partner-client.mjs) · [TypeScript types](partner-client.d.mts)
 
 ## 1. Kết nối
 
-| Thông số | Sandbox | Production |
+| Thông số | Demo (Sandbox) | Game (Production) |
 | --- | --- | --- |
 | `GAME_ORIGIN` | `https://play.skai0o0.id.vn` | `https://skai0o0.id.vn` |
 | `CAMPAIGN_ID` | `99000000-0000-4000-8000-000000000001` | `2e00774c-4a8f-4c58-bff6-ed9092901d8f` |
@@ -14,8 +14,9 @@
 | `SECRET` | Cấp riêng | Cấp riêng |
 
 - Secret chỉ lưu ở backend; mỗi môi trường dùng bộ thông số riêng.
-- Portal tham khảo: `https://portal.skai0o0.id.vn` — xác minh edu và chạy bộ giả lập, chỉ nối Sandbox.
-- Production: API đã mở; đăng nhập chờ cấu hình URL Portal đối tác.
+- Game chính: `https://skai0o0.id.vn/` — chờ kết nối API với Portal đối tác.
+- Demo: `https://play.skai0o0.id.vn/` — môi trường Sandbox để thử tích hợp.
+- Portal demo: `https://portal.skai0o0.id.vn/` — xác minh edu và chạy bộ giả lập, chỉ nối Demo.
 - `GET /health`: không ký; `mode = staging` ở Sandbox, `production` ở Production.
 - `GET /api/partner/v1/openapi.json`: không ký; schema API trực tuyến.
 
@@ -211,7 +212,7 @@ Response `200`:
 | Production | `2e00774c-4a8f-4c58-bff6-ed9092901d8f` | `https://skai0o0.id.vn/` |
 
 - Không lấy danh tính/quyền từ query; không log secret hoặc ticket.
-- Đối tác gửi URL đăng nhập nhận GET cho từng môi trường để đội Game cấu hình trước khi thử SSO trên Portal đối tác.
+- Đối tác gửi URL đăng nhập HTTPS nhận GET cho từng môi trường, không có query string hoặc fragment (`#`); Game tự thêm các tham số handoff.
 
 ## 5. Retry và lỗi
 

@@ -6,13 +6,18 @@ import {
   decodeAck,
   decodeDelta,
   decodeFrame,
+  decodePublicDelta,
+  decodePublicSnapshot,
   decodeSnapshot,
   encodeExplore,
   encodeResync,
   encodeSubscribe,
   M2_KIND,
 } from "../../shared/protocol/m2.ts";
-import { ProjectionReplica } from "../../shared/protocol/replica.ts";
+import {
+  ProjectionReplica,
+  PublicKnowledgeReplica,
+} from "../../shared/protocol/replica.ts";
 import {
   BotPlanner,
   type BotRole,
@@ -49,6 +54,7 @@ export class BotPeer {
   readonly #sdk: ColyseusSDK;
   readonly #token: string;
   #replica: ProjectionReplica;
+  #public = new PublicKnowledgeReplica();
   #room: Room | undefined;
   #pending: Pending | undefined;
   #intentional = false;
@@ -66,7 +72,11 @@ export class BotPeer {
   resyncs = 0;
   frames = 0;
   bytes = 0;
+  sentBytes = 0;
+  readonly frameKinds: Record<number, number> = {};
   wireCommands = 0;
+  lastCloseCode: number | undefined;
+  lastCloseReason: string | undefined;
   constructor(
     url: string,
     token: string,
@@ -89,6 +99,7 @@ export class BotPeer {
     this.#intentional = false;
     this.#ready.clear();
     this.#replica = new ProjectionReplica(this.school.slot);
+    this.#public.clear();
     const room = roomId
       ? await this.#sdk.joinById(roomId, { token: this.#token })
       : await this.#sdk.joinOrCreate("m2", { token: this.#token });
@@ -103,11 +114,19 @@ export class BotPeer {
       }
     });
     room.onError(() => this.#fail("Bot transport error"));
-    room.onLeave(() => {
+    room.onLeave((code, reason) => {
+      this.lastCloseCode = code;
+      this.lastCloseReason =
+        reason &&
+        ["slow_client", "send_failed", "post_commit_retry_required"].includes(
+          reason,
+        )
+          ? reason
+          : undefined;
       if (!this.#intentional && this.#room === room)
         this.#fail("Bot connection closed unexpectedly");
     });
-    room.sendBytes("m2", encodeSubscribe(this.chunks));
+    this.#send(encodeSubscribe(this.chunks));
     const deadline = performance.now() + 10000;
     while (
       this.#ready.size < this.chunks.length &&
@@ -134,6 +153,7 @@ export class BotPeer {
     this.bytes += bytes.byteLength;
     this.frames++;
     const frame = decodeFrame(bytes);
+    this.frameKinds[frame.kind] = (this.frameKinds[frame.kind] ?? 0) + 1;
     if (frame.kind === M2_KIND.SNAPSHOT) {
       const snapshot = decodeSnapshot(frame.payload);
       this.#replica.applySnapshot(snapshot);
@@ -143,8 +163,16 @@ export class BotPeer {
       const delta = decodeDelta(frame.payload);
       if (this.#replica.applyDelta(delta) === "resync") {
         this.resyncs++;
-        this.#room!.sendBytes("m2", encodeResync(delta.chunkId));
+        this.#send(encodeResync(delta.chunkId));
       } else this.#learn(delta.chunkId, delta.localIndex);
+    } else if (frame.kind === M2_KIND.PUBLIC_SNAPSHOT) {
+      this.#public.applySnapshot(decodePublicSnapshot(frame.payload));
+    } else if (frame.kind === M2_KIND.PUBLIC_DELTA) {
+      const delta = decodePublicDelta(frame.payload);
+      if (this.#public.applyDelta(delta) === "resync") {
+        this.resyncs++;
+        this.#send(encodeResync(delta.chunkId));
+      }
     } else if (frame.kind === M2_KIND.ACK) {
       const ack = decodeAck(frame.payload);
       const hex = Buffer.from(ack.key).toString("hex");
@@ -165,6 +193,10 @@ export class BotPeer {
       if (pending.timer) clearTimeout(pending.timer);
       pending.reject(new Error(message));
     }
+  }
+  #send(bytes: Uint8Array): void {
+    this.sentBytes += bytes.byteLength;
+    this.#room!.sendBytes("m2", bytes);
   }
   async explore(tile: number, key: Uint8Array): Promise<Ack> {
     if (!this.#room || this.error || this.#pending)
@@ -192,7 +224,7 @@ export class BotPeer {
         if (attempts > 0) this.retries++;
         attempts++;
         this.wireCommands++;
-        this.#room!.sendBytes("m2", bytes);
+        this.#send(bytes);
         pending.timer = setTimeout(send, 2000);
       };
       send();

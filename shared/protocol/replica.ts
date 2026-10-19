@@ -127,6 +127,9 @@ export class ProjectionReplica {
 /** Public active-Knowledge layer. It is intentionally mask-only and cannot reveal fog. */
 export class PublicKnowledgeReplica {
   readonly #chunks = new Map<number, { mask: Uint8Array; revision: bigint }>();
+  clear(): void {
+    this.#chunks.clear();
+  }
   hasChunk(id: number): boolean {
     return this.#chunks.has(id);
   }
@@ -137,6 +140,8 @@ export class PublicKnowledgeReplica {
     return this.#chunks.get(id)?.revision;
   }
   applySnapshot(snapshot: PublicSnapshot): void {
+    if ((this.#chunks.get(snapshot.chunkId)?.revision ?? -1n) > snapshot.revision)
+      return;
     if (snapshot.mask.byteLength !== CHUNK_MASK_BYTES)
       throw new Error("Invalid public snapshot size");
     const { chunkX, chunkZ } = chunkCoordinatesForId(snapshot.chunkId),

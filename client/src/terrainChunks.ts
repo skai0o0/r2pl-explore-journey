@@ -222,6 +222,19 @@ export function terrainMaterial(
   };
   material.customProgramCacheKey = () => "dusk-biome-knowledge-v3";
   discoveryFog?.apply(material);
+  const compile = material.onBeforeCompile;
+  const cacheKey = material.customProgramCacheKey();
+  material.onBeforeCompile = (shader, renderer) => {
+    compile.call(material, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <opaque_fragment>",
+      `// Public membership is legible above cosmetic fog; discovery is unchanged.
+       if (terrainTop > 0.5 && state >= 128.0)
+         outgoingLight = mix(outgoingLight, knowledge.rgb, ${P.publicKnowledgeTint});
+       #include <opaque_fragment>`,
+    );
+  };
+  material.customProgramCacheKey = () => `${cacheKey}-public-knowledge-v1`;
   return material;
 }
 
@@ -449,9 +462,8 @@ export function writeTerrainTile(
     return;
   }
 
-  const publicMask = publicKnowledge?.hasChunk(id)
-    ? publicKnowledge.maskAt(id, local)
-    : 0;
+  const hasPublic = publicKnowledge?.hasChunk(id) ?? false;
+  const publicMask = hasPublic ? publicKnowledge!.maskAt(id, local) : 0;
   if (!replica.isDiscovered(id, local) && !publicMask) {
     pixels[offset + 3] = 0;
     return;
@@ -459,17 +471,17 @@ export function writeTerrainTile(
   const pair = shared.get(z * 1000 + x);
   const mask = replica.maskAt(id, local);
   const slots =
-    pair?.length === 2
+    !hasPublic && pair?.length === 2
       ? pair
       : SCHOOLS.flatMap((_, slot) =>
-          (mask | publicMask) & (1 << slot) ? [slot] : [],
+          (hasPublic ? publicMask : mask) & (1 << slot) ? [slot] : [],
         );
   const hex = terrainTileColor(field.sample(x, z).color, slots);
   pixels[offset] = (hex >> 16) & 255;
   pixels[offset + 1] = (hex >> 8) & 255;
   pixels[offset + 2] = hex & 255;
   let edges = 0;
-  if (mask & (1 << schoolSlot)) {
+  if ((hasPublic ? publicMask : mask) & (1 << schoolSlot)) {
     for (const [dx, dz, flag] of [
       [-1, 0, 1],
       [1, 0, 2],
