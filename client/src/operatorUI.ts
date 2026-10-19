@@ -36,7 +36,7 @@ export class OperatorUI {
   ) {
     this.menu.className = "operator-menu";
     this.menu.innerHTML =
-      '<summary>Admin Map Editor</summary><input type="password" aria-label="Admin key" placeholder="ADMIN_KEY"><button class="load">Mở editor</button><button class="rollback">Khôi phục layout trước</button><select aria-label="Object mới"><option value="unistop">UniStop</option><option value="chest">Chest</option></select><select aria-label="Tier mới"><option>aspire</option><option>nitro</option><option>predator</option></select><button class="place">Đặt object mới</button><input type="number" min="0" max="100000" aria-label="Gift stock staging" placeholder="Gift stock"><button class="stock">Cập nhật Gift stock staging</button><input aria-label="Tiêu đề thông báo" placeholder="Tiêu đề"><input aria-label="Nội dung thông báo" placeholder="Nội dung"><button class="notify">Gửi thông báo campaign</button><details class="gift-checkin-section" style="margin-top:12px;border-top:1px solid #334;padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:#00e5ff">Tra cứu & Xác nhận Check-in Quà tặng</summary><div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><input type="text" class="gift-code-input" aria-label="Mã quà tặng" placeholder="R2PL-GIFT-XXXXXX" style="flex:1;min-width:140px"><button type="button" class="gift-lookup-btn">Tra cứu mã</button><button type="button" class="gift-list-btn">Danh sách gần đây</button></div><div class="gift-checkin-result" style="font-size:12px;margin-top:6px"></div></details>';
+      '<summary>Admin Map Editor</summary><input type="password" aria-label="Admin key" placeholder="ADMIN_KEY"><button class="load">Mở editor</button><button class="rollback">Khôi phục layout trước</button><select aria-label="Object mới"><option value="unistop">UniStop</option><option value="chest">Chest</option></select><select aria-label="Tier mới"><option>aspire</option><option>nitro</option><option>predator</option></select><button class="place">Đặt object mới</button><input type="number" min="0" max="100000" aria-label="Gift stock staging" placeholder="Gift stock"><button class="stock">Cập nhật Gift stock staging</button><input aria-label="Tiêu đề thông báo" placeholder="Tiêu đề"><input aria-label="Nội dung thông báo" placeholder="Nội dung"><button class="notify">Gửi thông báo campaign</button><details class="gift-checkin-section" style="margin-top:12px;border-top:1px solid #334;padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:#00e5ff">Tra cứu & Xác nhận Check-in Quà tặng</summary><div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><input type="text" class="gift-code-input" aria-label="Mã quà tặng" placeholder="R2PL-GIFT-XXXXXX" style="flex:1;min-width:140px"><button type="button" class="gift-lookup-btn">Tra cứu mã</button><button type="button" class="gift-list-btn">Danh sách gần đây</button></div><div class="gift-checkin-result" style="font-size:12px;margin-top:6px"></div></details><details class="bot-simulation-section" open style="margin-top:12px;border-top:1px solid rgba(0,229,255,0.3);padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:#00e5ff;display:flex;justify-content:space-between;align-items:center;"><span>🤖 Giả lập 200 Bot</span><span class="operator-bot-status" style="font-size:9px;background:#1e293b;color:#94a3b8;padding:2px 6px;border-radius:4px;">DỪNG</span></summary><p style="font-size:11px;color:#94a3b8;margin:6px 0 8px;line-height:1.4">200 bot tự động mở ô theo chiến thuật tiến về tâm & UniStop để kiểm tra tải thực tế.</p><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px">Số lượng:</span><select class="operator-bot-count" style="background:#162732;color:#cbe3ed;border:1px solid #ffffff20;border-radius:4px;padding:3px 6px;font-size:11px"><option value="200" selected>200 Bot (Toàn diện)</option><option value="100">100 Bot</option><option value="50">50 Bot</option><option value="24">24 Bot (Nhẹ)</option></select></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px">Tốc độ:</span><select class="operator-bot-speed" style="background:#162732;color:#cbe3ed;border:1px solid #ffffff20;border-radius:4px;padding:3px 6px;font-size:11px"><option value="realistic" selected>Thực tế (1-2s)</option><option value="slow">Thư thả (3-5s)</option><option value="fast">Thần tốc (0.5s)</option></select></div></div><div style="display:flex;gap:6px"><button type="button" class="operator-bot-start" style="flex:1;background:var(--cyan);color:#08131a;font-weight:600;padding:6px;border-radius:4px;cursor:pointer;border:none">▶ Bật Bot</button><button type="button" class="operator-bot-stop" style="flex:1;background:#334155;color:#f87171;font-weight:600;padding:6px;border-radius:4px;cursor:pointer;border:none" disabled>⏹ Dừng</button></div><div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;color:#94a3b8;display:flex;justify-content:space-between"><span>Đang chạy: <strong class="op-bot-active" style="color:#fff">0</strong></span><span>Tốc độ: <strong class="op-bot-rate" style="color:var(--cyan)">0</strong>/s</span><span>Đã mở: <strong class="op-bot-tiles" style="color:var(--cyan-bright)">0</strong></span></div></details>';
     document.body.append(this.menu);
     this.menu.addEventListener("toggle", () => {
       if (this.menu.open)
@@ -134,6 +134,107 @@ export class OperatorUI {
     this.menu.querySelector(".gift-list-btn")?.addEventListener("click", () => {
       void this.listRecentGifts();
     });
+
+    const opBotStart = this.menu.querySelector(".operator-bot-start") as HTMLButtonElement | null;
+    const opBotStop = this.menu.querySelector(".operator-bot-stop") as HTMLButtonElement | null;
+    const opBotCount = this.menu.querySelector(".operator-bot-count") as HTMLSelectElement | null;
+    const opBotSpeed = this.menu.querySelector(".operator-bot-speed") as HTMLSelectElement | null;
+    const opBotStatus = this.menu.querySelector(".operator-bot-status") as HTMLElement | null;
+    const opBotActive = this.menu.querySelector(".op-bot-active") as HTMLElement | null;
+    const opBotRate = this.menu.querySelector(".op-bot-rate") as HTMLElement | null;
+    const opBotTiles = this.menu.querySelector(".op-bot-tiles") as HTMLElement | null;
+
+    if (opBotStart && opBotStop) {
+      const updateOpBotUI = (telemetry: {
+        status?: string;
+        activeBots?: number;
+        actionsPerSecond?: number;
+        totalActions?: number;
+      }) => {
+        const isRunning = telemetry.status === "running" || telemetry.status === "starting";
+        opBotStart.disabled = isRunning;
+        opBotStop.disabled = !isRunning;
+        if (opBotCount) opBotCount.disabled = isRunning;
+        if (opBotSpeed) opBotSpeed.disabled = isRunning;
+
+        if (opBotStatus) {
+          if (telemetry.status === "running") {
+            opBotStatus.textContent = "ĐANG CHẠY";
+            opBotStatus.style.background = "rgba(0, 229, 255, 0.2)";
+            opBotStatus.style.color = "var(--cyan-bright)";
+          } else if (telemetry.status === "starting") {
+            opBotStatus.textContent = "KHỞI ĐỘNG";
+            opBotStatus.style.background = "rgba(238, 203, 114, 0.2)";
+            opBotStatus.style.color = "#eecb72";
+          } else if (telemetry.status === "stopping") {
+            opBotStatus.textContent = "ĐANG DỪNG";
+            opBotStatus.style.background = "rgba(239, 68, 68, 0.2)";
+            opBotStatus.style.color = "#f87171";
+          } else {
+            opBotStatus.textContent = "DỪNG";
+            opBotStatus.style.background = "#1e293b";
+            opBotStatus.style.color = "#94a3b8";
+          }
+        }
+        if (opBotActive) opBotActive.textContent = String(telemetry.activeBots ?? 0);
+        if (opBotRate) opBotRate.textContent = String(telemetry.actionsPerSecond ?? 0);
+        if (opBotTiles) opBotTiles.textContent = String(telemetry.totalActions ?? 0);
+      };
+
+      const pollOpBotStatus = async () => {
+        try {
+          const res = await fetch("/api/fixture/bots");
+          if (res.ok) {
+            const data = await res.json();
+            updateOpBotUI(data);
+          }
+        } catch {}
+      };
+
+      opBotStart.addEventListener("click", async () => {
+        opBotStart.disabled = true;
+        NotificationBanner.show({ title: "Bot Simulation", body: "Đang khởi động 200 bot mô phỏng..." });
+        try {
+          const res = await fetch("/api/fixture/bots/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              count: opBotCount ? Number(opBotCount.value) : 200,
+              speed: opBotSpeed ? opBotSpeed.value : "realistic",
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            updateOpBotUI(data);
+            NotificationBanner.show({ title: "Bot Simulation", body: "200 bot đã bắt đầu khám phá bản đồ!" });
+          } else {
+            NotificationBanner.show({ title: "Bot Simulation", body: "Chưa thể khởi động bot." });
+            opBotStart.disabled = false;
+          }
+        } catch {
+          NotificationBanner.show({ title: "Bot Simulation", body: "Lỗi kết nối khi bật bot." });
+          opBotStart.disabled = false;
+        }
+      });
+
+      opBotStop.addEventListener("click", async () => {
+        opBotStop.disabled = true;
+        NotificationBanner.show({ title: "Bot Simulation", body: "Đang dừng toàn bộ bot..." });
+        try {
+          const res = await fetch("/api/fixture/bots/stop", { method: "POST" });
+          if (res.ok) {
+            const data = await res.json();
+            updateOpBotUI(data);
+            NotificationBanner.show({ title: "Bot Simulation", body: "Đã dừng mô phỏng bot." });
+          }
+        } catch {
+          NotificationBanner.show({ title: "Bot Simulation", body: "Lỗi khi dừng bot." });
+        }
+      });
+
+      window.setInterval(pollOpBotStatus, 2000);
+      void pollOpBotStatus();
+    }
   }
   get relocating(): boolean {
     return this.panel.isRelocating();

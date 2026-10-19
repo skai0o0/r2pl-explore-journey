@@ -27,6 +27,10 @@
           <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
           <span class="switch-label">Đổi trường</span>
         </button>
+        <button class="bot-sim-btn" id="hud-bot-sim-btn" type="button" aria-label="Giả lập 200 Bot" title="Mở bảng điều khiển 200 Bot mô phỏng" style="display:inline-flex; align-items:center; gap:6px; background:rgba(0, 229, 255, 0.12); border:1px solid rgba(0, 229, 255, 0.35); color:var(--cyan-bright); padding:4px 10px; border-radius:16px; font-size:11px; font-weight:600; cursor:pointer;">
+          <span>🤖 200 Bot:</span>
+          <span class="tiny-tag" id="hud-bot-tag" style="font-size:9px; background:#1e293b; color:#94a3b8; padding:1px 5px; border-radius:3px;">DỪNG</span>
+        </button>
         <span class="divider"></span>
         <button class="buff-chip" id="hud-beacon" type="button" hidden aria-label="Xem buff đèn hiệu"></button>
         <span class="hud-wallet"><strong id="hud-points">—</strong><small>Points</small></span>
@@ -38,6 +42,43 @@
           <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4m8 1v4m-6 1v4"/></svg>
         </button>
       </header>
+
+      <!-- QUICK 200 BOT CONTROL CARD (Floating below HUD) -->
+      <div id="hud-bot-popover" hidden style="position:fixed; top:58px; left:200px; z-index:1000; width:280px; background:#0d1d25; border:1px solid rgba(0, 229, 255, 0.3); border-radius:8px; box-shadow:0 8px 32px rgba(0,0,0,0.6); padding:12px; backdrop-filter:blur(8px);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <strong style="color:var(--cyan-bright); font-size:12px;">GIẢ LẬP 200 BOT</strong>
+          <button type="button" id="close-bot-popover" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:2px 6px;">✕</button>
+        </div>
+        <p style="font-size:11px; color:#94a3b8; margin:0 0 10px; line-height:1.4;">
+          200 bot tự động mở ô, có chiến thuật tiến về tâm & UniStop để test tải thực tế.
+        </p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:11px; color:#cbe3ed;">Số lượng bot:</span>
+          <select id="popover-bot-count" style="background:#162732; color:#cbe3ed; border:1px solid #ffffff20; border-radius:4px; padding:3px 6px; font-size:11px;">
+            <option value="200" selected>200 Bot (Toàn diện)</option>
+            <option value="100">100 Bot</option>
+            <option value="50">50 Bot</option>
+            <option value="24">24 Bot (Nhẹ)</option>
+          </select>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="font-size:11px; color:#cbe3ed;">Tốc độ click:</span>
+          <select id="popover-bot-speed" style="background:#162732; color:#cbe3ed; border:1px solid #ffffff20; border-radius:4px; padding:3px 6px; font-size:11px;">
+            <option value="realistic" selected>Thực tế (1-2s)</option>
+            <option value="slow">Thư thả (3-5s)</option>
+            <option value="fast">Thần tốc (0.5s)</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="popover-btn-start" type="button" class="primary" style="flex:1; justify-content:center; padding:7px; font-size:12px; cursor:pointer;">▶ Bật Bot</button>
+          <button id="popover-btn-stop" type="button" class="secondary" style="flex:1; justify-content:center; padding:7px; font-size:12px; cursor:pointer;" disabled>⏹ Dừng</button>
+        </div>
+        <div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); font-size:11px; color:#94a3b8; display:flex; justify-content:space-between;">
+          <span>Chạy: <strong id="popover-bot-active" style="color:#fff">0</strong></span>
+          <span>Tốc độ: <strong id="popover-bot-rate" style="color:var(--cyan)">0</strong>/s</span>
+          <span>Đã mở: <strong id="popover-bot-tiles" style="color:var(--cyan-bright)">0</strong></span>
+        </div>
+      </div>
 
       <!-- COMPACT TOOLS PANEL -->
       <section class="panel" id="tools-panel" hidden aria-label="Công cụ bản đồ">

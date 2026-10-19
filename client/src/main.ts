@@ -1223,6 +1223,7 @@ if (fogSlider && fogVal) {
   });
 }
 
+// Bot simulation elements in Dev Tools section
 const btnStartBots = document.getElementById("btn-start-bots") as HTMLButtonElement | null;
 const btnStopBots = document.getElementById("btn-stop-bots") as HTMLButtonElement | null;
 const botCountSelect = document.getElementById("bot-count-select") as HTMLSelectElement | null;
@@ -1232,99 +1233,155 @@ const botActiveCount = document.getElementById("bot-active-count");
 const botRateVal = document.getElementById("bot-rate-val");
 const botTilesVal = document.getElementById("bot-tiles-val");
 
-if (btnStartBots && btnStopBots) {
-  const updateBotUI = (telemetry: {
-    status?: string;
-    activeBots?: number;
-    actionsPerSecond?: number;
-    totalActions?: number;
-  }) => {
-    const isRunning = telemetry.status === "running" || telemetry.status === "starting";
-    btnStartBots.disabled = isRunning;
-    btnStopBots.disabled = !isRunning;
-    if (botCountSelect) botCountSelect.disabled = isRunning;
-    if (botSpeedSelect) botSpeedSelect.disabled = isRunning;
+// Bot simulation elements in Top HUD and Floating Popover
+const hudBotBtn = document.getElementById("hud-bot-sim-btn");
+const hudBotTag = document.getElementById("hud-bot-tag");
+const hudBotPopover = document.getElementById("hud-bot-popover");
+const closeBotPopover = document.getElementById("close-bot-popover");
+const popoverStartBtn = document.getElementById("popover-btn-start") as HTMLButtonElement | null;
+const popoverStopBtn = document.getElementById("popover-btn-stop") as HTMLButtonElement | null;
+const popoverCountSelect = document.getElementById("popover-bot-count") as HTMLSelectElement | null;
+const popoverSpeedSelect = document.getElementById("popover-bot-speed") as HTMLSelectElement | null;
+const popoverActiveCount = document.getElementById("popover-bot-active");
+const popoverRateVal = document.getElementById("popover-bot-rate");
+const popoverTilesVal = document.getElementById("popover-bot-tiles");
 
-    if (botStatusTag) {
-      if (telemetry.status === "running") {
-        botStatusTag.textContent = "ĐANG CHẠY";
-        botStatusTag.style.background = "rgba(0, 229, 255, 0.2)";
-        botStatusTag.style.color = "var(--cyan-bright)";
-      } else if (telemetry.status === "starting") {
-        botStatusTag.textContent = "KHỞI ĐỘNG";
-        botStatusTag.style.background = "rgba(238, 203, 114, 0.2)";
-        botStatusTag.style.color = "#eecb72";
-      } else if (telemetry.status === "stopping") {
-        botStatusTag.textContent = "ĐANG DỪNG";
-        botStatusTag.style.background = "rgba(239, 68, 68, 0.2)";
-        botStatusTag.style.color = "#f87171";
-      } else {
-        botStatusTag.textContent = "DỪNG";
-        botStatusTag.style.background = "#1e293b";
-        botStatusTag.style.color = "#94a3b8";
-      }
-    }
-    if (botActiveCount) botActiveCount.textContent = String(telemetry.activeBots ?? 0);
-    if (botRateVal) botRateVal.textContent = String(telemetry.actionsPerSecond ?? 0);
-    if (botTilesVal) botTilesVal.textContent = String(telemetry.totalActions ?? 0);
-  };
-
-  const pollBotStatus = async () => {
-    try {
-      const res = await gameFetch("/api/fixture/bots");
-      if (res.ok) {
-        const data = await res.json();
-        updateBotUI(data);
-      }
-    } catch {
-      // Ignored
-    }
-  };
-
-  btnStartBots.addEventListener("click", async () => {
-    btnStartBots.disabled = true;
-    activity("Đang khởi động bot mô phỏng...", "normal");
-    try {
-      const res = await gameFetch("/api/fixture/bots/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          count: botCountSelect ? Number(botCountSelect.value) : 200,
-          speed: botSpeedSelect ? botSpeedSelect.value : "realistic",
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        updateBotUI(data);
-        activity("Bot đã bắt đầu khám phá bản đồ!", "success");
-      } else {
-        activity("Chưa thể khởi động bot.", "error");
-        btnStartBots.disabled = false;
-      }
-    } catch {
-      activity("Lỗi kết nối khi bật bot.", "error");
-      btnStartBots.disabled = false;
-    }
+if (hudBotBtn && hudBotPopover) {
+  hudBotBtn.addEventListener("click", () => {
+    hudBotPopover.hidden = !hudBotPopover.hidden;
   });
-
-  btnStopBots.addEventListener("click", async () => {
-    btnStopBots.disabled = true;
-    activity("Đang dừng toàn bộ bot...", "normal");
-    try {
-      const res = await gameFetch("/api/fixture/bots/stop", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        updateBotUI(data);
-        activity("Đã dừng mô phỏng bot.", "normal");
-      }
-    } catch {
-      activity("Lỗi khi dừng bot.", "error");
-    }
+  closeBotPopover?.addEventListener("click", () => {
+    hudBotPopover.hidden = true;
   });
-
-  window.setInterval(pollBotStatus, 2000);
-  void pollBotStatus();
 }
+
+const updateAllBotUI = (telemetry: {
+  status?: string;
+  activeBots?: number;
+  actionsPerSecond?: number;
+  totalActions?: number;
+}) => {
+  const isRunning = telemetry.status === "running" || telemetry.status === "starting";
+  if (btnStartBots) btnStartBots.disabled = isRunning;
+  if (btnStopBots) btnStopBots.disabled = !isRunning;
+  if (botCountSelect) botCountSelect.disabled = isRunning;
+  if (botSpeedSelect) botSpeedSelect.disabled = isRunning;
+
+  if (popoverStartBtn) popoverStartBtn.disabled = isRunning;
+  if (popoverStopBtn) popoverStopBtn.disabled = !isRunning;
+  if (popoverCountSelect) popoverCountSelect.disabled = isRunning;
+  if (popoverSpeedSelect) popoverSpeedSelect.disabled = isRunning;
+
+  const statusText =
+    telemetry.status === "running"
+      ? "ĐANG CHẠY"
+      : telemetry.status === "starting"
+        ? "KHỞI ĐỘNG"
+        : telemetry.status === "stopping"
+          ? "ĐANG DỪNG"
+          : "DỪNG";
+
+  const statusBg =
+    telemetry.status === "running"
+      ? "rgba(0, 229, 255, 0.2)"
+      : telemetry.status === "starting"
+        ? "rgba(238, 203, 114, 0.2)"
+        : telemetry.status === "stopping"
+          ? "rgba(239, 68, 68, 0.2)"
+          : "#1e293b";
+
+  const statusColor =
+    telemetry.status === "running"
+      ? "var(--cyan-bright)"
+      : telemetry.status === "starting"
+        ? "#eecb72"
+        : telemetry.status === "stopping"
+          ? "#f87171"
+          : "#94a3b8";
+
+  for (const tag of [botStatusTag, hudBotTag]) {
+    if (tag) {
+      tag.textContent = statusText;
+      tag.style.background = statusBg;
+      tag.style.color = statusColor;
+    }
+  }
+
+  const activeStr = String(telemetry.activeBots ?? 0);
+  const rateStr = String(telemetry.actionsPerSecond ?? 0);
+  const tilesStr = String(telemetry.totalActions ?? 0);
+
+  if (botActiveCount) botActiveCount.textContent = activeStr;
+  if (botRateVal) botRateVal.textContent = rateStr;
+  if (botTilesVal) botTilesVal.textContent = tilesStr;
+
+  if (popoverActiveCount) popoverActiveCount.textContent = activeStr;
+  if (popoverRateVal) popoverRateVal.textContent = rateStr;
+  if (popoverTilesVal) popoverTilesVal.textContent = tilesStr;
+};
+
+const pollAllBotStatus = async () => {
+  try {
+    const res = await gameFetch("/api/fixture/bots");
+    if (res.ok) {
+      const data = await res.json();
+      updateAllBotUI(data);
+    }
+  } catch {
+    // Ignored
+  }
+};
+
+const doStartBots = async (count: number, speed: string) => {
+  activity("Đang khởi động bot mô phỏng...", "normal");
+  try {
+    const res = await gameFetch("/api/fixture/bots/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count, speed }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      updateAllBotUI(data);
+      activity("200 bot đã bắt đầu khám phá bản đồ!", "success");
+    } else {
+      activity("Chưa thể khởi động bot.", "error");
+    }
+  } catch {
+    activity("Lỗi kết nối khi bật bot.", "error");
+  }
+};
+
+const doStopBots = async () => {
+  activity("Đang dừng toàn bộ bot...", "normal");
+  try {
+    const res = await gameFetch("/api/fixture/bots/stop", { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      updateAllBotUI(data);
+      activity("Đã dừng mô phỏng bot.", "normal");
+    }
+  } catch {
+    activity("Lỗi khi dừng bot.", "error");
+  }
+};
+
+btnStartBots?.addEventListener("click", () => {
+  const count = botCountSelect ? Number(botCountSelect.value) : 200;
+  const speed = botSpeedSelect ? botSpeedSelect.value : "realistic";
+  void doStartBots(count, speed);
+});
+btnStopBots?.addEventListener("click", () => void doStopBots());
+
+popoverStartBtn?.addEventListener("click", () => {
+  const count = popoverCountSelect ? Number(popoverCountSelect.value) : 200;
+  const speed = popoverSpeedSelect ? popoverSpeedSelect.value : "realistic";
+  void doStartBots(count, speed);
+});
+popoverStopBtn?.addEventListener("click", () => void doStopBots());
+
+window.setInterval(pollAllBotStatus, 2000);
+void pollAllBotStatus();
 
 get("landmark-button").addEventListener("click", () => {
   const first = homeLandmark();
