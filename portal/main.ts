@@ -1,4 +1,5 @@
 import "./style.css";
+import { postPortalApi } from "./csrfRequest.ts";
 
 interface Student {
   id: string;
@@ -49,22 +50,7 @@ async function api(
   path: string,
   body: unknown = {},
 ): Promise<Record<string, unknown>> {
-  const response = await fetch(`/api/dummy/v1/${path}`, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRF-Token": data.csrfToken,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
-  });
-  const result = (await response.json()) as Record<string, unknown>;
-  if (!response.ok)
-    throw new Error(
-      String(result.error ?? "Chưa thể kết nối. Vui lòng thử lại."),
-    );
-  return result;
+  return postPortalApi(path, body, data);
 }
 function brand(): string {
   return '<a class="brand" href="/"><span class="brand-mark">R²</span><strong>R2PL<span>STUDENT RUNNING LEAGUE</span></strong></a>';
