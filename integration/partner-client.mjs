@@ -20,10 +20,15 @@ export class R2plPartnerClient {
       headers: { "Content-Type": "application/json", "X-R2PL-Campaign": this.campaignId, "X-R2PL-Key-Id": this.keyId, "X-R2PL-Timestamp": timestamp, "X-R2PL-Nonce": nonce, "X-R2PL-Signature": createHmac("sha256", this.secret).update(canonical).digest("hex") },
       body,
     });
-    const result = await response.json();
+    let result = {};
+    try {
+      result = await response.json();
+    } catch {
+      /* Response might not be JSON if server returned empty body or HTML error */
+    }
     if (!response.ok) {
-      const error = new Error(result.error ?? "R2PL_REQUEST_FAILED");
-      error.status = response.status; error.requestId = result.requestId;
+      const error = new Error(result?.error ?? `R2PL_REQUEST_FAILED_${response.status}`);
+      error.status = response.status; error.requestId = result?.requestId;
       throw error;
     }
     return result;

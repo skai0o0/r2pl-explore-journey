@@ -414,7 +414,11 @@ export class DummyStore {
   }
   async dashboard(student: DummyStudent): Promise<unknown> {
     if (student.school_id === "amtech") {
-      await this.provision(student);
+      try {
+        await this.provision(student);
+      } catch {
+        /* Durable activities and admin portal remain accessible while game is offline or standalone. */
+      }
       return {
         student: {
           id: student.id,
