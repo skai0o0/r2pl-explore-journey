@@ -3,7 +3,7 @@ import test from "node:test";
 import { Window } from "happy-dom";
 import { createServer } from "vite";
 
-test("play-only staff skip empty dashboard after direct login and admin SSO; portal entry clears stale routing", async () => {
+test("test-profile staff enter game after SSO with or without dashboard rights; explicit admin pages preserve rights", async () => {
   const w = new Window({ url: "http://127.0.0.1/admin" });
   const keys = [
     "window",
@@ -25,6 +25,7 @@ test("play-only staff skip empty dashboard after direct login and admin SSO; por
     replace: (url: string) => redirects.push(url),
     assign: (url: string) => redirects.push(url),
   };
+  let permissions: string[] = [];
   const globals = {
     window: w,
     document: w.document,
@@ -36,28 +37,30 @@ test("play-only staff skip empty dashboard after direct login and admin SSO; por
       requests.push(path);
       return new Response(
         JSON.stringify(
-          path.startsWith("/api/portal/config")
-            ? {
-                portalLoginUrl: "https://event.example.test/login",
-                campaignId: "campaign",
-                returnUrl: "http://127.0.0.1/",
-              }
-            : path === "/api/portal/session"
-              ? {}
-              : {
-                  version: 1,
-                  mode: "admin",
-                  environment: "production",
-                  csrfToken: "a".repeat(64),
-                  principal: {
-                    actorId: "staff",
-                    name: "Test",
-                    role: "admin",
-                    organizationId: "amtech",
-                    playable: true,
-                    permissions: [],
+          path === "/api/admin/rankings"
+            ? { rankings: [] }
+            : path.startsWith("/api/portal/config")
+              ? {
+                  portalLoginUrl: "https://event.example.test/login",
+                  campaignId: "campaign",
+                  returnUrl: "http://127.0.0.1/",
+                }
+              : path === "/api/portal/session"
+                ? {}
+                : {
+                    version: 1,
+                    mode: "admin",
+                    environment: "production",
+                    csrfToken: "a".repeat(64),
+                    principal: {
+                      actorId: "staff",
+                      name: "Test",
+                      role: "admin",
+                      organizationId: "amtech",
+                      playable: true,
+                      permissions,
+                    },
                   },
-                },
         ),
       );
     },
@@ -82,9 +85,10 @@ test("play-only staff skip empty dashboard after direct login and admin SSO; por
     const { loadGameSession } = await vite.ssrLoadModule(
       "/src/portalSession.ts",
     );
-    for (const entry of ["direct", "sso"]) {
-      location.pathname = entry === "direct" ? "/admin" : "/";
-      location.hash = entry === "sso" ? "#launch=ticket" : "";
+    for (const rights of [[], ["rankings.view"]]) {
+      permissions = rights;
+      location.pathname = "/";
+      location.hash = "#launch=ticket";
       w.sessionStorage.setItem("r2pl-demo-admin-entry", "1");
       w.sessionStorage.setItem("r2pl-portal-verifier", "test-verifier");
       void loadGameSession();
@@ -94,6 +98,41 @@ test("play-only staff skip empty dashboard after direct login and admin SSO; por
       assert.equal(w.document.querySelector(".admin-console"), null);
     }
     assert(requests.includes("/api/portal/session"));
+    for (const rights of [[], ["rankings.view"]]) {
+      permissions = rights;
+      location.pathname = "/admin";
+      location.hash = "";
+      const before = redirects.length;
+      void loadGameSession();
+      for (
+        let i = 0;
+        i < 100 && !w.document.querySelector(".admin-console");
+        i++
+      )
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      await flush();
+      assert(
+        w.document.querySelector(".admin-console"),
+        "explicit /admin opens dashboard",
+      );
+      assert.equal(
+        redirects.length,
+        before,
+        "explicit admin entry never redirects to game",
+      );
+      assert.equal(
+        w.document.querySelectorAll(".admin-nav button").length,
+        rights.length,
+      );
+      if (!rights.length)
+        assert(
+          w.document
+            .querySelector(".admin-content")!
+            .textContent!.includes("chưa được cấp"),
+        );
+      w.document.querySelector(".admin-console")!.remove();
+    }
+    location.pathname = "/";
     location.search = "?entry=portal";
     location.hash = "";
     w.sessionStorage.setItem("r2pl-demo-admin-entry", "1");

@@ -54,11 +54,11 @@ async function openAdminBootstrap(
     !["staging", "production"].includes(String(raw.environment))
   )
     throw new Error("Invalid admin bootstrap");
-  // Local login and SSO share the already-bound play-only test session.
+  // Every test-profile account enters game by default. Dashboard/editor are
+  // opened only through an explicit admin page, with existing permissions.
   if (
     p.playable === true &&
-    Array.isArray(p.permissions) &&
-    p.permissions.length === 0
+    !["/admin", "/admin/login", "/admin/editor"].includes(location.pathname)
   ) {
     sessionStorage.removeItem("r2pl-demo-admin-entry");
     location.replace("/");

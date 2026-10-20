@@ -54,7 +54,7 @@
 
 - Portal xác minh và ánh xạ trường; chọn `schoolId: amtech` đơn thuần không cấp admin.
 - `role: admin` là nhánh danh tính nhân sự, không chứng minh quyền quản trị. AMTECH mới mặc định đủ quyền, Acer/Dava mặc định chỉ xem BXH; quyền đã chỉnh trên Game được giữ nguyên khi Portal đồng bộ. Không yêu cầu ít nhất một quyền quản trị để cấp launch ticket.
-- Game có nhóm **Chỉ chơi 8 hồ sơ test**: cho phép đăng nhập, `testProfiles: true`, quyền quản trị rỗng. Tài khoản vào thẳng game và chuyển giữa 8 hồ sơ riêng, giữ ví/tiến độ từng hồ sơ. Nhóm **Đối tác thử nghiệm · Chỉ xem** cấp thêm các quyền xem đã chọn.
+- Game có nhóm **Chỉ chơi 8 hồ sơ test**: cho phép đăng nhập, `testProfiles: true`, quyền quản trị rỗng. Mọi tài khoản được cấp 8 hồ sơ test vào thẳng game theo luồng đăng nhập thông thường, kể cả có thêm quyền xem dashboard; chuyển hồ sơ giữ ví/tiến độ riêng. Dashboard chỉ mở khi chủ động vào `/admin` (hoặc `/admin/editor` theo quyền); tài khoản quyền rỗng không xem được dữ liệu quản trị. Nhóm **Đối tác thử nghiệm · Chỉ xem** cấp thêm các quyền xem đã chọn.
 - Quản trị Game có thể đặt mật khẩu riêng cho nhân sự AMTECH thuộc nhóm chỉ chơi (không có quyền quản trị); đăng nhập trực tiếp tại `/admin`, độc lập mật khẩu Portal. SSO vẫn hoạt động với cùng danh tính/hồ sơ. Không gửi mật khẩu hoặc gọi `running`/`accounts` cho danh tính nhân sự.
 - Bỏ “Cho phép đăng nhập và sử dụng tài khoản” khóa cả SSO lẫn đăng nhập Game; muốn bỏ quản trị nhưng vẫn chơi thì giữ mục này bật và bỏ quyền quản trị.
 - Tài khoản quản trị riêng của Game dùng `/admin`, không cần tạo bên Portal; không thay đổi luồng SSO/API sinh viên.
