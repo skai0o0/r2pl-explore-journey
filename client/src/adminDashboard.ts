@@ -392,7 +392,7 @@ export async function mountAdminDashboard(
           testProfiles,
           node(
             "span",
-            "Cho phép chơi với 8 hồ sơ test riêng · Có thể cấp thêm quyền chỉ xem",
+            "Cho phép chơi với 8 hồ sơ test · Điểm dùng chung theo trường",
           ),
         );
         form.querySelector("fieldset")!.before(testLabel);

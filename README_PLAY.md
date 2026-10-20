@@ -350,3 +350,5 @@ Server từ chối chỉnh sửa, xuất bản, gửi thông báo, trao quà và
 game cũ); thu hồi quyền hoặc khóa tài khoản có hiệu lực với cả game và dashboard.
 Việc cập nhật tài khoản không xóa hay cấp lại ví. Bridge admin của Demo tổng hợp
 không cấp hồ sơ test; dùng máy chủ Portal để kiểm tra luồng này.
+
+Points của 8 hồ sơ test dùng chung theo trường trên toàn campaign: tài khoản test mới, đăng nhập lại hoặc chuyển hồ sơ không cấp lại điểm. Hồ sơ, hành trang và phiên đăng nhập vẫn riêng. Migration 011 lấy số dư hiện tại từ bộ test đã cấp điểm, giữ lịch sử ví cũ, ghi giao dịch pool mới theo tài khoản thực hiện lệnh; không cộng dồn hoặc nạp lại 8.888 điểm.

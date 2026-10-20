@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { pointWalletTarget } from "./TestPointWallet.ts";
 
 /** Net one resource per command; cancel exact offsets without inserting forbidden zero rows. */
 export async function recordLedger(
@@ -10,6 +11,20 @@ export async function recordLedger(
   amount: number | bigint,
 ): Promise<void> {
   if (BigInt(amount) === 0n) return;
+  if (resource === "fixture-credit") {
+    const target = await pointWalletTarget(db, campaign, actor);
+    if (target.pooled) {
+      await db.query(
+        `WITH cancelled AS (
+        DELETE FROM r2pl_v2.test_point_ledger WHERE campaign_id=$1 AND actor_id=$2 AND command_key=$3 AND resource=$4 AND amount=-$5::bigint RETURNING 1
+      ) INSERT INTO r2pl_v2.test_point_ledger(campaign_id,actor_id,command_key,resource,amount,pool_actor_id)
+        SELECT $1,$2,$3,$4,$5::bigint,$6 WHERE NOT EXISTS(SELECT 1 FROM cancelled)
+        ON CONFLICT(campaign_id,actor_id,command_key,resource) DO UPDATE SET amount=test_point_ledger.amount+EXCLUDED.amount`,
+        [campaign, actor, key, resource, amount.toString(), target.actorId],
+      );
+      return;
+    }
+  }
   await db.query(
     `WITH cancelled AS (
       DELETE FROM r2pl_v2.ledger_entries WHERE campaign_id=$1 AND actor_id=$2 AND command_key=$3 AND resource=$4 AND amount=-$5::bigint RETURNING 1

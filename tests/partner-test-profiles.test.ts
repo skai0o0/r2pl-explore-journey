@@ -10,7 +10,7 @@ import { PortalStore } from "../server/integration/PortalStore.ts";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
 import { SignedGameplay } from "../server/integration/SignedGameplay.ts";
 import { migratePortalDatabase } from "../server/persistence/PortalMigrations.ts";
-import { SCHOOLS } from "../shared/gameplay/gameConfig.ts";
+import { GAME_CONFIG, SCHOOLS } from "../shared/gameplay/gameConfig.ts";
 import {
   ADMIN_ROLES,
   ALL_ADMIN_PERMISSIONS,
@@ -390,8 +390,30 @@ test("partner login owns eight isolated profiles, read-only dashboard, atomic sw
     );
     // Synthetic funding is restricted to this disposable loopback test database.
     await pool.query(
-      "UPDATE r2pl_v2.wallet_accounts SET opening_balance=37,balance=37 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+      "UPDATE r2pl_v2.test_point_pools SET opening_balance=37,balance=37 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
       [config.campaignId, initialActor],
+    );
+    const peerAccount = await call(
+      "/api/admin/accounts",
+      {
+        ...input,
+        email: "other-partner@example.test",
+        name: "Other partner",
+        permissions: [],
+      },
+      root,
+    );
+    assert.equal(peerAccount.status, 200);
+    let peer = await login("other-partner@example.test", password);
+    const peerActor = (await portal.authenticate(peer.Cookie.split("=")[1]!))!;
+    assert.notEqual(
+      peerActor.actorId,
+      initialActor,
+      "profiles and inventory stay private",
+    );
+    assert.equal(
+      (await call("/api/fixture/me", undefined, peer)).data.balance,
+      "37",
     );
     const before = (await call("/api/fixture/me", undefined, partner)).data;
     const oldHeaders = partner,
@@ -428,9 +450,143 @@ test("partner login owns eight isolated profiles, read-only dashboard, atomic sw
       }),
     );
     assert.equal((await ack).status, ACK_STATUS.TEST_APPLIED);
-    const spentBalance = (await call("/api/fixture/me", undefined, partner))
-      .data.balance;
+    let spentBalance = (await call("/api/fixture/me", undefined, partner)).data
+      .balance;
+    const peerMe = (await call("/api/fixture/me", undefined, peer)).data;
+    assert.equal(
+      peerMe.balance,
+      spentBalance,
+      "another login sees the same school pool after WS spend",
+    );
+    assert.equal(peerMe.ledgerConserved, true);
+    assert.equal(
+      (await call("/api/game", undefined, peer)).data.contributionCapacity,
+      (
+        BigInt(spentBalance) / BigInt(GAME_CONFIG.landmark.pointsPerCrystal)
+      ).toString(),
+    );
     assert(BigInt(spentBalance) < 37n);
+    // HTTP contribution and automatic refund hit the same pool as WebSocket exploration.
+    const clusterId = randomUUID(),
+      now = Date.now();
+    await pool.query(
+      "INSERT INTO r2pl_v2.game_state(campaign_id,scope,id,data) VALUES($1,'shared-cluster',$2,$3)",
+      [
+        config.campaignId,
+        clusterId,
+        JSON.stringify({
+          id: clusterId,
+          pair: [0, 1],
+          tiles: [],
+          createdAt: now,
+          due: { 0: now + 600000, 1: now + 600000 },
+          status: "consolidating",
+          guest: 0,
+          required: 100,
+          escrow: {},
+          hardUntil: now + 600000,
+          rollingUntil: now + 600000,
+        }),
+      ],
+    );
+    const contribution = {
+      ruleVersion: 1,
+      key: randomUUID(),
+      action: "consolidate",
+      target: clusterId,
+      amount: 1,
+    };
+    const paid = await call("/api/game", contribution, peer);
+    assert.equal(paid.status, 200);
+    assert.equal(paid.data.status, "applied");
+    assert.equal(
+      (await call("/api/fixture/me", undefined, partner)).data.balance,
+      String(BigInt(spentBalance) - 1n),
+    );
+    assert.equal(
+      (await call("/api/game", contribution, peer)).data.status,
+      "applied",
+      "HTTP command replay cannot spend twice",
+    );
+    await pool.query(
+      "UPDATE r2pl_v2.game_state SET data=jsonb_set(data,'{hardUntil}','0') WHERE campaign_id=$1 AND scope='shared-cluster' AND id=$2",
+      [config.campaignId, clusterId],
+    );
+    await call(
+      "/api/game",
+      { ruleVersion: 1, key: randomUUID(), action: "running", amount: 1 },
+      peer,
+    );
+    assert.equal(
+      (await call("/api/fixture/me", undefined, partner)).data.balance,
+      spentBalance,
+      "expired consolidation refunds the common school pool",
+    );
+    assert.equal(
+      (await call("/api/fixture/me", undefined, peer)).data.ledgerConserved,
+      true,
+    );
+    // Shared debit serializes across distinct owner sessions, with actor-scoped replay.
+    await pool.query(
+      "UPDATE r2pl_v2.test_point_pools w SET balance=1,opening_balance=1-COALESCE((SELECT sum(amount) FROM r2pl_v2.test_point_ledger l WHERE l.campaign_id=w.campaign_id AND l.pool_actor_id=w.actor_id),0) WHERE campaign_id=$1 AND school_slot=0",
+      [config.campaignId],
+    );
+    const raceCommands = [oldActor, peerActor].map((actor, i) => ({
+      actor,
+      key: randomBytes(16),
+      tile: (hq.z + 1 + i) * 1000 + hq.x + hq.size,
+      hash: createHash("sha256")
+        .update((i ? peer : partner).Cookie.split("=")[1]!)
+        .digest("hex"),
+    }));
+    const debits = await Promise.all(
+      raceCommands.map((c) =>
+        play!.realtime.authority.apply(
+          c.actor.actorId,
+          0,
+          c.key,
+          c.tile,
+          "explore",
+          c.hash,
+        ),
+      ),
+    );
+    assert.deepEqual(debits.map((d) => d.result.status).sort(), [
+      "rejected",
+      "test_applied",
+    ]);
+    const winner =
+      raceCommands[
+        debits.findIndex((d) => d.result.status === "test_applied")
+      ]!;
+    const replayed = await play!.realtime.authority.apply(
+      winner.actor.actorId,
+      0,
+      winner.key,
+      winner.tile,
+      "explore",
+      winner.hash,
+    );
+    assert.equal(replayed.metrics.replayed, true);
+    spentBalance = "0";
+    for (const h of [partner, peer]) {
+      const me = (await call("/api/fixture/me", undefined, h)).data;
+      assert.equal(me.balance, "0");
+      assert.equal(me.ledgerConserved, true);
+    }
+    await pool.query(
+      "UPDATE r2pl_v2.test_point_pools SET opening_balance=23,balance=23 WHERE campaign_id=$1 AND school_slot=1",
+      [config.campaignId],
+    );
+    for (const schoolId of [SCHOOLS[1]!.id, SCHOOLS[0]!.id]) {
+      const moved = await call("/api/test-profiles/switch", { schoolId }, peer);
+      assert.equal(moved.status, 200);
+      peer = await headersFor(moved.cookie);
+      assert.equal(
+        (await call("/api/fixture/me", undefined, peer)).data.balance,
+        schoolId === SCHOOLS[1]!.id ? "23" : "0",
+      );
+    }
     const delayed = await call("/api/portal/ws-ticket", {}, partner);
     let switched = await call(
       "/api/test-profiles/switch",
@@ -549,6 +705,28 @@ test("partner login owns eight isolated profiles, read-only dashboard, atomic sw
       "/api/fixture/bootstrap",
     ])
       assert.equal((await call(path, undefined, partner)).status, 401, path);
+    assert.equal(
+      (await call("/api/game", undefined, peer)).status,
+      200,
+      "revoking one owner never revokes another owner sharing Points",
+    );
+    assert.equal(
+      (await call("/api/fixture/me", undefined, peer)).data.balance,
+      spentBalance,
+    );
+    assert.equal(
+      (await login("other-partner@example.test", password)).Cookie.length > 0,
+      true,
+    );
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT count(*)::int AS n FROM r2pl_v2.test_point_pools WHERE campaign_id=$1",
+          [config.campaignId],
+        )
+      ).rows[0].n,
+      8,
+    );
     const data = JSON.stringify(
       (await call("/api/admin/accounts", undefined, freshRoot)).data,
     );

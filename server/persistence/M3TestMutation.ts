@@ -38,6 +38,7 @@ import {
   type ExploreBoundary,
   lockExploreNeighborhood,
 } from "./ExploreBoundary.ts";
+import { pointWalletTarget } from "./TestPointWallet.ts";
 import { recordLedger } from "./WalletLedger.ts";
 
 export type WriteStrategy = "full_chunk" | "mutation_log";
@@ -418,11 +419,16 @@ export class M3TestMutationService {
                 : GAME_CONFIG.knowledge.explorePoints,
             )
           : command.cost;
+      const points = await pointWalletTarget(
+        client,
+        command.campaignId,
+        command.actorId,
+      );
       let devDecision: ReturnType<EvaluateDevExplore> | undefined;
       if (this.#devExplore) {
         const lockedWallet = await client.query<{ balance: string }>(
-          "SELECT balance FROM wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' FOR UPDATE",
-          [command.campaignId, command.actorId],
+          `SELECT balance FROM ${points.table} WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' FOR UPDATE`,
+          [command.campaignId, points.actorId],
         );
         const lockedBalance = BigInt(lockedWallet.rows[0]?.balance ?? "0");
         devDecision = this.#devExplore(
@@ -482,8 +488,8 @@ export class M3TestMutationService {
       let result: M3TestResult;
       if (alreadyExplored) {
         const wallet = await client.query<{ balance: string }>(
-          "SELECT balance FROM wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
-          [command.campaignId, command.actorId],
+          `SELECT balance FROM ${points.table} WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'`,
+          [command.campaignId, points.actorId],
         );
         result = {
           status: "test_no_change",
@@ -500,13 +506,13 @@ export class M3TestMutationService {
           spatialRejection || devDecision?.kind === "reject"
             ? { rows: [] as { balance: string }[] }
             : await client.query<{ balance: string }>(
-                "UPDATE wallet_accounts SET balance=balance-$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' AND balance >= $3 RETURNING balance",
-                [command.campaignId, command.actorId, effectiveCost.toString()],
+                `UPDATE ${points.table} SET balance=balance-$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' AND balance >= $3 RETURNING balance`,
+                [command.campaignId, points.actorId, effectiveCost.toString()],
               );
         if (!wallet.rows[0]) {
           const current = await client.query<{ balance: string }>(
-            "SELECT balance FROM wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
-            [command.campaignId, command.actorId],
+            `SELECT balance FROM ${points.table} WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'`,
+            [command.campaignId, points.actorId],
           );
           result = {
             status: "rejected",
@@ -660,19 +666,18 @@ export class M3TestMutationService {
             );
           }
           if (effectiveCost > 0n)
-            await client.query(
-              "INSERT INTO ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',$4) ON CONFLICT(campaign_id,actor_id,command_key,resource) DO UPDATE SET amount=ledger_entries.amount+EXCLUDED.amount",
-              [
-                command.campaignId,
-                command.actorId,
-                Buffer.from(command.key),
-                (-effectiveCost).toString(),
-              ],
+            await recordLedger(
+              client,
+              command.campaignId,
+              command.actorId,
+              Buffer.from(command.key),
+              "fixture-credit",
+              -effectiveCost,
             );
           if (benefit.points) {
             await client.query(
-              "UPDATE wallet_accounts SET balance=balance+$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
-              [command.campaignId, command.actorId, benefit.points],
+              `UPDATE ${points.table} SET balance=balance+$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'`,
+              [command.campaignId, points.actorId, benefit.points],
             );
             await recordLedger(
               client,
