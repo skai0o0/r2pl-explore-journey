@@ -5,6 +5,7 @@ import { ColyseusSDK, type Room } from "@colyseus/sdk";
 import { Pool } from "pg";
 import { AdminAccessStore } from "../server/integration/AdminAccessStore.ts";
 import { validatePortalConfig } from "../server/integration/PortalConfig.ts";
+import { portalSignature } from "../server/integration/PortalSignature.ts";
 import { PortalStore } from "../server/integration/PortalStore.ts";
 import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.ts";
 import { SignedGameplay } from "../server/integration/SignedGameplay.ts";
@@ -275,12 +276,77 @@ test("partner login owns eight isolated profiles, read-only dashboard, atomic sw
       displayName: "Partner staff",
       eduVerified: true,
     };
-    const provisioned = (await portal.upsertMember(member)) as {
-      playable: boolean;
+    const signedPartnerCall = async (operation: string, input: unknown) => {
+      const path = `/api/partner/v1/${operation}`,
+        timestamp = String(Date.now()),
+        nonce = randomBytes(24).toString("hex"),
+        raw = Buffer.from(JSON.stringify(input));
+      // Partner backend sends no browser Origin header.
+      const response = await fetch(base + path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-R2PL-Campaign": config.campaignId,
+          "X-R2PL-Key-Id": "test",
+          "X-R2PL-Timestamp": timestamp,
+          "X-R2PL-Nonce": nonce,
+          "X-R2PL-Signature": portalSignature(
+            config.keys.test!,
+            config.campaignId,
+            "POST",
+            path,
+            timestamp,
+            nonce,
+            raw,
+          ),
+        },
+        body: raw,
+      });
+      assert.equal(response.status, 200);
+      return (await response.json()) as Record<string, unknown>;
     };
-    assert.equal(provisioned.playable, true);
+    const provisioned = await signedPartnerCall("members", member);
+    assert.equal(provisioned.role, "admin");
+    assert.equal(
+      provisioned.playable,
+      false,
+      "legacy Portal staff contract is independent of internal test play",
+    );
+    assert.equal("permissions" in provisioned, false);
+    let staffRevision = staff.data.account.revision;
+    for (const grant of [
+      { testProfiles: true, permissions: ADMIN_ROLES.partner.permissions },
+      {
+        testProfiles: false,
+        permissions: ALL_ADMIN_PERMISSIONS.filter(
+          (p) => p !== "notifications.send",
+        ),
+      },
+      { testProfiles: true, permissions: [] },
+    ]) {
+      const saved = await call(
+        "/api/admin/accounts",
+        {
+          email: staffEmail,
+          name: "Partner staff",
+          enabled: true,
+          expectedRevision: staffRevision,
+          ...grant,
+        },
+        root,
+      );
+      assert.equal(saved.status, 200);
+      staffRevision = saved.data.account.revision;
+      const identity = await signedPartnerCall("members", member);
+      assert.equal(identity.role, "admin");
+      assert.equal(
+        identity.playable,
+        false,
+        "removing any admin right must preserve the v1 staff response",
+      );
+    }
     const verifier = randomBytes(32).toString("base64url");
-    const launch = (await portal.launch({
+    const launch = (await signedPartnerCall("launches", {
       externalStudentId: member.externalStudentId,
       codeChallenge: createHash("sha256").update(verifier).digest("base64url"),
     })) as { launchUrl: string };

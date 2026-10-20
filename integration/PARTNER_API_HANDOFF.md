@@ -46,7 +46,7 @@
 | --- | --- |
 | `externalStudentId` | ID Portal ổn định; không dùng email; regex `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$` |
 | Sinh viên | `eduVerified: true`, một `schoolId` trong bảng; trả `role: user`, `playable: true` |
-| Admin AMTECH | Email đã xác minh thuộc `amtech.vn`, `amtech-vn.com`, `acer.com`, `dava.vn` hoặc danh sách được duyệt; trả `role: admin`; `playable: true` khi Game cấp 8 hồ sơ test, còn lại `false` |
+| Admin AMTECH | Email đã xác minh thuộc `amtech.vn`, `amtech-vn.com`, `acer.com`, `dava.vn` hoặc danh sách được duyệt; luôn trả `role: admin`, `playable: false` theo hợp đồng nhân sự v1; quyền chơi hồ sơ test chỉ xác định trong phiên Game |
 | `revision`, mét, điểm | Chuỗi số nguyên; `delta` có thể âm |
 | Trường thời gian `*Ms` | Unix milliseconds dạng number |
 | `earnedRunningPoints` | Điểm chạy cho BXH; tiêu/thưởng game không thay đổi, điều chỉnh vRace có thể thay đổi |
@@ -54,6 +54,7 @@
 
 - Portal xác minh và ánh xạ trường; chọn `schoolId: amtech` đơn thuần không cấp admin.
 - `role: admin` là nhánh danh tính nhân sự, không chứng minh quyền quản trị. AMTECH mới mặc định đủ quyền, Acer/Dava mặc định chỉ xem BXH; quyền đã chỉnh trên Game được giữ nguyên khi Portal đồng bộ. Không yêu cầu ít nhất một quyền quản trị để cấp launch ticket.
+- `playable` trong phản hồi partner `members` mô tả tư cách người chơi thi đấu; nhân sự luôn là `false`, kể cả được Game cấp hồ sơ test. Không suy ra quyền quản trị hay quyền chơi test từ trường này. `playable` trong bootstrap nội bộ Game được xác định riêng theo quyền chơi test.
 - Game có nhóm **Chỉ chơi 8 hồ sơ test**: cho phép đăng nhập, `testProfiles: true`, quyền quản trị rỗng. Mọi tài khoản được cấp 8 hồ sơ test vào thẳng game theo luồng đăng nhập thông thường, kể cả có thêm quyền xem dashboard; chuyển hồ sơ giữ ví/tiến độ riêng. Dashboard chỉ mở khi chủ động vào `/admin` (hoặc `/admin/editor` theo quyền); tài khoản quyền rỗng không xem được dữ liệu quản trị. Nhóm **Đối tác thử nghiệm · Chỉ xem** cấp thêm các quyền xem đã chọn.
 - Quản trị Game có thể đặt mật khẩu riêng cho nhân sự AMTECH thuộc nhóm chỉ chơi (không có quyền quản trị); đăng nhập trực tiếp tại `/admin`, độc lập mật khẩu Portal. SSO vẫn hoạt động với cùng danh tính/hồ sơ. Không gửi mật khẩu hoặc gọi `running`/`accounts` cho danh tính nhân sự.
 - Bỏ “Cho phép đăng nhập và sử dụng tài khoản” khóa cả SSO lẫn đăng nhập Game; muốn bỏ quản trị nhưng vẫn chơi thì giữ mục này bật và bỏ quyền quản trị.
