@@ -235,15 +235,37 @@ test("partner login owns eight isolated profiles, read-only dashboard, atomic sw
       "/api/admin/accounts",
       {
         email: staffEmail,
+        password,
         name: "Partner staff",
         enabled: true,
         testProfiles: true,
-        permissions: ADMIN_ROLES.partner.permissions,
+        permissions: ADMIN_ROLES.testPlayer.permissions,
         expectedRevision: 0,
       },
       root,
     );
     assert.equal(staff.status, 200);
+    const directStaff = await login(staffEmail, password);
+    assert.equal((await call("/api/game", undefined, directStaff)).status, 200);
+    assert.equal(
+      (await call("/api/admin/rankings", undefined, directStaff)).status,
+      403,
+    );
+    const deniedStaffPassword = await call(
+      "/api/admin/accounts",
+      {
+        email: "admin-staff@amtech.vn",
+        name: "Staff",
+        enabled: true,
+        testProfiles: false,
+        permissions: ALL_ADMIN_PERMISSIONS,
+        expectedRevision: 0,
+        password,
+      },
+      root,
+    );
+    assert.equal(deniedStaffPassword.status, 400);
+    assert.equal(deniedStaffPassword.data.error, "STAFF_USES_PORTAL");
     const member = {
       externalStudentId: "partner-staff-sso",
       schoolId: "amtech",
@@ -277,11 +299,27 @@ test("partner login owns eight isolated profiles, read-only dashboard, atomic sw
     );
     assert.equal(
       (await call("/api/admin/rankings", undefined, staffHeaders)).status,
+      403,
+    );
+    const staffAdmin = await call(
+      "/api/fixture/bootstrap?view=admin",
+      undefined,
+      staffHeaders,
+    );
+    assert.deepEqual(staffAdmin.data.principal.permissions, []);
+    assert.equal(staffAdmin.data.principal.playable, true);
+    const staffAfterSso = await login(staffEmail, password);
+    assert.equal(
+      (await call("/api/game", undefined, staffAfterSso)).status,
       200,
     );
     await portal.upsertMember({ ...member, active: false });
     assert.equal(
       (await call("/api/game", undefined, staffHeaders)).status,
+      401,
+    );
+    assert.equal(
+      (await call("/api/game", undefined, staffAfterSso)).status,
       401,
     );
     // Synthetic funding is restricted to this disposable loopback test database.

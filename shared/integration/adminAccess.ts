@@ -21,6 +21,7 @@ export const ADMIN_ROLES = {
     label: "Đối tác thử nghiệm · Chỉ xem",
     permissions: ["rankings.view", "map.view", "gifts.view", "audit.view"],
   },
+  testPlayer: { label: "Chỉ chơi 8 hồ sơ test", permissions: [] },
   editor: {
     label: "Biên tập bản đồ",
     permissions: ["rankings.view", "map.view", "map.edit"],
