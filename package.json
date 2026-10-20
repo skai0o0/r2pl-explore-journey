@@ -41,7 +41,8 @@
     "demo:play-rewards": "node --experimental-strip-types scripts/demo-playable-rewards.ts",
     "simulate:200": "node --experimental-strip-types scripts/simulate-200-players.ts",
     "simulate:public": "node --experimental-strip-types scripts/simulate-public-clients.ts",
-    "test:load500": "node --experimental-strip-types scripts/loadtest-500-clients.ts"
+    "test:load500": "node --experimental-strip-types scripts/loadtest-500-clients.ts",
+    "test:notifications": "node --experimental-strip-types --test --test-concurrency=1 tests/notifications.test.ts tests/notification-banner.test.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.18",

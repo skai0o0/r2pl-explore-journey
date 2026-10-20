@@ -352,3 +352,5 @@ Việc cập nhật tài khoản không xóa hay cấp lại ví. Bridge admin c
 không cấp hồ sơ test; dùng máy chủ Portal để kiểm tra luồng này.
 
 Points của 8 hồ sơ test dùng chung theo trường trên toàn campaign: tài khoản test mới, đăng nhập lại hoặc chuyển hồ sơ không cấp lại điểm. Hồ sơ, hành trang và phiên đăng nhập vẫn riêng. Migration 011 lấy số dư hiện tại từ bộ test đã cấp điểm, giữ lịch sử ví cũ, ghi giao dịch pool mới theo tài khoản thực hiện lệnh; không cộng dồn hoặc nạp lại 8.888 điểm.
+
+Thông báo: chạy migration 012 trước bản mới. Ingame dùng SSE online-only `/api/notifications/live`, Nginx giữ `X-Accel-Buffering: no`, không cache/buffer SSE; client chỉ mở kết nối khi tab game hiện. PostgreSQL giữ sự kiện và outbox Portal; không có HTTP callback tự động. Adapter dùng signed `notifications/pull` + `notifications/ack` theo integration/PARTNER_API_HANDOFF.md. Hoạt động gửi Portal mặc định tắt; admin chọn loại và soạn tin ở tab Thông báo. `delivered` chỉ có nghĩa adapter đã xác nhận lưu bền vững. Không tự xóa backlog để thử nghiệm.

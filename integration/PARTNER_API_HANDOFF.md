@@ -1,4 +1,4 @@
-# R2PL Game — Partner API v1.2
+# R2PL Game — Partner API v1.3
 
 > Cập nhật 20/10/2026 · Portal = website giải chạy · Game = R2PL.
 
@@ -257,3 +257,31 @@ Response `200`:
 | Dữ liệu giải | Thời gian giải, tiêu chí vRace hợp lệ, tần suất sync, quy trình điều chỉnh mét |
 
 > Nghiệm thu Sandbox: tạo hồ sơ → sync 1.500 m = 15 điểm → replay không cộng trùng → tiêu điểm không giảm BXH → SSO user/admin → khóa/mở → điều chỉnh mét/đổi tuần/retry → khóa Sandbox bị Production từ chối.
+
+## Thông báo hai kênh (20/10/2026)
+
+**Ingame:** chỉ phát hoạt động mới cho người đang kết nối game qua SSE `/api/notifications/live`; không đọc lại lịch sử khi đăng nhập/reconnect. Ba loại đầu tiên: `rally` (cùng trường), `station_arrival` (toàn campaign), `chest_opened` (toàn campaign, chỉ tên hiển thị/trường/cấp rương, không tọa độ, mã quà hay email). Một banner tại một thời điểm; chờ tối đa 10 tin, tối đa 30 giây, bỏ tin hết hạn. Ẩn/đóng tab sẽ ngắt luồng và bỏ hàng chờ ingame. Phản hồi thao tác cá nhân cũng dùng cùng bộ điều phối banner. Hoạt động không dùng hàng chờ offline ingame.
+
+**Web giải chạy:** Game giữ outbox trong PostgreSQL. Hoạt động chỉ được chuyển tiếp khi admin bật từng loại ở tab Thông báo; mặc định cả ba tắt. Nội dung admin soạn được xếp hàng riêng cho Portal, chọn toàn chiến dịch hoặc một trường; không tạo popup ingame. Adapter phía Portal chủ động gọi API lấy lô tin, lưu bền vững rồi xác nhận. Game không gọi URL ngoài và chưa cần cấu hình endpoint nhận phía Portal.
+
+### Hợp đồng adapter
+
+1. Gọi `POST /api/partner/v1/notifications/pull` với `{"limit":20}`. Ký cùng HMAC v1/campaign/key như API hiện tại; giữ secret ở backend. Đường dẫn ký bao gồm `/notifications/pull`. Mỗi lần thử dùng timestamp/nonce/chữ ký mới.
+2. Phản hồi `{version:1, deliveries:[{deliveryId,leaseToken,leaseUntilMs,attempt,notification}]}`. `notification` gồm `version`, `notificationId` (bằng deliveryId), `kind`, `title`, `body`, `occurredAtMs`, `audience`. Audience là `{scope:"campaign"}` hoặc `{scope:"school",schoolId:"hcmut"}`; Portal tự ánh xạ sinh viên thuộc trường và kiểm tra quyền nhận. Không dùng email để định tuyến.
+3. Lưu notification vào inbox/job của Portal với ràng buộc duy nhất theo `(campaignId, notificationId)` trong cùng giao dịch với việc tạo việc gửi cho người nhận. Nếu đã tồn tại thì không tạo lại. Khi đã commit, gọi `POST /api/partner/v1/notifications/ack` với `{deliveries:[{deliveryId,leaseToken,delivered:true}]}`. Đây là xác nhận adapter nhận/lưu, không phải sinh viên đã đọc.
+4. Lỗi xử lý tạm thời: gửi `delivered:false`. Mất tiến trình trước khi ack: đợi lease hết hạn rồi lấy lại; deliveryId giữ nguyên, leaseToken thay mới. Khử trùng bằng notificationId, không bằng leaseToken. `409 NOTIFICATION_LEASE_CONFLICT` nghĩa là lease đã hết hạn/thay mới; không tiếp tục ack lease cũ.
+
+Giới hạn: 50 tin/lô; lease 90 giây; backoff mũ tối đa 1 giờ; tối đa 8 lần nhận; hết hạn sau 7 ngày. Chọn polling 3–5 giây khi rảnh, backoff khi API lỗi; giữ giới hạn chung 300 request/phút/key/campaign. Chỉ xác nhận thành công sau commit ở Portal. Nội dung là plain text, không hiển thị như HTML.
+
+```js
+const { deliveries } = await game.pullNotifications(20);
+for (const item of deliveries) {
+  // Portal tự triển khai transaction + unique(campaignId, notificationId).
+  await persistInboxAndScheduleRecipients(item.notification);
+  await game.acknowledgeNotifications([{
+    deliveryId: item.deliveryId, leaseToken: item.leaseToken, delivered: true,
+  }]);
+}
+```
+
+Tab Thông báo trong Game hiển thị chờ nhận/đang xử lý/đã được adapter xác nhận/thất bại. Thử nghiệm adapter trước trên Sandbox; không lấy hoặc ack thông báo Production để thử kết nối. Các API quản trị cần quyền `notifications.send`, cookie phiên và CSRF; adapter Portal không dùng API quản trị.

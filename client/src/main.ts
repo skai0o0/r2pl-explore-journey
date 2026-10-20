@@ -39,6 +39,7 @@ import {
 } from "../../shared/world/coordinates.ts";
 import { gameFetch } from "./gameHttp.ts";
 import { GameplayUI } from "./gameplayUI.ts";
+import { startLiveNotifications } from "./liveNotifications.ts";
 import { fetchModelManifest } from "./modelManifest.ts";
 import { OperatorUI } from "./operatorUI.ts";
 import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
@@ -846,6 +847,7 @@ const gameplay = new GameplayUI(
   },
 );
 miniMap.onPanRequested = (x, z) => world.animateFocus(x, z, 100);
+if ("mode" in session && session.mode === "portal") startLiveNotifications();
 gameplay.onFindExpansion = () => stats.onExploreRequested?.();
 miniMap.onPanLive = (x, z) => world.focus(x, z, 100);
 miniMap.onZoomIn = () => world.zoom(0.72);

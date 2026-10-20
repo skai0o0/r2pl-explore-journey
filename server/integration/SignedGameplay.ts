@@ -52,6 +52,7 @@ import { scoutFrontier } from "./BeaconScout.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { claimGiftPoolItem, readGiftPool } from "./GiftPoolStore.ts";
 import { campaignProviderFromEnv } from "./HttpCampaignProvider.ts";
+import { emitNotification } from "./NotificationStore.ts";
 import { requirePortalActorSession } from "./PortalActorSession.ts";
 import type {
   SchoolPlayActor,
@@ -283,6 +284,15 @@ export class SignedGameplay {
       const now = Date.now();
       for (const s of present) {
         if (arrivals[String(s)] === undefined) {
+          await emitNotification(db, this.fixture.campaignId, {
+            key: `station:${id}:${s}:${now}`,
+            kind: "station_arrival",
+            title: "Trường đến trạm tiếp tế",
+            body: `${SCHOOLS[s]!.shortName} vừa đến ${stop.name}.`.slice(
+              0,
+              500,
+            ),
+          });
           arrivals[String(s)] = now;
           changedArrivals = true;
         }
@@ -908,6 +918,13 @@ export class SignedGameplay {
             `${a.schoolName} kêu gọi cùng góp vào ${o.name}. Tiến độ ${b.pots[slot] ?? 0}/${currentTarget} Tinh thể.`,
           ],
         );
+        await emitNotification(db, this.fixture.campaignId, {
+          key: `rally:${a.actorId}:${key.toString("hex")}`,
+          kind: "rally",
+          title: "Hiệu triệu thắp đèn",
+          body: `${a.schoolName} kêu gọi cùng góp vào ${o.name}.`.slice(0, 500),
+          schoolSlot: a.schoolSlot,
+        });
         return {
           status: "applied",
           reason: null,
@@ -1067,6 +1084,15 @@ export class SignedGameplay {
         -GAME_CONFIG.rewards.chestKeyCost,
       );
       await this.save(db, "chest-claim", o.id, { actorId: a.actorId });
+      await emitNotification(db, this.fixture.campaignId, {
+        key: `chest:${o.id}`,
+        kind: "chest_opened",
+        title: "Sinh viên vừa mở rương",
+        body: `${a.name} (${a.schoolName}) vừa mở rương ${o.tier.toUpperCase()}.`.slice(
+          0,
+          500,
+        ),
+      });
     }
     const running = await this.state<{ week?: number; weeklyMeters?: number }>(
       db,

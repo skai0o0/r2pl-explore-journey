@@ -12,6 +12,7 @@ import {
   snapshotWire,
 } from "../../shared/integration/running.ts";
 import { authenticateAdminAccess } from "./AdminAccessStore.ts";
+import { NotificationStore } from "./NotificationStore.ts";
 import { bindTestProfile } from "./PartnerTestProfiles.ts";
 import type { PortalConfig } from "./PortalConfig.ts";
 import { PortalError } from "./PortalSignature.ts";
@@ -330,6 +331,9 @@ export class PortalStore {
         active: value.active,
       };
     });
+  }
+  notifications(): NotificationStore {
+    return new NotificationStore(this.pool, this.config.campaignId);
   }
   async authenticateAdmin(token: unknown): Promise<AdminPrincipal | undefined> {
     return authenticateAdminAccess(this.pool, this.config.campaignId, token);

@@ -15,5 +15,7 @@ export interface ProvisionedMember {
 export class R2plPartnerClient {
   constructor(config: { origin: string; campaignId: string; keyId: string; secret: string; timeoutMs?: number });
   request(operation: string, payload: unknown): Promise<Record<string, unknown>>;
+  pullNotifications(limit?:number):Promise<{version:1;deliveries:{deliveryId:string;leaseToken:string;leaseUntilMs:number;attempt:number;notification:{version:1;notificationId:string;kind:"rally"|"station_arrival"|"chest_opened"|"admin";title:string;body:string;occurredAtMs:number;audience:{scope:"campaign"|"school";schoolId?:CompetitiveSchoolId}}}[]}>;
+  acknowledgeNotifications(deliveries:{deliveryId:string;leaseToken:string;delivered:boolean}[]):Promise<{acknowledged:number}>;
   provisionMember(payload: VerifiedMemberInput): Promise<ProvisionedMember>;
 }

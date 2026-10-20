@@ -2,6 +2,8 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 
 /** Server-side only. Never bundle a partner key in a browser or mobile app. */
 export class R2plPartnerClient {
+  async pullNotifications(limit = 20) { return this.request("notifications/pull", { limit }); }
+  async acknowledgeNotifications(deliveries) { return this.request("notifications/ack", { deliveries }); }
   async provisionMember(payload) {
     return this.request("members", payload);
   }
@@ -11,7 +13,7 @@ export class R2plPartnerClient {
     this.origin = origin; this.campaignId = campaignId; this.keyId = keyId; this.secret = secret; this.timeoutMs = timeoutMs;
   }
   async request(operation, payload) {
-    if (!["members", "running", "accounts", "launches"].includes(operation)) throw new Error("Unknown operation");
+    if (!["members", "running", "accounts", "launches", "notifications/pull", "notifications/ack"].includes(operation)) throw new Error("Unknown operation");
     const path = `/api/partner/v1/${operation}`, body = JSON.stringify(payload);
     const timestamp = String(Date.now()), nonce = randomBytes(24).toString("base64url");
     const canonical = ["r2pl-v1", this.campaignId, "POST", path, timestamp, nonce, createHash("sha256").update(body).digest("hex")].join("\n");

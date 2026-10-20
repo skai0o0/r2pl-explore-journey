@@ -21,6 +21,8 @@ import { DevAccountService } from "./DevAccountService.ts";
 import { EditorStore } from "./EditorStore.ts";
 import { GiftPoolStore } from "./GiftPoolStore.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
+import { NotificationStore } from "./NotificationStore.ts";
+import { NotificationStream } from "./NotificationStream.ts";
 import { seedPortalCampaign } from "./PortalCampaign.ts";
 import { type PortalConfig, validatePortalConfig } from "./PortalConfig.ts";
 import {
@@ -147,6 +149,9 @@ async function startSchoolPlayServer(
     portal || adminPortal
       ? new PortalHttp((portal ?? adminPortal)!)
       : undefined;
+  const notifications = new NotificationStream(
+    new NotificationStore(pool, fixture.campaignId),
+  );
   const rewardHttp = new SchoolRewardHttp(pool, fixture);
   const gameplay = new SignedGameplay(
     pool,
@@ -417,6 +422,29 @@ async function startSchoolPlayServer(
     }
     const actorForRequest = () =>
       portal ? portalActor : gameplay.actor(token);
+    if (path === "/api/notifications/live") {
+      if (request.method !== "GET" || url.search) {
+        response.writeHead(400).end();
+        return;
+      }
+      if (
+        request.headers.origin &&
+        authConfig &&
+        request.headers.origin !== authConfig.publicOrigin
+      ) {
+        response.writeHead(403).end();
+        return;
+      }
+      const current = actorForRequest();
+      if (!current) {
+        response.writeHead(401).end();
+        return;
+      }
+      await notifications.open(response, current.schoolSlot, async () =>
+        portal ? portal.authenticate(token) : gameplay.actor(token),
+      );
+      return;
+    }
     const expectedOrigin =
       authConfig?.publicOrigin ?? `http://${request.headers.host}`;
     if (path === "/api/admin/gift-pool") {
@@ -1280,6 +1308,7 @@ async function startSchoolPlayServer(
     return botTask;
   };
   const close = async (): Promise<void> => {
+    notifications.close();
     clearInterval(lifecycleTimer);
     stopped = true;
     await stopBots();

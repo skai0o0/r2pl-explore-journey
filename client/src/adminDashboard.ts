@@ -9,6 +9,10 @@ import {
   isStaffSsoEmail,
 } from "../../shared/integration/adminAccess.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
+import {
+  NOTIFICATION_LABELS,
+  type NotificationRouting,
+} from "../../shared/integration/notifications.ts";
 import { finishBoot } from "./bootScreen.ts";
 import { gameFetch } from "./gameHttp.ts";
 import { mountGiftPoolEditor } from "./giftPoolEditor.ts";
@@ -223,25 +227,106 @@ export async function mountAdminDashboard(
     "Thông báo",
     "notifications.send",
     async () => {
-      content.innerHTML = `<h2>Gửi thông báo</h2><form class="admin-form"><label>Tiêu đề<input name="title" maxlength="100" required></label><label>Nội dung<textarea name="body" maxlength="500" required></textarea></label><button type="submit" class="admin-primary">Gửi đến campaign</button></form>`;
-      content.querySelector("form")!.onsubmit = (event) => {
-        event.preventDefault();
-        const form = event.currentTarget as HTMLFormElement,
-          button = form.querySelector("button")!;
-        if (!confirm("Gửi thông báo này đến người chơi?")) return;
+      const state = await api<{
+        routes: NotificationRouting[];
+        counts: { status: string; count: number }[];
+        recent: {
+          id: string;
+          title: string;
+          status: string;
+          attempts: number;
+        }[];
+      }>("/api/admin/notifications");
+      content.innerHTML = `<h2>Thông báo</h2><p>Ingame chỉ hiện hoạt động mới khi đang chơi, từng banner một. Chọn hoạt động nào được đưa sang web giải chạy. Adapter của web giải lấy tin và xác nhận qua API.</p><form class="admin-form notification-routing"><fieldset><legend>Hoạt động gửi sang web giải chạy</legend></fieldset><button type="submit">Lưu lựa chọn</button></form><h3>Soạn thông báo cho web giải chạy</h3><form class="admin-form notification-compose"><label>Người nhận<select name="school"><option value="">Toàn chiến dịch</option></select></label><label>Tiêu đề<input name="title" required maxlength="100"></label><label>Nội dung<textarea name="body" required maxlength="500"></textarea></label><button type="submit">Xếp hàng gửi sang web giải chạy</button></form><h3>Trạng thái chuyển tin</h3><div class="notification-status"></div>`;
+      const routing = content.querySelector<HTMLFormElement>(
+        ".notification-routing",
+      )!;
+      for (const [kind, label] of Object.entries(NOTIFICATION_LABELS)) {
+        const wrapper = node("label"),
+          check = node("input");
+        wrapper.className = "admin-check";
+        check.type = "checkbox";
+        check.name = kind;
+        check.checked =
+          state.routes?.find((r) => r.kind === kind)?.forwardToPortal ?? false;
+        wrapper.append(check, node("span", label));
+        routing.querySelector("fieldset")!.append(wrapper);
+      }
+      routing.onsubmit = (e) => {
+        e.preventDefault();
+        const button = routing.querySelector("button")!;
         button.disabled = true;
         void work(async () => {
-          const data = new FormData(form);
-          await api("/api/admin", {
-            action: "notify",
-            title: data.get("title"),
-            body: data.get("body"),
+          await api("/api/admin/notifications", {
+            action: "routing",
+            routes: Object.keys(NOTIFICATION_LABELS).map((kind) => ({
+              kind,
+              forwardToPortal: (
+                routing.elements.namedItem(kind) as HTMLInputElement
+              ).checked,
+            })),
           });
-          form.reset();
-        }).finally(() => {
-          button.disabled = false;
-        });
+          feedback.textContent =
+            "Đã lưu các hoạt động chuyển sang web giải chạy.";
+        }).finally(() => (button.disabled = false));
       };
+      const compose = content.querySelector<HTMLFormElement>(
+          ".notification-compose",
+        )!,
+        schools = compose.elements.namedItem("school") as HTMLSelectElement;
+      for (const school of SCHOOLS) {
+        const option = node("option", school.shortName);
+        option.value = school.id;
+        schools.append(option);
+      }
+      let composeKey = crypto.randomUUID();
+      compose.onsubmit = (e) => {
+        e.preventDefault();
+        if (!confirm("Xếp hàng thông báo này để web giải chạy nhận qua API?"))
+          return;
+        const button = compose.querySelector("button")!;
+        button.disabled = true;
+        void work(async () => {
+          await api("/api/admin/notifications", {
+            action: "compose",
+            key: composeKey,
+            schoolId: schools.value || null,
+            title: (compose.elements.namedItem("title") as HTMLInputElement)
+              .value,
+            body: (compose.elements.namedItem("body") as HTMLTextAreaElement)
+              .value,
+          });
+          compose.reset();
+          composeKey = crypto.randomUUID();
+          feedback.textContent =
+            "Đã xếp hàng. Tin chỉ được chuyển khi adapter web giải chạy lấy và xác nhận.";
+        }).finally(() => (button.disabled = false));
+      };
+      const status = content.querySelector(".notification-status")!;
+      const labels: Record<string, string> = {
+        pending: "Chờ adapter nhận",
+        leased: "Adapter đang xử lý",
+        delivered: "Adapter đã xác nhận",
+        failed: "Hết hạn / cần kiểm tra",
+      };
+      for (const count of state.counts ?? [])
+        status.append(
+          node("p", `${labels[count.status] ?? count.status}: ${count.count}`),
+        );
+      for (const item of state.recent ?? [])
+        status.append(
+          node(
+            "p",
+            `${item.title} · ${labels[item.status] ?? item.status} · ${item.attempts} lượt nhận`,
+          ),
+        );
+      if (!state.recent?.length)
+        status.append(
+          node(
+            "p",
+            "Chưa có tin xếp hàng. Chưa kết nối adapter thì chưa có tin nào được gửi ra ngoài.",
+          ),
+        );
     },
   ]);
   tabs.push([

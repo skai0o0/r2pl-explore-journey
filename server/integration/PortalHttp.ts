@@ -106,6 +106,12 @@ export class PortalHttp {
         case "/api/partner/v1/accounts":
           result = await this.store.account(input);
           break;
+        case "/api/partner/v1/notifications/pull":
+          result = await this.store.notifications().pull(input);
+          break;
+        case "/api/partner/v1/notifications/ack":
+          result = await this.store.notifications().ack(input);
+          break;
         case "/api/partner/v1/launches":
           result = await this.store.launch(input);
           break;
