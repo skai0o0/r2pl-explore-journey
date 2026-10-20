@@ -54,6 +54,16 @@ async function openAdminBootstrap(
     !["staging", "production"].includes(String(raw.environment))
   )
     throw new Error("Invalid admin bootstrap");
+  // Local login and SSO share the already-bound play-only test session.
+  if (
+    p.playable === true &&
+    Array.isArray(p.permissions) &&
+    p.permissions.length === 0
+  ) {
+    sessionStorage.removeItem("r2pl-demo-admin-entry");
+    location.replace("/");
+    return new Promise<never>(() => {});
+  }
   configureGameHttp(raw.csrfToken);
   const principal: AdminPrincipal = {
     actorId: p.actorId,
@@ -106,6 +116,8 @@ export async function loadGameSession(): Promise<
     }
     const adminEntry =
       new URLSearchParams(location.search).get("entry") === "admin";
+    if (new URLSearchParams(location.search).get("entry") === "portal")
+      sessionStorage.removeItem("r2pl-demo-admin-entry");
     if (adminEntry) sessionStorage.setItem("r2pl-demo-admin-entry", "1");
     const returningAdmin =
       new URLSearchParams(location.hash.slice(1)).has("launch") &&

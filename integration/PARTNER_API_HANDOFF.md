@@ -1,6 +1,6 @@
-# R2PL Game — Partner API v1.1
+# R2PL Game — Partner API v1.2
 
-> Cập nhật 19/10/2026 · Portal = website giải chạy · Game = R2PL.
+> Cập nhật 20/10/2026 · Portal = website giải chạy · Game = R2PL.
 
 [OpenAPI](openapi.json) · [Client Node.js](partner-client.mjs) · [TypeScript types](partner-client.d.mts)
 
@@ -46,16 +46,25 @@
 | --- | --- |
 | `externalStudentId` | ID Portal ổn định; không dùng email; regex `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$` |
 | Sinh viên | `eduVerified: true`, một `schoolId` trong bảng; trả `role: user`, `playable: true` |
-| Admin AMTECH | Email đã xác minh thuộc `amtech.vn`, `amtech-vn.com`, `acer.com`, `dava.vn` hoặc danh sách được duyệt; trả `role: admin`, `playable: false` |
+| Admin AMTECH | Email đã xác minh thuộc `amtech.vn`, `amtech-vn.com`, `acer.com`, `dava.vn` hoặc danh sách được duyệt; trả `role: admin`; `playable: true` khi Game cấp 8 hồ sơ test, còn lại `false` |
 | `revision`, mét, điểm | Chuỗi số nguyên; `delta` có thể âm |
 | Trường thời gian `*Ms` | Unix milliseconds dạng number |
 | `earnedRunningPoints` | Điểm chạy cho BXH; tiêu/thưởng game không thay đổi, điều chỉnh vRace có thể thay đổi |
 | `spendablePoints` | Số dư tiêu trong game; ví mới bắt đầu từ 0 |
 
 - Portal xác minh và ánh xạ trường; chọn `schoolId: amtech` đơn thuần không cấp admin.
-- Admin Portal → dashboard Game; AMTECH mặc định đủ quyền, Acer/Dava mặc định chỉ xem BXH; Game quản lý phân quyền, không gửi mật khẩu hoặc gọi `running`/`accounts` cho admin.
+- `role: admin` là nhánh danh tính nhân sự, không chứng minh quyền quản trị. AMTECH mới mặc định đủ quyền, Acer/Dava mặc định chỉ xem BXH; quyền đã chỉnh trên Game được giữ nguyên khi Portal đồng bộ. Không yêu cầu ít nhất một quyền quản trị để cấp launch ticket.
+- Game có nhóm **Chỉ chơi 8 hồ sơ test**: cho phép đăng nhập, `testProfiles: true`, quyền quản trị rỗng. Tài khoản vào thẳng game và chuyển giữa 8 hồ sơ riêng, giữ ví/tiến độ từng hồ sơ. Nhóm **Đối tác thử nghiệm · Chỉ xem** cấp thêm các quyền xem đã chọn.
+- Quản trị Game có thể đặt mật khẩu riêng cho nhân sự AMTECH thuộc nhóm chỉ chơi (không có quyền quản trị); đăng nhập trực tiếp tại `/admin`, độc lập mật khẩu Portal. SSO vẫn hoạt động với cùng danh tính/hồ sơ. Không gửi mật khẩu hoặc gọi `running`/`accounts` cho danh tính nhân sự.
+- Bỏ “Cho phép đăng nhập và sử dụng tài khoản” khóa cả SSO lẫn đăng nhập Game; muốn bỏ quản trị nhưng vẫn chơi thì giữ mục này bật và bỏ quyền quản trị.
 - Tài khoản quản trị riêng của Game dùng `/admin`, không cần tạo bên Portal; không thay đổi luồng SSO/API sinh viên.
 - Đổi trường hoặc đổi ID của danh tính đã liên kết cần đối soát với đội Game.
+
+### Chẩn đoán chuyển tiếp đăng nhập
+
+- Nút Game trên Portal mở `<GAME_ORIGIN>/?entry=portal` trong cùng tab, kể cả email AMTECH; không chọn điểm đến theo `role` hoặc quyền quản trị. Game tạo PKCE mới rồi chuyển về Portal.
+- Giữ nguyên `game_campaign`, `game_challenge`, `game_return` qua các bước đăng nhập; sau `members` → `launches`, trả 303 đến nguyên `launchUrl`, bao gồm fragment `#launch`. Không tái sử dụng ticket (60 giây, một lần), không tự dựng URL đích.
+- Nếu Portal báo phiên chuyển tiếp hết hạn, đối chiếu bước lỗi, HTTP status, mã lỗi API và `requestId`; không ghi secret, ticket hoặc verifier. Quyền quản trị rỗng không làm SSO thất bại. Đăng nhập Game bằng mật khẩu riêng là đường dự phòng khi luồng Portal lỗi; Game không thể sửa phiên nội bộ của Portal.
 
 ## 3. Gọi API
 

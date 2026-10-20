@@ -31,7 +31,7 @@ const errors: Record<string, string> = {
   CANNOT_GRANT_PERMISSION: "Bạn chỉ có thể cấp và sửa các quyền mình đang có.",
   PASSWORD_REQUIRED: "Hãy nhập mật khẩu ban đầu cho tài khoản mới.",
   STAFF_USES_PORTAL:
-    "Tài khoản AMTECH đăng nhập qua web giải, không đặt mật khẩu tại Game.",
+    "AMTECH chỉ đặt mật khẩu Game khi bật 8 hồ sơ test và bỏ toàn bộ quyền quản trị.",
   TEST_PROFILE_READ_ONLY:
     "Tài khoản có hồ sơ test chỉ được cấp quyền xem dữ liệu.",
   TEST_PROFILES_REQUIRE_PORTAL:
@@ -340,7 +340,7 @@ export async function mountAdminDashboard(
       const { accounts } = await api<{ accounts: AdminAccountView[] }>(
         "/api/admin/accounts",
       );
-      content.innerHTML = `<div class="admin-section-heading"><h2>Tài khoản & quyền</h2><button class="admin-new admin-primary">＋ Tạo tài khoản</button></div><p>AMTECH mặc định đủ quyền qua web giải. Acer / Dava mặc định chỉ xem BXH. Tài khoản riêng đăng nhập tại /admin.</p><div class="admin-accounts"></div><div class="admin-account-editor"></div>`;
+      content.innerHTML = `<div class="admin-section-heading"><h2>Tài khoản & quyền</h2><button class="admin-new admin-primary">＋ Tạo tài khoản</button></div><p>AMTECH mới mặc định đủ quyền qua web giải; quyền đã chỉnh được giữ nguyên. Chọn “Chỉ chơi 8 hồ sơ test” để bỏ toàn bộ quyền quản trị và có thể đặt mật khẩu riêng đăng nhập tại /admin.</p><div class="admin-accounts"></div><div class="admin-account-editor"></div>`;
       const list = content.querySelector(".admin-accounts")!;
       for (const account of accounts) {
         const row = node("button");
@@ -366,7 +366,7 @@ export async function mountAdminDashboard(
         edit();
       function edit(account?: AdminAccountView): void {
         const editor = content.querySelector(".admin-account-editor")!;
-        editor.innerHTML = `<form class="admin-form"><h3></h3><label>Họ tên<input name="name" required maxlength="100"></label><label>Email<input type="email" name="email" required maxlength="254"></label><label>Mật khẩu <small>(để trống nếu giữ mật khẩu cũ; AMTECH dùng web giải)</small><input type="password" name="password" autocomplete="new-password" minlength="10" maxlength="128"></label><label>Nhóm quyền<select name="preset"></select></label><fieldset><legend>Quyền được cấp</legend></fieldset><label class="admin-check"><input type="checkbox" name="enabled" checked>Cho phép quản trị</label><button type="submit" class="admin-primary">Lưu tài khoản</button></form>`;
+        editor.innerHTML = `<form class="admin-form"><h3></h3><label>Họ tên<input name="name" required maxlength="100"></label><label>Email<input type="email" name="email" required maxlength="254"></label><label>Mật khẩu đăng nhập trực tiếp <small>(để trống để giữ mật khẩu cũ; AMTECH chỉ đặt được khi chọn Chỉ chơi 8 hồ sơ test; không đổi mật khẩu web giải)</small><input type="password" name="password" autocomplete="new-password" minlength="10" maxlength="128"></label><label>Nhóm quyền<select name="preset"></select></label><fieldset><legend>Quyền được cấp</legend></fieldset><label class="admin-check"><input type="checkbox" name="enabled" checked>Cho phép đăng nhập và sử dụng tài khoản</label><button type="submit" class="admin-primary">Lưu tài khoản</button></form>`;
         const form = editor.querySelector("form")!,
           name = form.elements.namedItem("name") as HTMLInputElement,
           email = form.elements.namedItem("email") as HTMLInputElement,
@@ -392,7 +392,7 @@ export async function mountAdminDashboard(
           testProfiles,
           node(
             "span",
-            "Cho phép chơi với 8 hồ sơ test riêng · Quyền admin chỉ xem",
+            "Cho phép chơi với 8 hồ sơ test riêng · Có thể cấp thêm quyền chỉ xem",
           ),
         );
         form.querySelector("fieldset")!.before(testLabel);
@@ -415,12 +415,18 @@ export async function mountAdminDashboard(
           form.querySelector("fieldset")!.append(label);
         }
         for (const [id, role] of Object.entries(ADMIN_ROLES)) {
-          if (id === "partner" && !testProfilesSupported) continue;
+          if (["partner", "testPlayer"].includes(id) && !testProfilesSupported)
+            continue;
           const option = node("option", role.label);
           option.value = id;
           preset.append(option);
         }
-        preset.value = account ? "custom" : "viewer";
+        preset.value =
+          account?.testProfiles && account.permissions.length === 0
+            ? "testPlayer"
+            : account
+              ? "custom"
+              : "viewer";
         const syncChecks = () => {
           const allowed = ADMIN_ROLES.partner
             .permissions as readonly AdminPermission[];
@@ -432,16 +438,28 @@ export async function mountAdminDashboard(
           });
         };
         syncChecks();
+        const syncPassword = () => {
+          password.disabled =
+            isStaffSsoEmail(email.value.trim().toLowerCase()) &&
+            !(
+              testProfiles.checked &&
+              [...checks.values()].every((c) => !c.checked)
+            );
+          if (password.disabled) password.value = "";
+        };
         let permissionsTouched = false;
         preset.onchange = () => {
           permissionsTouched = true;
-          testProfiles.checked = preset.value === "partner";
+          testProfiles.checked = ["partner", "testPlayer"].includes(
+            preset.value,
+          );
           syncChecks();
           const chosen = ADMIN_ROLES[preset.value as AdminRole]
             .permissions as readonly AdminPermission[];
           checks.forEach((check, p) => {
             check.checked = !check.disabled && chosen.includes(p);
           });
+          syncPassword();
         };
         testProfiles.onchange = () => {
           permissionsTouched = true;
@@ -454,18 +472,19 @@ export async function mountAdminDashboard(
               check.checked = !check.disabled && allowed.includes(p);
             });
           }
+          syncPassword();
         };
         checks.forEach((check) => {
           check.onchange = () => {
             permissionsTouched = true;
             preset.value = "custom";
+            syncPassword();
           };
         });
         const syncEmail = () => {
-          password.disabled = isStaffSsoEmail(email.value.trim().toLowerCase());
-          if (password.disabled) password.value = "";
+          const staff = isStaffSsoEmail(email.value.trim().toLowerCase());
           if (!account && !permissionsTouched) {
-            preset.value = password.disabled ? "full" : "viewer";
+            preset.value = staff ? "full" : "viewer";
             const defaults = ADMIN_ROLES[preset.value as AdminRole]
               .permissions as readonly AdminPermission[];
             checks.forEach((check, p) => {
@@ -473,8 +492,12 @@ export async function mountAdminDashboard(
             });
           }
         };
-        email.oninput = syncEmail;
+        email.oninput = () => {
+          syncEmail();
+          syncPassword();
+        };
         syncEmail();
+        syncPassword();
         form.onsubmit = (event) => {
           event.preventDefault();
           const button = form.querySelector("button")!;

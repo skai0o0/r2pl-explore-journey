@@ -139,6 +139,20 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
       "editor",
       "intentional overrides survive email changes",
     );
+    role.value = "testPlayer";
+    role.dispatchEvent(new w.Event("change"));
+    assert(
+      w.document.querySelector<TestInput>('input[name="testProfiles"]')!
+        .checked,
+    );
+    assert.equal(
+      w.document.querySelectorAll("fieldset input:checked").length,
+      0,
+    );
+    assert(
+      w.document.querySelector<TestInput>('input[name="enabled"]')!.checked,
+    );
+    assert(!password.disabled);
     role.value = "partner";
     role.dispatchEvent(new w.Event("change"));
     assert(
@@ -149,6 +163,7 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
       w.document.querySelectorAll("fieldset input:checked").length,
       4,
     );
+    assert(password.disabled);
     for (const checkbox of w.document.querySelectorAll<TestInput>(
       "fieldset input",
     )) {

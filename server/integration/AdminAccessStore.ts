@@ -234,8 +234,13 @@ export class AdminAccessStore {
       (permissions.includes("map.publish") && !permissions.includes("map.edit"))
     )
       throw new PortalError(400, "MAP_PERMISSION_DEPENDENCY");
-    // Passwords for AMTECH staff stay exclusively with the event portal.
-    if (v.password !== undefined && isStaffSsoEmail(email))
+    // Only explicitly play-only test accounts may receive a separate Game password.
+    // Other staff continue to use Portal SSO; root remains operator-managed.
+    if (
+      v.password !== undefined &&
+      isStaffSsoEmail(email) &&
+      !(v.testProfiles === true && permissions.length === 0)
+    )
       throw new PortalError(400, "STAFF_USES_PORTAL");
     // Authenticate before spending password hashing work, then revalidate in the write transaction.
     const current = await requireAdminPermission(
