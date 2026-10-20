@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import { pointWalletTarget } from "../persistence/TestPointWallet.ts";
 export interface DevIdentity {
   readonly token: string;
   readonly actorId: string;
@@ -52,6 +53,27 @@ export class DevAccountService {
         [this.#campaignId, actor.actorId, actor.schoolSlot],
       )
     ).rows;
+    const points = await pointWalletTarget(
+      this.#pool,
+      this.#campaignId,
+      actor.actorId,
+    );
+    if (points.pooled) {
+      const shared = (
+        await this.#pool.query<{
+          resource: string;
+          balance: string;
+          opening_balance: string;
+          ledger_net: string;
+          has_spent_points: boolean;
+        }>(
+          `SELECT w.resource,w.balance::text,w.opening_balance::text,COALESCE((SELECT sum(amount) FROM r2pl_v2.test_point_ledger l WHERE l.campaign_id=w.campaign_id AND l.pool_actor_id=w.actor_id),0)::text AS ledger_net,EXISTS(SELECT 1 FROM r2pl_v2.test_point_ledger l WHERE l.campaign_id=w.campaign_id AND l.pool_actor_id=w.actor_id AND l.amount<0) AS has_spent_points FROM r2pl_v2.test_point_pools w WHERE w.campaign_id=$1 AND w.actor_id=$2`,
+          [this.#campaignId, points.actorId],
+        )
+      ).rows[0];
+      const index = rows.findIndex((r) => r.resource === "fixture-credit");
+      if (shared && index >= 0) rows[index] = shared;
+    }
     const row = rows.find((r) => r.resource === "fixture-credit");
     const balance = (resource: string) =>
       rows.find((r) => r.resource === resource)?.balance ?? "0";
@@ -87,6 +109,22 @@ export class DevAccountService {
   > {
     const actor = token ? this.#actors.get(token) : undefined;
     if (!actor || !(await this.profile(token))) return null;
+    const points = await pointWalletTarget(
+      this.#pool,
+      this.#campaignId,
+      actor.actorId,
+    );
+    if (points.pooled)
+      return (
+        await this.#pool.query<{
+          status: string;
+          resource: string;
+          amount: string;
+        }>(
+          "SELECT c.status,COALESCE(l.resource,'fixture-credit')::text AS resource,COALESCE(l.amount,0)::text AS amount FROM r2pl_v2.command_results c LEFT JOIN (SELECT campaign_id,actor_id,command_key,resource,amount FROM r2pl_v2.ledger_entries UNION ALL SELECT campaign_id,actor_id,command_key,resource,amount FROM r2pl_v2.test_point_ledger) l USING(campaign_id,actor_id,command_key) WHERE c.campaign_id=$1 AND c.actor_id=$2 ORDER BY c.created_at DESC LIMIT 10",
+          [this.#campaignId, actor.actorId],
+        )
+      ).rows;
     return (
       await this.#pool.query<{
         status: string;

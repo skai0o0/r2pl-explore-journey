@@ -53,6 +53,10 @@ export async function provisionTestProfiles(
         [campaign, actor, resource, opening],
       );
     }
+    await db.query(
+      "INSERT INTO r2pl_v2.test_point_pools(campaign_id,actor_id,school_slot,opening_balance,balance) SELECT campaign_id,actor_id,$3,balance,balance FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit' ON CONFLICT(campaign_id,school_slot) DO NOTHING",
+      [campaign, actor, school.slot],
+    );
   }
 }
 

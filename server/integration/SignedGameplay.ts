@@ -33,6 +33,7 @@ import {
   localIndex,
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
+import { pointWalletTarget } from "../persistence/TestPointWallet.ts";
 import { recordLedger } from "../persistence/WalletLedger.ts";
 import { requireAdminPermission } from "./AdminAccessStore.ts";
 import {
@@ -378,6 +379,21 @@ export class SignedGameplay {
           [this.fixture.campaignId, actor.actorId],
         )
       ).rows;
+      const points = await pointWalletTarget(
+        db,
+        this.fixture.campaignId,
+        actor.actorId,
+      );
+      if (points.pooled) {
+        const shared = (
+          await db.query<{ balance: string }>(
+            `SELECT balance::text FROM ${points.table} WHERE campaign_id=$1 AND actor_id=$2`,
+            [this.fixture.campaignId, points.actorId],
+          )
+        ).rows[0];
+        const row = wallets.find((w) => w.resource === "fixture-credit");
+        if (row && shared) row.balance = shared.balance;
+      }
       const balance = (r: string) =>
         wallets.find((w) => w.resource === r)?.balance ?? "0";
       const landmarks: LandmarkView[] = [];
@@ -645,13 +661,22 @@ export class SignedGameplay {
     amount: number,
   ): Promise<void> {
     if (amount === 0) return;
-    await db.query(
-      "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,balance) VALUES($1,$2,$3,0) ON CONFLICT DO NOTHING",
-      [this.fixture.campaignId, a.actorId, resource],
-    );
+    const target =
+      resource === "fixture-credit"
+        ? await pointWalletTarget(db, this.fixture.campaignId, a.actorId)
+        : {
+            table: "r2pl_v2.wallet_accounts",
+            actorId: a.actorId,
+            pooled: false,
+          };
+    if (!target.pooled)
+      await db.query(
+        "INSERT INTO r2pl_v2.wallet_accounts(campaign_id,actor_id,resource,balance) VALUES($1,$2,$3,0) ON CONFLICT DO NOTHING",
+        [this.fixture.campaignId, a.actorId, resource],
+      );
     const updated = await db.query(
-      "UPDATE r2pl_v2.wallet_accounts SET balance=balance+$4 WHERE campaign_id=$1 AND actor_id=$2 AND resource=$3 AND balance+$4>=0 RETURNING 1",
-      [this.fixture.campaignId, a.actorId, resource, amount],
+      `UPDATE ${target.table} SET balance=balance+$4 WHERE campaign_id=$1 AND actor_id=$2 AND resource=$3 AND balance+$4>=0 RETURNING 1`,
+      [this.fixture.campaignId, target.actorId, resource, amount],
     );
     if (!updated.rowCount) throw new RuleRejection("INSUFFICIENT_BALANCE");
     await recordLedger(

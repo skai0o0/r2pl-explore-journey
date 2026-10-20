@@ -8,6 +8,8 @@ import {
   localIndex,
   tileCoordinates,
 } from "../../shared/world/coordinates.ts";
+import { pointWalletTarget } from "../persistence/TestPointWallet.ts";
+import { recordLedger } from "../persistence/WalletLedger.ts";
 import { adjustKnowledgeScore } from "./KnowledgeScore.ts";
 export interface SharedCluster {
   id: string;
@@ -227,14 +229,12 @@ async function refund(
         `${amount} Points đã hoàn vào ví`,
       ],
     );
+    const points = await pointWalletTarget(db, campaign, actor);
     await db.query(
-      "UPDATE r2pl_v2.wallet_accounts SET balance=balance+$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
-      [campaign, actor, amount],
+      `UPDATE ${points.table} SET balance=balance+$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'`,
+      [campaign, points.actorId, amount],
     );
-    await db.query(
-      "INSERT INTO r2pl_v2.ledger_entries(campaign_id,actor_id,command_key,resource,amount) VALUES($1,$2,$3,'fixture-credit',$4)",
-      [campaign, actor, key, amount],
-    );
+    await recordLedger(db, campaign, actor, key, "fixture-credit", amount);
   }
 }
 /** All callers take the signed campaign lock before this function. No wall-clock sleep is needed. */
