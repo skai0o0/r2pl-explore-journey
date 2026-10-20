@@ -8,6 +8,7 @@ import {
   authenticateAdminAccess,
 } from "./AdminAccessStore.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
+import { NotificationStore } from "./NotificationStore.ts";
 import { switchTestProfile } from "./PartnerTestProfiles.ts";
 import type { PortalConfig } from "./PortalConfig.ts";
 import {
@@ -43,6 +44,7 @@ export class AdminHttp {
         "/api/admin/accounts",
         "/api/admin/audit",
         "/api/admin/rankings",
+        "/api/admin/notifications",
         "/api/test-profiles/switch",
       ].includes(path)
     )
@@ -120,6 +122,15 @@ export class AdminHttp {
           `${nonceName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${config.mode === "production" ? "; Secure" : ""}`,
         ]);
         result = { signedIn: true };
+      } else if (path === "/api/admin/notifications") {
+        result = await new NotificationStore(
+          this.pool,
+          config.campaignId,
+        ).admin(
+          admin!.actorId,
+          token!,
+          request.method === "GET" ? undefined : input,
+        );
       } else if (path === "/api/test-profiles/switch") {
         if (request.method !== "POST")
           throw new PortalError(405, "METHOD_NOT_ALLOWED");

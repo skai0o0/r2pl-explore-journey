@@ -341,6 +341,18 @@ export const BEACON_BUFF_CONFIG = {
   comeback: { tiles: 10, spins: 1, points: 5 },
 } as const;
 export const GAME_CONFIG = {
+  notifications: {
+    liveTtlMs: 60_000,
+    queueTtlMs: 30_000,
+    maxQueued: 10,
+    bannerMs: 6000,
+    streamPollMs: 1000,
+    streamBatch: 100,
+    portalBatch: 50,
+    portalLeaseMs: 90_000,
+    portalTtlMs: 7 * 24 * 60 * 60 * 1000,
+    portalMaxAttempts: 8,
+  },
   adminAccess: {
     minPasswordLength: 10,
     maxPasswordLength: 128,

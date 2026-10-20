@@ -59,7 +59,6 @@ export class GameplayUI {
   }
   private panel = document.createElement("details");
   private journey: UiOverlay;
-  private seen = new Set<string>();
   private _landmark: LandmarkModal | undefined;
   private get landmark(): LandmarkModal {
     this._landmark ??= new LandmarkModal({
@@ -199,11 +198,6 @@ export class GameplayUI {
     this._carousel?.close();
     this._chestModal?.close();
     NotificationBanner.clearAll();
-    this.seen = new Set(
-      JSON.parse(
-        sessionStorage.getItem(`events-${this.scope}-${player.token}`) ?? "[]",
-      ) as string[],
-    );
     if (this.panel.open) this.render();
     void this.refresh();
   }
@@ -351,19 +345,7 @@ export class GameplayUI {
         view.giftStock ?? { aspire: 0, nitro: 0, predator: 0 },
         view.weeklyKm > 0,
       );
-      const unseen = [...view.events]
-        .reverse()
-        .filter((e) => !this.seen.has(e.id));
-      for (const e of unseen) this.seen.add(e.id);
-      for (const e of unseen.slice(-3))
-        NotificationBanner.show({
-          title: campaignDisplayText(e.title),
-          body: campaignDisplayText(e.body),
-        });
-      sessionStorage.setItem(
-        `events-${this.scope}-${token}`,
-        JSON.stringify([...this.seen].slice(-200)),
-      );
+      // Activity banners arrive only on the live feed, never from stored history.
     } catch {
       if (
         generation === this.generation &&
@@ -520,18 +502,6 @@ export class GameplayUI {
 
         if (c.action === "open" && c.target) {
           this.onChestOpened?.(c.target);
-          notifyGameEvent(
-            "chest_opened_big",
-            {
-              chest_tier: (o?.tier ?? "aspire").toUpperCase(),
-              x: o?.x ?? 0,
-              z: o?.z ?? 0,
-              reward_text: winner.name,
-            },
-            () => {
-              if (o) this.focus(o.x, o.z);
-            },
-          );
         }
       }
 

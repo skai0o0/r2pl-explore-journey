@@ -13,6 +13,7 @@ import { createSchoolPlayServer } from "../server/integration/SchoolPlayServer.t
 import { cleanupSchoolRewards } from "../server/integration/SchoolRewardFixture.ts";
 import { SignedGameplay } from "../server/integration/SignedGameplay.ts";
 import { M3TestMutationService } from "../server/persistence/M3TestMutation.ts";
+import { migratePortalDatabase } from "../server/persistence/PortalMigrations.ts";
 import type { GameCommand, GameReceipt } from "../shared/gameplay/commands.ts";
 import { GAME_CONFIG, STAGING_OBJECTS } from "../shared/gameplay/gameConfig.ts";
 import { crc32 } from "../shared/world/checksum.ts";
@@ -36,6 +37,7 @@ async function fixture(run: (context: Context) => Promise<void>) {
   let play: Play | undefined,
     roll = 625;
   try {
+    await migratePortalDatabase(pool);
     play = await createSchoolPlayServer(
       pool,
       { web: 0, websocket: 0 },
@@ -249,6 +251,15 @@ test(
       assert.equal(
         (await http(c, b, command("rally", "halong"))).status,
         "applied",
+      );
+      assert.equal(
+        (
+          await c.pool.query(
+            "SELECT count(*)::int AS n FROM r2pl_v2.notification_events WHERE campaign_id=$1 AND kind='rally' AND school_slot=0",
+            [c.campaign],
+          )
+        ).rows[0].n,
+        1,
       );
       assert(
         (await c.game.view(a)).events.some(
@@ -580,6 +591,15 @@ test(
             [c.campaign, a.actorId, `key-${chest.tier}`],
           );
           const result = await http(c, a, command("open", chest.id));
+          assert.equal(
+            (
+              await c.pool.query(
+                "SELECT count(*)::int AS n FROM r2pl_v2.notification_events WHERE campaign_id=$1 AND event_key=$2 AND kind='chest_opened'",
+                [c.campaign, `chest:${chest.id}`],
+              )
+            ).rows[0].n,
+            1,
+          );
           assert.equal(result.reward?.quantity, 10 + extra);
           assert.equal(
             (await http(c, a, command("open", chest.id))).reason,
@@ -781,5 +801,52 @@ test(
         c.play.realtime.core.removeSession("beacon-0");
         c.play.realtime.core.removeSession("beacon-1");
       }
+    }),
+);
+
+test(
+  "station arrival emits once for new school contact, not for every view refresh",
+  { skip: !database, timeout: 30000 },
+  async () =>
+    fixture(async (c) => {
+      const actor = c.play.fixture.actors[0]!,
+        hq =
+          STAGING_OBJECTS.find((o) => o.kind === "hq" && o.schoolSlot === 0) ??
+          STAGING_OBJECTS.find((o) => o.kind === "hq")!,
+        template = STAGING_OBJECTS.find((o) => o.kind === "unistop")!;
+      const stop = {
+        ...template,
+        id: "notification-stop",
+        name: "Synthetic arrival station",
+        x: hq.x + hq.width / 2 + template.width / 2,
+        z: hq.z,
+        ownerSchoolSlot: null,
+        ownerSchoolId: null,
+      };
+      await c.pool.query(
+        "INSERT INTO r2pl_v2.game_world_objects(campaign_id,id,data) VALUES($1,$2,$3)",
+        [c.campaign, stop.id, JSON.stringify(stop)],
+      );
+      await c.game.view(actor);
+      await c.game.view(actor);
+      const events = async () =>
+        (
+          await c.pool.query(
+            "SELECT count(*)::int AS n FROM r2pl_v2.notification_events WHERE campaign_id=$1 AND kind='station_arrival' AND event_key LIKE 'station:notification-stop:0:%'",
+            [c.campaign],
+          )
+        ).rows[0].n;
+      assert.equal(await events(), 1);
+      await c.pool.query(
+        "UPDATE r2pl_v2.game_world_objects SET data=$3 WHERE campaign_id=$1 AND id=$2",
+        [c.campaign, stop.id, JSON.stringify({ ...stop, x: 500, z: 500 })],
+      );
+      await c.game.view(actor);
+      await c.pool.query(
+        "UPDATE r2pl_v2.game_world_objects SET data=$3 WHERE campaign_id=$1 AND id=$2",
+        [c.campaign, stop.id, JSON.stringify(stop)],
+      );
+      await c.game.view(actor);
+      assert.equal(await events(), 2);
     }),
 );

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "R2PL Game Partner Integration",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Integration contract for the student race portal backend. Portal verifies student/staff identity and provides accepted campaign distance from vRace. Game converts distance to running points, owns the spendable wallet and issues browser-bound launch tickets. Only partner endpoints and service discovery are included here; game browser sessions and editor APIs are managed by Game. HMAC-SHA256 signs seven UTF-8 lines joined with LF and no trailing LF: r2pl-v1, campaignId, POST, exact path, timestamp milliseconds, nonce, lowercase SHA256(raw JSON body bytes). Clock skew <=300 seconds; fresh nonce/signature per attempt. Retry with the identical running snapshot; use accounts to reconcile if a previously unaccepted snapshot becomes stale. Maximum JSON body 16384 bytes; 300 authenticated requests/minute/key/campaign. Separate credentials for Sandbox and Production. See PARTNER_API_HANDOFF.md in the handoff package."
   },
   "servers": [
@@ -226,6 +226,123 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/partner/v1/notifications/pull": {
+      "post": {
+        "operationId": "pullNotifications",
+        "summary": "Lease queued Game notifications for the race Portal adapter",
+        "description": "Server-to-server using existing campaign HMAC headers. Activities are enqueued only after Game admin explicitly enables their kind; admin-composed messages are queued independently. Lease is 90 seconds, at most 50 per batch, eight attempts, seven-day expiry. No callback URL is required. Only acknowledge after the Portal durably stores/deduplicates notificationId. Delivery is at least once, never proof that a student read the message. An expired lease may be reissued with the same deliveryId and a fresh leaseToken.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 20
+                  }
+                }
+              },
+              "example": {
+                "limit": 20
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Leased batch, possibly empty",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationBatch"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/partner/v1/notifications/ack": {
+      "post": {
+        "operationId": "acknowledgeNotifications",
+        "summary": "Acknowledge durable Portal processing or request retry",
+        "description": "The exact active leaseToken is required. delivered=true means the adapter durably accepted the notification, not that a student read it. Repeating a successful acknowledgement with the same lease is safe. delivered=false schedules bounded exponential retry; after eight leases the delivery fails. A stale/expired lease returns 409 NOTIFICATION_LEASE_CONFLICT. Requests are atomic across the batch.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "deliveries"
+                ],
+                "properties": {
+                  "deliveries": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "deliveryId",
+                        "leaseToken",
+                        "delivered"
+                      ],
+                      "properties": {
+                        "deliveryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "leaseToken": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "delivered": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "acknowledged"
+                  ],
+                  "properties": {
+                    "acknowledged": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -521,6 +638,124 @@
               "integer",
               "null"
             ]
+          }
+        }
+      },
+      "PortalNotification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "notificationId",
+          "kind",
+          "title",
+          "body",
+          "occurredAtMs",
+          "audience"
+        ],
+        "properties": {
+          "version": {
+            "const": 1
+          },
+          "notificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "rally",
+              "station_arrival",
+              "chest_opened",
+              "admin"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "occurredAtMs": {
+            "type": "number"
+          },
+          "audience": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope"
+            ],
+            "properties": {
+              "scope": {
+                "enum": [
+                  "campaign",
+                  "school"
+                ]
+              },
+              "schoolId": {
+                "type": "string",
+                "enum": [
+                  "hcmut",
+                  "ou",
+                  "dtu",
+                  "hpuni",
+                  "hsu",
+                  "huce",
+                  "ntu",
+                  "hcmiu"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "NotificationBatch": {
+        "type": "object",
+        "required": [
+          "version",
+          "deliveries"
+        ],
+        "properties": {
+          "version": {
+            "const": 1
+          },
+          "deliveries": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "required": [
+                "deliveryId",
+                "leaseToken",
+                "leaseUntilMs",
+                "attempt",
+                "notification"
+              ],
+              "properties": {
+                "deliveryId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "leaseToken": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "leaseUntilMs": {
+                  "type": "number"
+                },
+                "attempt": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                },
+                "notification": {
+                  "$ref": "#/components/schemas/PortalNotification"
+                }
+              }
+            }
           }
         }
       }

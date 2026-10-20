@@ -1,3 +1,4 @@
+import { GAME_CONFIG } from "../../../shared/gameplay/gameConfig.ts";
 import { Icons } from "./icons.ts";
 // client/src/ui/notificationBanner.ts
 
@@ -8,6 +9,7 @@ export interface NotificationBannerOptions {
   durationMs?: number | undefined;
   category?: "territory" | "landmark" | "gacha" | "rank" | string | undefined;
   onClick?: (() => void) | undefined;
+  expiresAtMs?: number | undefined;
 }
 
 class SoundSynthesizer {
@@ -59,7 +61,15 @@ class SoundSynthesizer {
 export class NotificationBanner {
   private static container: HTMLElement | null = null;
   private static activeBanners: HTMLElement[] = [];
-  private static maxConcurrent = 3;
+  private static queue: {
+    options: NotificationBannerOptions;
+    element: HTMLElement;
+    expires: number;
+  }[] = [];
+  private static transitionUntil = 0;
+  private static pumpTimer: ReturnType<typeof setTimeout> | undefined;
+  private static exiting = new WeakSet<HTMLElement>();
+  private static timers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
 
   private static ensureContainer(): HTMLElement {
     if (
@@ -140,6 +150,48 @@ export class NotificationBanner {
   }
 
   public static show(options: NotificationBannerOptions): HTMLElement {
+    const element = document.createElement("div");
+    const expires = Math.min(
+      options.expiresAtMs ?? Infinity,
+      Date.now() + GAME_CONFIG.notifications.queueTtlMs,
+    );
+    if (expires <= Date.now() || document.hidden) return element;
+    if (NotificationBanner.queue.length >= GAME_CONFIG.notifications.maxQueued)
+      NotificationBanner.queue.shift();
+    NotificationBanner.queue.push({ options, element, expires });
+    NotificationBanner.pump();
+    return element;
+  }
+  private static pump(): void {
+    if (NotificationBanner.activeBanners.length || document.hidden) return;
+    if (Date.now() < NotificationBanner.transitionUntil) {
+      clearTimeout(NotificationBanner.pumpTimer);
+      NotificationBanner.pumpTimer = setTimeout(
+        () => NotificationBanner.pump(),
+        NotificationBanner.transitionUntil - Date.now(),
+      );
+      return;
+    }
+    while (NotificationBanner.queue.length) {
+      const next = NotificationBanner.queue.shift()!;
+      if (next.expires <= Date.now()) continue;
+      NotificationBanner.render(
+        {
+          ...next.options,
+          durationMs: Math.min(
+            next.options.durationMs ?? GAME_CONFIG.notifications.bannerMs,
+            next.expires - Date.now(),
+          ),
+        },
+        next.element,
+      );
+      break;
+    }
+  }
+  private static render(
+    options: NotificationBannerOptions,
+    banner: HTMLElement,
+  ): HTMLElement {
     const container = NotificationBanner.ensureContainer();
     const durationMs = options.durationMs ?? 6000;
     const catMeta = NotificationBanner.getCategoryMeta(options.category);
@@ -148,18 +200,6 @@ export class NotificationBanner {
     // Play pleasant synthesized chime
     SoundSynthesizer.playChime();
 
-    // Remove oldest if exceeding maximum stack
-    if (
-      NotificationBanner.activeBanners.length >=
-      NotificationBanner.maxConcurrent
-    ) {
-      const oldest = NotificationBanner.activeBanners.shift();
-      if (oldest) {
-        NotificationBanner.dismiss(oldest);
-      }
-    }
-
-    const banner = document.createElement("div");
     banner.className = "predator-push-banner";
     banner.setAttribute("role", "status");
     for (const name of ["pointerdown", "pointerup", "click"])
@@ -223,10 +263,11 @@ export class NotificationBanner {
     }
 
     // Auto dismiss timer
-    let autoDismissTimer: any = setTimeout(() => {
+    let autoDismissTimer = setTimeout(() => {
       NotificationBanner.dismiss(banner);
     }, durationMs);
 
+    NotificationBanner.timers.set(banner, autoDismissTimer);
     // Pause on hover, resume on mouse leave
     banner.addEventListener("mouseenter", () => {
       clearTimeout(autoDismissTimer);
@@ -241,6 +282,7 @@ export class NotificationBanner {
       autoDismissTimer = setTimeout(() => {
         NotificationBanner.dismiss(banner);
       }, 2000);
+      NotificationBanner.timers.set(banner, autoDismissTimer);
       if (progressBar) {
         progressBar.style.transition = "width 2000ms linear";
         progressBar.style.width = "0%";
@@ -251,7 +293,12 @@ export class NotificationBanner {
   }
 
   public static dismiss(banner: HTMLElement): void {
-    if (!banner?.parentElement) return;
+    if (!banner?.parentElement || NotificationBanner.exiting.has(banner))
+      return;
+    clearTimeout(NotificationBanner.timers.get(banner));
+    NotificationBanner.timers.delete(banner);
+    NotificationBanner.exiting.add(banner);
+    NotificationBanner.transitionUntil = Date.now() + 320;
     banner.classList.remove("banner-visible");
     banner.classList.add("banner-exit");
 
@@ -262,14 +309,21 @@ export class NotificationBanner {
 
     setTimeout(() => {
       banner.remove();
+      NotificationBanner.pump();
     }, 320);
   }
 
   public static clearAll(): void {
-    const list = [...NotificationBanner.activeBanners];
-    for (const b of list) {
-      NotificationBanner.dismiss(b);
+    NotificationBanner.queue = [];
+    clearTimeout(NotificationBanner.pumpTimer);
+    NotificationBanner.transitionUntil = 0;
+    for (const b of NotificationBanner.activeBanners) {
+      clearTimeout(NotificationBanner.timers.get(b));
+      NotificationBanner.timers.delete(b);
+      b.remove();
     }
+    NotificationBanner.activeBanners = [];
+    NotificationBanner.container?.replaceChildren();
   }
 
   private static escapeHtml(str: string): string {

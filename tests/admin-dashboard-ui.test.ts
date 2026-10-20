@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  type HTMLTextAreaElement as TestArea,
   type HTMLButtonElement as TestButton,
   type HTMLInputElement as TestInput,
   type HTMLSelectElement as TestSelect,
@@ -18,42 +19,48 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
     window: globalThis.window,
     document: globalThis.document,
     fetch: globalThis.fetch,
+    confirm: globalThis.confirm,
   };
   Object.assign(globalThis, { window: w, document: w.document });
   const calls: string[] = [];
-  globalThis.fetch = async (input) => {
+  const submitted: Record<string, unknown>[] = [];
+  globalThis.confirm = () => true;
+  globalThis.fetch = async (input, init) => {
+    if (init?.body) submitted.push(JSON.parse(String(init.body)));
     const path = String(input);
     calls.push(path);
     return new Response(
       JSON.stringify(
-        path === "/api/admin/accounts"
-          ? {
-              accounts: [
-                {
-                  actorId: "root",
-                  email: "admin@amtech.vn",
-                  name: "Root",
-                  enabled: true,
-                  protectedRoot: true,
-                  permissions: ALL_ADMIN_PERMISSIONS,
-                  login: "password",
-                  revision: 0,
-                },
-              ],
-            }
-          : path === "/api/admin/gift-pool"
+        path === "/api/admin/notifications"
+          ? { routes: [], counts: [], recent: [] }
+          : path === "/api/admin/accounts"
             ? {
-                items: [
+                accounts: [
                   {
-                    name: "Test gift",
-                    tier: "nitro",
-                    remaining: 3,
-                    awarded: 1,
-                    active: true,
+                    actorId: "root",
+                    email: "admin@amtech.vn",
+                    name: "Root",
+                    enabled: true,
+                    protectedRoot: true,
+                    permissions: ALL_ADMIN_PERMISSIONS,
+                    login: "password",
+                    revision: 0,
                   },
                 ],
               }
-            : { rankings: [{ schoolId: "hcmut", points: 400 }] },
+            : path === "/api/admin/gift-pool"
+              ? {
+                  items: [
+                    {
+                      name: "Test gift",
+                      tier: "nitro",
+                      remaining: 3,
+                      awarded: 1,
+                      active: true,
+                    },
+                  ],
+                }
+              : { rankings: [{ schoolId: "hcmut", points: 400 }] },
       ),
     );
   };
@@ -170,6 +177,39 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
       if (!ADMIN_ROLES.partner.permissions.some((p) => p === checkbox.value))
         assert(checkbox.disabled);
     }
+    [...w.document.querySelectorAll<TestButton>(".admin-nav button")]
+      .find((b) => b.textContent === "Thông báo")!
+      .click();
+    await flush();
+    const routing = w.document.querySelector(".notification-routing")!;
+    w.document.querySelector<TestInput>('input[name="rally"]')!.checked = true;
+    routing.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert(
+      submitted.some(
+        (v) =>
+          v.action === "routing" &&
+          Array.isArray(v.routes) &&
+          v.routes.length === 3,
+      ),
+    );
+    const compose = w.document.querySelector(".notification-compose")!;
+    compose.querySelector<TestInput>('input[name="title"]')!.value =
+      "Campaign message";
+    compose.querySelector<TestArea>('textarea[name="body"]')!.value =
+      "Join the game";
+    compose.querySelector<TestSelect>('select[name="school"]')!.value = "ou";
+    compose.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert(
+      submitted.some(
+        (v) =>
+          v.action === "compose" &&
+          v.schoolId === "ou" &&
+          v.title === "Campaign message" &&
+          typeof v.key === "string",
+      ),
+    );
     w.document.querySelector(".admin-console")!.remove();
     await mountAdminDashboard(
       {
