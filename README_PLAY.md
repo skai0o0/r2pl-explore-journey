@@ -327,3 +327,26 @@ Bộ test đầy đủ hiện tại: **142/142 PASS, 0 fail, 0 skip** với cả
 - Dock hỗ trợ Tự Động hoặc Thủ Công. Thủ Công: chọn Khám Phá/Giao Lưu, chạm ô rồi xác nhận trong thẻ thông tin; máy chủ kiểm tra đúng loại thao tác trước khi trừ Điểm.
 - Nhãn công trình nằm cạnh chân đế, tự thu gọn khi xem toàn bản đồ và tránh chồng lấp. Trạm tiếp tế chỉ hiện sau khi mở sương mù; tên địa danh bí ẩn được mở sau khi giải đố.
 - Công cụ thử nghiệm: `?mode=dev` hoặc Ctrl+Alt+D. Công cụ quản trị: `?admin=1` hoặc Ctrl+Alt+A. Bỏ query để trở lại giao diện người chơi; API quản trị vẫn yêu cầu `ADMIN_KEY`.
+
+## Tài khoản đối tác: chơi và xem dashboard
+
+Trên máy chủ Portal, vào `/admin` bằng tài khoản có quyền quản lý tài khoản.
+Trong **Tài khoản & quyền**, tạo tài khoản với nhóm **Đối tác thử nghiệm · Chỉ xem**
+và bật **Cho phép chơi với 8 hồ sơ test riêng**. Đăng nhập tài khoản riêng tại
+`/admin`; nhân sự AMTECH tiếp tục dùng web giải. Chạy migration Portal trước khi
+khởi động bản cập nhật (bao gồm `010_partner_test_profiles.sql`).
+
+Đối tác có thể chọn **Vào game**, chuyển hồ sơ theo trường, và quay lại dashboard.
+Mỗi trường có một actor riêng; ví, quà, khám phá cá nhân và lịch sử đóng góp không
+chuyển sang trường khác và không reset khi đổi hồ sơ. Bản đồ/tri thức chung vẫn
+thuộc campaign và trường như người chơi bình thường. Đây là hồ sơ thử nghiệm,
+không phải tính năng chuyển trường của sinh viên. Không tự cộng tài nguyên test:
+số dư khởi tạo dùng cùng cấu hình Portal với người chơi mới; mọi cấp tài nguyên
+thử nghiệm phải được thực hiện riêng trong campaign phù hợp.
+
+Quyền dashboard chỉ gồm BXH, xem bản đồ, xem/tra cứu quà và lịch sử quản trị.
+Server từ chối chỉnh sửa, xuất bản, gửi thông báo, trao quà và quản lý tài khoản.
+Đổi hồ sơ thay cookie phiên, hủy các phiên test cũ của tài khoản (kể cả tab/kết nối
+game cũ); thu hồi quyền hoặc khóa tài khoản có hiệu lực với cả game và dashboard.
+Việc cập nhật tài khoản không xóa hay cấp lại ví. Bridge admin của Demo tổng hợp
+không cấp hồ sơ test; dùng máy chủ Portal để kiểm tra luồng này.

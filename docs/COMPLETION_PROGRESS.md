@@ -34,6 +34,7 @@ Nghiệm thu: [layout overview](../artifacts/g-v1/layout-overview.jpg), [steppin
 
 | Package | Status | Evidence / next |
 | --- | --- | --- |
+| Partner test profiles · 2026-10-20 | IMPLEMENTED LOCAL — chờ owner review/triển khai | Một đăng nhập, 8 hồ sơ độc lập, dashboard chỉ xem, cookie rotation/thu hồi phiên; PostgreSQL + UI tests và browser local đạt. TypeScript/build đạt; full regression 251/253 (2 lỗi kho quà/tỷ lệ thưởng tái hiện trên main gốc); lint toàn repo còn lỗi nền. Chưa tạo tài khoản production hoặc chạy migration trên server. |
 | R0-01 parity checklist | COMPLETE — 18/18 FULL G-V1 local/dev | PV01–PV18 bên dưới; focused integration tests và desktop/mobile browser acceptance |
 | R0-02/03 current spec reconciliation | COMPLETE — signed ruleVersion 1 | GAME_SPEC và gameConfig thống nhất; C-01..C-13 closed, không còn gate số liệu gameplay |
 | R1-01 synthetic 8-school binding | COMPLETE — G-V1 local/dev | Official school IDs/slots/HQ; stable actor tokens; server validates campaign binding |

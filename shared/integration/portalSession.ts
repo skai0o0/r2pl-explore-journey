@@ -7,6 +7,7 @@ export interface PortalSessionConfig
   readonly fixtureOnly: false;
   readonly websocketUrl: string;
   readonly csrfToken: string;
+  readonly testProfiles?: true;
 }
 export function parsePortalSession(input: unknown): PortalSessionConfig {
   if (!input || typeof input !== "object")
@@ -68,6 +69,7 @@ export function parsePortalSession(input: unknown): PortalSessionConfig {
     fixtureOnly: false,
     websocketUrl: url.href,
     csrfToken: value.csrfToken,
+    ...(value.testProfiles === true ? { testProfiles: true as const } : {}),
     adjacentOnly: true,
     headquarters,
   };

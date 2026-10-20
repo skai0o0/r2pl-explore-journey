@@ -32,6 +32,10 @@ const errors: Record<string, string> = {
   PASSWORD_REQUIRED: "Hãy nhập mật khẩu ban đầu cho tài khoản mới.",
   STAFF_USES_PORTAL:
     "Tài khoản AMTECH đăng nhập qua web giải, không đặt mật khẩu tại Game.",
+  TEST_PROFILE_READ_ONLY:
+    "Tài khoản có hồ sơ test chỉ được cấp quyền xem dữ liệu.",
+  TEST_PROFILES_REQUIRE_PORTAL:
+    "Hồ sơ test chỉ có trên máy chủ game dùng đăng nhập tài khoản.",
   ADMIN_REQUIRED: "Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.",
   CSRF_REJECTED: "Phiên đăng nhập đã thay đổi. Vui lòng tải lại trang.",
 };
@@ -130,6 +134,7 @@ export async function mountAdminLogin(): Promise<void> {
 export async function mountAdminDashboard(
   principal: AdminPrincipal,
   environment: "staging" | "production",
+  testProfilesSupported = false,
 ): Promise<void> {
   document.title = "Campaign Console · R2PL";
   const app = shell(
@@ -148,6 +153,11 @@ export async function mountAdminDashboard(
   );
   const logout = node("button", "Đăng xuất");
   identity.append(logout);
+  if (principal.playable) {
+    const play = node("a", "Vào game ↗");
+    play.href = "/";
+    identity.prepend(play);
+  }
   logout.onclick = () =>
     void work(async () => {
       await api("/api/portal/logout", {});
@@ -236,12 +246,27 @@ export async function mountAdminDashboard(
   ]);
   tabs.push([
     "Kho quà",
-    "gifts.manage",
+    "gifts.view",
     async () => {
       content.replaceChildren(node("h2", "Pool quà thật"));
       const pool = node("div");
       content.append(pool);
-      mountGiftPoolEditor(pool, api);
+      if (canAdmin(principal, "gifts.manage")) mountGiftPoolEditor(pool, api);
+      else {
+        const snapshot = await api<
+          import("../../shared/gameplay/giftPool.ts").GiftPoolSnapshot
+        >("/api/admin/gift-pool");
+        pool.append(node("p", "Chỉ xem · Số liệu tại thời điểm tải."));
+        for (const item of snapshot.items) {
+          pool.append(
+            node(
+              "p",
+              `${item.name} · ${item.tier.toUpperCase()} · Còn ${item.remaining} · Đã trúng ${item.awarded}${item.active ? "" : " · Đã ngừng"}`,
+            ),
+          );
+        }
+        if (!snapshot.items.length) pool.append(node("p", "Kho đang trống."));
+      }
     },
   ]);
   tabs.push([
@@ -355,6 +380,22 @@ export async function mountAdminDashboard(
         email.value = account?.email ?? "";
         email.readOnly = !!account;
         enabled.checked = account?.enabled ?? true;
+        const testLabel = node("label"),
+          testProfiles = node("input");
+        testLabel.className = "admin-check";
+        testProfiles.type = "checkbox";
+        testProfiles.name = "testProfiles";
+        testProfiles.checked = account?.testProfiles ?? false;
+        testProfiles.disabled = !testProfilesSupported;
+        testLabel.hidden = !testProfilesSupported;
+        testLabel.append(
+          testProfiles,
+          node(
+            "span",
+            "Cho phép chơi với 8 hồ sơ test riêng · Quyền admin chỉ xem",
+          ),
+        );
+        form.querySelector("fieldset")!.before(testLabel);
         const checks = new Map<AdminPermission, HTMLInputElement>();
         for (const [permission, labelText] of Object.entries(
           ADMIN_PERMISSIONS,
@@ -374,19 +415,45 @@ export async function mountAdminDashboard(
           form.querySelector("fieldset")!.append(label);
         }
         for (const [id, role] of Object.entries(ADMIN_ROLES)) {
+          if (id === "partner" && !testProfilesSupported) continue;
           const option = node("option", role.label);
           option.value = id;
           preset.append(option);
         }
         preset.value = account ? "custom" : "viewer";
+        const syncChecks = () => {
+          const allowed = ADMIN_ROLES.partner
+            .permissions as readonly AdminPermission[];
+          checks.forEach((check, p) => {
+            check.disabled =
+              !canAdmin(principal, p) ||
+              (testProfiles.checked && !allowed.includes(p));
+            if (check.disabled) check.checked = false;
+          });
+        };
+        syncChecks();
         let permissionsTouched = false;
         preset.onchange = () => {
           permissionsTouched = true;
+          testProfiles.checked = preset.value === "partner";
+          syncChecks();
           const chosen = ADMIN_ROLES[preset.value as AdminRole]
             .permissions as readonly AdminPermission[];
           checks.forEach((check, p) => {
             check.checked = !check.disabled && chosen.includes(p);
           });
+        };
+        testProfiles.onchange = () => {
+          permissionsTouched = true;
+          syncChecks();
+          if (testProfiles.checked) {
+            preset.value = "partner";
+            const allowed = ADMIN_ROLES.partner
+              .permissions as readonly AdminPermission[];
+            checks.forEach((check, p) => {
+              check.checked = !check.disabled && allowed.includes(p);
+            });
+          }
         };
         checks.forEach((check) => {
           check.onchange = () => {
@@ -421,6 +488,7 @@ export async function mountAdminDashboard(
                 .filter(([, check]) => check.checked)
                 .map(([p]) => p),
               expectedRevision: account?.revision ?? 0,
+              testProfiles: testProfiles.checked,
               ...(password.value ? { password: password.value } : {}),
             });
             password.value = "";

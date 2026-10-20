@@ -10,7 +10,7 @@
     "start:portal": "node --env-file=.env.portal --experimental-strip-types scripts/start-portal.ts",
     "migrate:portal": "node --env-file=.env.portal --experimental-strip-types scripts/migrate-portal.ts",
     "demo:portal": "node --env-file=.env.portal --experimental-strip-types scripts/demo-portal.ts",
-    "test:portal": "node --experimental-strip-types --test --test-concurrency=1 tests/portal-integration.test.ts tests/dummy-portal.test.ts",
+    "test:portal": "node --experimental-strip-types --test --test-concurrency=1 tests/portal-integration.test.ts tests/dummy-portal.test.ts tests/admin-access.test.ts tests/production-auth.test.ts tests/partner-test-profiles.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check shared server client portal tests scripts",
     "format": "biome check --write shared server client portal tests scripts",

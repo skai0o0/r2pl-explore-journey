@@ -12,6 +12,7 @@ import {
   snapshotWire,
 } from "../../shared/integration/running.ts";
 import { authenticateAdminAccess } from "./AdminAccessStore.ts";
+import { bindTestProfile } from "./PartnerTestProfiles.ts";
 import type { PortalConfig } from "./PortalConfig.ts";
 import { PortalError } from "./PortalSignature.ts";
 import type { SchoolPlayActor } from "./SchoolPlayFixture.ts";
@@ -137,6 +138,8 @@ export class PortalStore {
       "emailVerified",
     ]);
     assertIdentifier(value.externalStudentId);
+    if (String(value.externalStudentId).startsWith("partner-test:"))
+      throw new PortalError(403, "TEST_PROFILE_MANAGED_LOCALLY");
     if (isAmtechIdentity(value.email, value.emailVerified))
       return this.upsertAdmin(value);
     if (value.schoolId === "amtech")
@@ -295,8 +298,8 @@ export class PortalStore {
           [this.config.campaignId, player.actor_id],
         );
       }
-      await db.query(
-        "INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active) VALUES($1,$2,$3,'amtech',$4,$5,$6) ON CONFLICT(campaign_id,external_student_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=EXCLUDED.active",
+      const updated = await db.query<{ test_profiles: boolean }>(
+        "INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active) VALUES($1,$2,$3,'amtech',$4,$5,$6) ON CONFLICT(campaign_id,external_student_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=EXCLUDED.active RETURNING test_profiles",
         [
           this.config.campaignId,
           value.externalStudentId,
@@ -321,7 +324,7 @@ export class PortalStore {
         organizationId: "amtech",
         schoolId: null,
         role: "admin",
-        playable: false,
+        playable: updated.rows[0]!.test_profiles,
         active: value.active,
       };
     });
@@ -565,6 +568,18 @@ export class PortalStore {
             GAME_CONFIG.integration.sessionTtlMs,
           ],
         );
+        const access = await authenticateAdminAccess(
+          db,
+          this.config.campaignId,
+          token,
+        );
+        if (access?.playable)
+          await bindTestProfile(
+            db,
+            this.config.campaignId,
+            adminLaunch.actor_id,
+            token,
+          );
         return {
           token,
           expiresInSeconds: GAME_CONFIG.integration.sessionTtlMs / 1000,
@@ -618,7 +633,13 @@ export class PortalStore {
     if (!/^[a-f0-9]{64}$/.test(hash)) return undefined;
     const row = (
       await this.pool.query<Member>(
-        "SELECT m.* FROM r2pl_v2.portal_sessions s JOIN r2pl_v2.portal_members m USING(campaign_id,actor_id) WHERE s.campaign_id=$1 AND s.token_hash=$2 AND s.expires_at>clock_timestamp() AND m.active",
+        `SELECT m.* FROM r2pl_v2.portal_sessions s JOIN r2pl_v2.portal_members m USING(campaign_id,actor_id)
+         LEFT JOIN r2pl_v2.partner_test_profiles p USING(campaign_id,actor_id)
+         LEFT JOIN r2pl_v2.portal_admins a ON a.campaign_id=p.campaign_id AND a.actor_id=p.owner_actor_id
+         WHERE s.campaign_id=$1 AND s.token_hash=$2 AND s.expires_at>clock_timestamp() AND m.active
+         AND (p.actor_id IS NULL OR (a.active AND a.access_enabled AND a.test_profiles AND EXISTS(
+           SELECT 1 FROM r2pl_v2.portal_admin_sessions ads WHERE ads.campaign_id=a.campaign_id AND ads.actor_id=a.actor_id
+           AND ads.token_hash=s.token_hash AND ads.expires_at>clock_timestamp())))`,
         [this.config.campaignId, Buffer.from(hash, "hex")],
       )
     ).rows[0];
@@ -644,7 +665,8 @@ export class PortalStore {
     );
   }
   async socketTicket(token: string): Promise<string> {
-    if (await this.authenticateAdmin(token))
+    const admin = await this.authenticateAdmin(token);
+    if (admin && !admin.playable)
       throw new PortalError(403, "ADMIN_CANNOT_PLAY");
     return this.transaction(async (db) => {
       const sessionHash = digest(token);

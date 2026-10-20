@@ -44,5 +44,5 @@ export interface AdminPrincipal extends AdminAccess {
   readonly name: string;
   readonly organizationId: "amtech";
   readonly role: "admin";
-  readonly playable: false;
+  readonly playable: boolean;
 }

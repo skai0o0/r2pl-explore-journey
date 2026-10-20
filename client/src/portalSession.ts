@@ -46,7 +46,7 @@ async function openAdminBootstrap(
     !p ||
     p.role !== "admin" ||
     p.organizationId !== "amtech" ||
-    p.playable !== false ||
+    typeof p.playable !== "boolean" ||
     typeof p.actorId !== "string" ||
     typeof p.name !== "string" ||
     typeof raw.csrfToken !== "string" ||
@@ -60,7 +60,7 @@ async function openAdminBootstrap(
     name: p.name,
     organizationId: "amtech",
     role: "admin",
-    playable: false,
+    playable: p.playable,
     email: typeof p.email === "string" ? p.email : "",
     permissions: Array.isArray(p.permissions)
       ? (p.permissions as AdminPermission[])
@@ -81,6 +81,7 @@ async function openAdminBootstrap(
     await mountAdminDashboard(
       principal,
       raw.environment as "staging" | "production",
+      raw.testProfilesSupported === true,
     );
   }
   return new Promise<never>(() => {});
@@ -93,7 +94,7 @@ export async function loadGameSession(): Promise<
     if (
       ["/admin", "/admin/login", "/admin/editor"].includes(location.pathname)
     ) {
-      const bootstrap = await request("/api/fixture/bootstrap");
+      const bootstrap = await request("/api/fixture/bootstrap?view=admin");
       if (bootstrap.ok) {
         const raw = (await bootstrap.json()) as Record<string, unknown>;
         if (raw.mode === "admin") return openAdminBootstrap(raw);
@@ -178,7 +179,11 @@ export async function loadGameSession(): Promise<
       await login();
       return new Promise<never>(() => {});
     }
-    const bootstrap = await request("/api/fixture/bootstrap");
+    const bootstrap = await request(
+      adminEntry || returningAdmin
+        ? "/api/fixture/bootstrap?view=admin"
+        : "/api/fixture/bootstrap",
+    );
     if (bootstrap.status === 401 || bootstrap.status === 403) {
       // The event portal owns login. Reuse its existing student session through
       // a browser-bound handoff instead of asking for a second login in game.

@@ -1,5 +1,3 @@
-import { isUiOverlayOpen } from "./ui/overlay.ts";
-import { SelectedTilePanel } from "./ui/selectedTilePanel.ts";
 import { ColyseusSDK, type Room } from "@colyseus/sdk";
 import type { GameView } from "../../shared/gameplay/commands.ts";
 import {
@@ -19,9 +17,9 @@ import {
   ACK_STATUS,
   decodeAck,
   decodeDelta,
+  decodeFrame,
   decodePublicDelta,
   decodePublicSnapshot,
-  decodeFrame,
   decodeSnapshot,
   encodeExplore,
   encodeResync,
@@ -46,11 +44,13 @@ import { OperatorUI } from "./operatorUI.ts";
 import { SCENE_PRESENTATION as P } from "./scenePresentation.ts";
 import { MiniMap } from "./ui/miniMap.ts";
 import { NotificationBanner } from "./ui/notificationBanner.ts";
+import { isUiOverlayOpen } from "./ui/overlay.ts";
 import {
   findExpansionTile,
   objectDisplayName,
   uiModeFromSearch,
 } from "./ui/playerPresentation.ts";
+import { SelectedTilePanel } from "./ui/selectedTilePanel.ts";
 import { StatsOverlay } from "./ui/statsOverlay.ts";
 import {
   deriveDevCreditState,
@@ -78,6 +78,10 @@ document.body.dataset.demoNotice = String(showDemoDisclaimer);
 const demoDisclaimer = document.getElementById("demo-disclaimer");
 if (demoDisclaimer) demoDisclaimer.hidden = !showDemoDisclaimer;
 const session = await loadGameSession();
+if ("testProfiles" in session && session.testProfiles === true) {
+  const { mountPartnerTestControls } = await import("./partnerTestControls.ts");
+  mountPartnerTestControls(session.players[0]!.slot);
+}
 const publicWorld: WorldObject[] =
   session === LEGACY_DEV_SESSION
     ? []
@@ -1053,8 +1057,7 @@ function handleFrame(raw: Uint8Array): void {
       case M2_KIND.PUBLIC_DELTA: {
         const delta = decodePublicDelta(frame.payload),
           result = publicKnowledge.applyDelta(delta);
-        if (result === "resync")
-          requestChunkResync(delta.chunkId);
+        if (result === "resync") requestChunkResync(delta.chunkId);
         else if (result === "applied" && replica.hasChunk(delta.chunkId))
           world.paintPublicTile(
             delta.chunkId,
@@ -1076,7 +1079,10 @@ function handleFrame(raw: Uint8Array): void {
 }
 
 async function connect(nextPlayer: Player): Promise<void> {
-  const resetWorld = generation === 0 || player.token !== nextPlayer.token || player.slot !== nextPlayer.slot;
+  const resetWorld =
+    generation === 0 ||
+    player.token !== nextPlayer.token ||
+    player.slot !== nextPlayer.slot;
   const attempt = ++generation;
   window.clearTimeout(reconnectTimer);
   if (player.token !== nextPlayer.token) {
