@@ -298,8 +298,8 @@ export class PortalStore {
           [this.config.campaignId, player.actor_id],
         );
       }
-      const updated = await db.query<{ test_profiles: boolean }>(
-        "INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active) VALUES($1,$2,$3,'amtech',$4,$5,$6) ON CONFLICT(campaign_id,external_student_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=EXCLUDED.active RETURNING test_profiles",
+      await db.query(
+        "INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active) VALUES($1,$2,$3,'amtech',$4,$5,$6) ON CONFLICT(campaign_id,external_student_id) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,active=EXCLUDED.active",
         [
           this.config.campaignId,
           value.externalStudentId,
@@ -324,7 +324,9 @@ export class PortalStore {
         organizationId: "amtech",
         schoolId: null,
         role: "admin",
-        playable: updated.rows[0]!.test_profiles,
+        // Partner v1 staff identity stays non-competitive. Internal test play is
+        // resolved from Game access grants during session exchange/bootstrap.
+        playable: false,
         active: value.active,
       };
     });
