@@ -1,0 +1,29 @@
+.partner-test-controls {
+  position: fixed;
+  top: 66px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 14px;
+  border: 1px solid #52634e;
+  border-radius: 12px;
+  background: #17241f;
+  color: #fff;
+  font:
+    13px system-ui,
+    sans-serif;
+}
+.partner-test-controls a {
+  color: #c4f599;
+}
+.partner-test-controls select {
+  max-width: 140px;
+  padding: 4px;
+}
+.partner-test-controls [role="status"]:empty {
+  display: none;
+}

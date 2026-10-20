@@ -27,21 +27,22 @@ import {
 import { schoolBit } from "../../shared/world/registry.ts";
 import { explorationBuff } from "../integration/BeaconBuffs.ts";
 import { adjustKnowledgeScore } from "../integration/KnowledgeScore.ts";
-import { recordLedger } from "./WalletLedger.ts";
+import { requirePortalActorSession } from "../integration/PortalActorSession.ts";
 import {
   clusters,
   joinShared,
   settleShared,
 } from "../integration/SharedKnowledge.ts";
-
 import {
   checkExploreBoundary,
   type ExploreBoundary,
   lockExploreNeighborhood,
 } from "./ExploreBoundary.ts";
+import { recordLedger } from "./WalletLedger.ts";
 
 export type WriteStrategy = "full_chunk" | "mutation_log";
 export interface M3TestCommand {
+  readonly sessionHash?: string;
   readonly campaignId: string;
   readonly actorId: string;
   readonly schoolSlot: number; // trusted fixture identity, never client supplied
@@ -260,6 +261,19 @@ export class M3TestMutationService {
       await client.query("SET LOCAL search_path = r2pl_v2, pg_catalog");
       await client.query("SET LOCAL synchronous_commit = on");
       await client.query("SET LOCAL lock_timeout = '5s'");
+      if (command.sessionHash) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+          [`signed-game:${command.campaignId}`],
+        );
+        await requirePortalActorSession(
+          client,
+          command.campaignId,
+          command.actorId,
+          command.schoolSlot,
+          command.sessionHash,
+        );
+      }
       const claim = await client.query(
         "INSERT INTO command_results(campaign_id,actor_id,command_key,payload_hash,status) VALUES($1,$2,$3,$4,'processing') ON CONFLICT DO NOTHING RETURNING status",
         [command.campaignId, command.actorId, Buffer.from(command.key), digest],
@@ -660,7 +674,14 @@ export class M3TestMutationService {
               "UPDATE wallet_accounts SET balance=balance+$3 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
               [command.campaignId, command.actorId, benefit.points],
             );
-            await recordLedger(client,command.campaignId,command.actorId,Buffer.from(command.key),"fixture-credit",benefit.points);
+            await recordLedger(
+              client,
+              command.campaignId,
+              command.actorId,
+              Buffer.from(command.key),
+              "fixture-credit",
+              benefit.points,
+            );
             wallet.rows[0].balance = (
               BigInt(wallet.rows[0].balance) + BigInt(benefit.points)
             ).toString();

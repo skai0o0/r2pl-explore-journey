@@ -51,6 +51,7 @@ import { scoutFrontier } from "./BeaconScout.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { claimGiftPoolItem, readGiftPool } from "./GiftPoolStore.ts";
 import { campaignProviderFromEnv } from "./HttpCampaignProvider.ts";
+import { requirePortalActorSession } from "./PortalActorSession.ts";
 import type {
   SchoolPlayActor,
   SchoolPlayFixture,
@@ -560,6 +561,13 @@ export class SignedGameplay {
       );
       if (binding.rowCount !== 1) throw new TypeError("Unbound actor");
       if (this.portalMode) {
+        await requirePortalActorSession(
+          db,
+          this.fixture.campaignId,
+          actor.actorId,
+          actor.schoolSlot,
+          createHash("sha256").update(actor.token).digest("hex"),
+        );
         const member = await db.query(
           "SELECT 1 FROM r2pl_v2.portal_members WHERE campaign_id=$1 AND actor_id=$2 AND school_slot=$3 AND active FOR SHARE",
           [this.fixture.campaignId, actor.actorId, actor.schoolSlot],

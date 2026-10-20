@@ -8,10 +8,10 @@ import {
   type ExploreCommand,
   encodeAck,
   encodeDelta,
-  encodePublicDelta,
-  encodePublicSnapshot,
   encodeError,
   encodeHello,
+  encodePublicDelta,
+  encodePublicSnapshot,
   encodeSnapshot,
   M2_KIND,
   MAX_COMMAND_BYTES,
@@ -394,6 +394,7 @@ export class DurableRealtimeCore {
             command.key,
             command.tileIndex,
             command.intent,
+            session.identity.authReference,
           );
         },
         "command",
@@ -505,16 +506,20 @@ export class DurableRealtimeCore {
           localIndex: event.localIndex,
           mask: event.publicMask,
         });
-        let recovery: Awaited<ReturnType<M35FixtureAuthority["publicSnapshot"]>> | undefined;
+        let recovery:
+          | Awaited<ReturnType<M35FixtureAuthority["publicSnapshot"]>>
+          | undefined;
         for (const session of this.#sessions.values()) {
           const generation = session.subscriptions.get(event.chunkId);
           if (generation === undefined || session.outbound.closed) continue;
           const current = session.publicRevisions.get(event.chunkId);
           // A fresh snapshot can already include this outbox event (or an entire
           // pending batch). Replaying it must not resend a full chunk per peer.
-          if (current !== undefined && event.publicRevision <= current) continue;
+          if (current !== undefined && event.publicRevision <= current)
+            continue;
           if (current === undefined || event.publicRevision !== current + 1n) {
-            const snapshot = recovery ??= await this.#authority.publicSnapshot(event.chunkId);
+            recovery ??= await this.#authority.publicSnapshot(event.chunkId);
+            const snapshot = recovery;
             if (
               session.subscriptions.get(event.chunkId) === generation &&
               session.outbound.enqueue(

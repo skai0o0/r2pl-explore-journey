@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import type { Pool, PoolClient } from "pg";
 import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import {
+  ADMIN_ROLES,
   type AdminAccountView,
   type AdminPermission,
   ALL_ADMIN_PERMISSIONS,
@@ -17,6 +18,11 @@ import {
   ROOT_ADMIN_EMAIL,
 } from "../../shared/integration/adminAccess.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
+import {
+  bindTestProfile,
+  provisionTestProfiles,
+  revokeTestPlay,
+} from "./PartnerTestProfiles.ts";
 import { PortalError } from "./PortalSignature.ts";
 
 const derive = promisify(scrypt);
@@ -32,6 +38,7 @@ interface AccessRow {
   access_revision: number;
   password_hash: Buffer | null;
   password_salt: Buffer | null;
+  test_profiles: boolean;
 }
 export const effectivePermissions = (
   row: Pick<AccessRow, "protected_root" | "email" | "permissions">,
@@ -62,7 +69,7 @@ export async function authenticateAdminAccess(
         email: row.email,
         organizationId: "amtech",
         role: "admin",
-        playable: false,
+        playable: row.test_profiles,
         permissions: effectivePermissions(row),
         protectedRoot: row.protected_root,
       }
@@ -123,6 +130,7 @@ function view(row: AccessRow): AdminAccountView {
     protectedRoot: row.protected_root,
     login: row.password_hash ? "password" : "portal",
     revision: row.access_revision,
+    testProfiles: row.test_profiles,
   };
 }
 export class AdminAccessStore {
@@ -201,6 +209,7 @@ export class AdminAccessStore {
             "enabled",
             "expectedRevision",
             "password",
+            "testProfiles",
           ].includes(k),
       )
     )
@@ -218,6 +227,8 @@ export class AdminAccessStore {
     )
       throw new PortalError(400, "INVALID_PERMISSIONS");
     const permissions = [...new Set(v.permissions as AdminPermission[])];
+    if (v.testProfiles !== undefined && typeof v.testProfiles !== "boolean")
+      throw new PortalError(400, "INVALID_BODY");
     if (
       (permissions.includes("map.edit") && !permissions.includes("map.view")) ||
       (permissions.includes("map.publish") && !permissions.includes("map.edit"))
@@ -256,6 +267,17 @@ export class AdminAccessStore {
       ).rows[0];
       if (old?.protected_root)
         throw new PortalError(403, "ROOT_ADMIN_PROTECTED");
+      const testProfiles = v.testProfiles ?? old?.test_profiles ?? false;
+      if (
+        testProfiles &&
+        permissions.some(
+          (p) =>
+            !(
+              ADMIN_ROLES.partner.permissions as readonly AdminPermission[]
+            ).includes(p),
+        )
+      )
+        throw new PortalError(400, "TEST_PROFILE_READ_ONLY");
       if (
         permissions.some((p) => !admin.permissions?.includes(p)) ||
         (old &&
@@ -284,10 +306,10 @@ export class AdminAccessStore {
         throw new PortalError(400, "ADMIN_ACCOUNT_LIMIT");
       const row = (
         await db.query<AccessRow>(
-          `INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active,access_enabled,permissions,access_revision,password_hash,password_salt)
-        VALUES($1,$2,$3,'amtech',$4,$5,true,$6,$7,1,$8,$9)
+          `INSERT INTO r2pl_v2.portal_admins(campaign_id,external_student_id,actor_id,organization_id,email,display_name,active,access_enabled,permissions,access_revision,password_hash,password_salt,test_profiles)
+        VALUES($1,$2,$3,'amtech',$4,$5,true,$6,$7,1,$8,$9,$10)
         ON CONFLICT(campaign_id,email) DO UPDATE SET display_name=EXCLUDED.display_name,access_enabled=EXCLUDED.access_enabled,permissions=EXCLUDED.permissions,access_revision=r2pl_v2.portal_admins.access_revision+1,
-        password_hash=COALESCE(EXCLUDED.password_hash,r2pl_v2.portal_admins.password_hash),password_salt=COALESCE(EXCLUDED.password_salt,r2pl_v2.portal_admins.password_salt) RETURNING *`,
+        password_hash=COALESCE(EXCLUDED.password_hash,r2pl_v2.portal_admins.password_hash),password_salt=COALESCE(EXCLUDED.password_salt,r2pl_v2.portal_admins.password_salt),test_profiles=EXCLUDED.test_profiles RETURNING *`,
           [
             this.campaign,
             `local-admin:${randomUUID()}`,
@@ -298,9 +320,13 @@ export class AdminAccessStore {
             permissions,
             credentials?.encoded ?? null,
             credentials?.salt ?? null,
+            testProfiles,
           ],
         )
       ).rows[0]!;
+      if (testProfiles)
+        await provisionTestProfiles(db, this.campaign, row.actor_id, name);
+      await revokeTestPlay(db, this.campaign, row.actor_id);
       await db.query(
         "DELETE FROM r2pl_v2.portal_admin_sessions WHERE campaign_id=$1 AND actor_id=$2",
         [this.campaign, row.actor_id],
@@ -320,6 +346,7 @@ export class AdminAccessStore {
             permissions,
             passwordReset: !!credentials,
             revision: row.access_revision,
+            testProfiles,
           }),
         ],
       );
@@ -399,6 +426,8 @@ export class AdminAccessStore {
         "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,'admin-login','{}')",
         [this.campaign, row.actor_id],
       );
+      if (live.test_profiles)
+        await bindTestProfile(db, this.campaign, row.actor_id, token);
       return token;
     });
   }

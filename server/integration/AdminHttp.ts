@@ -8,6 +8,7 @@ import {
   authenticateAdminAccess,
 } from "./AdminAccessStore.ts";
 import { knowledgeRanking } from "./KnowledgeScore.ts";
+import { switchTestProfile } from "./PartnerTestProfiles.ts";
 import type { PortalConfig } from "./PortalConfig.ts";
 import {
   gameCookie,
@@ -21,10 +22,12 @@ export class AdminHttp {
   private pool: Pool;
   private config: PortalConfig;
   private store: AdminAccessStore;
-  constructor(pool: Pool, config: PortalConfig) {
+  private testProfilesSupported: boolean;
+  constructor(pool: Pool, config: PortalConfig, testProfilesSupported = true) {
     this.pool = pool;
     this.config = config;
     this.store = new AdminAccessStore(pool, config.campaignId);
+    this.testProfilesSupported = testProfilesSupported;
   }
   async handle(
     request: IncomingMessage,
@@ -40,6 +43,7 @@ export class AdminHttp {
         "/api/admin/accounts",
         "/api/admin/audit",
         "/api/admin/rankings",
+        "/api/test-profiles/switch",
       ].includes(path)
     )
       return false;
@@ -116,7 +120,30 @@ export class AdminHttp {
           `${nonceName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${config.mode === "production" ? "; Secure" : ""}`,
         ]);
         result = { signedIn: true };
+      } else if (path === "/api/test-profiles/switch") {
+        if (request.method !== "POST")
+          throw new PortalError(405, "METHOD_NOT_ALLOWED");
+        if (!this.testProfilesSupported || !admin?.playable)
+          throw new PortalError(403, "TEST_PROFILE_REQUIRED");
+        const session = await switchTestProfile(
+          this.pool,
+          config.campaignId,
+          token!,
+          input,
+        );
+        response.setHeader(
+          "Set-Cookie",
+          gameCookie(config, session.token, session.expiresInSeconds),
+        );
+        result = { switched: true };
       } else if (path === "/api/admin/accounts") {
+        if (
+          !this.testProfilesSupported &&
+          input &&
+          typeof input === "object" &&
+          (input as Record<string, unknown>).testProfiles === true
+        )
+          throw new PortalError(400, "TEST_PROFILES_REQUIRE_PORTAL");
         result =
           request.method === "GET"
             ? { accounts: await this.store.list(admin!.actorId, token!) }

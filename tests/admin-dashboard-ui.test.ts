@@ -7,7 +7,10 @@ import {
   Window,
 } from "happy-dom";
 import { createServer } from "vite";
-import { ALL_ADMIN_PERMISSIONS } from "../shared/integration/adminAccess.ts";
+import {
+  ADMIN_ROLES,
+  ALL_ADMIN_PERMISSIONS,
+} from "../shared/integration/adminAccess.ts";
 
 test("admin dashboard hides privileged tabs, protects root and selects the correct email defaults", async () => {
   const w = new Window({ url: "http://127.0.0.1:4318/admin" });
@@ -38,7 +41,19 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
                 },
               ],
             }
-          : { rankings: [{ schoolId: "hcmut", points: 400 }] },
+          : path === "/api/admin/gift-pool"
+            ? {
+                items: [
+                  {
+                    name: "Test gift",
+                    tier: "nitro",
+                    remaining: 3,
+                    awarded: 1,
+                    active: true,
+                  },
+                ],
+              }
+            : { rankings: [{ schoolId: "hcmut", points: 400 }] },
       ),
     );
   };
@@ -80,6 +95,7 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
     await mountAdminDashboard(
       { ...principal, permissions: ALL_ADMIN_PERMISSIONS },
       "production",
+      true,
     );
     await flush();
     const tab = [
@@ -123,6 +139,51 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
       "editor",
       "intentional overrides survive email changes",
     );
+    role.value = "partner";
+    role.dispatchEvent(new w.Event("change"));
+    assert(
+      w.document.querySelector<TestInput>('input[name="testProfiles"]')!
+        .checked,
+    );
+    assert.equal(
+      w.document.querySelectorAll("fieldset input:checked").length,
+      4,
+    );
+    for (const checkbox of w.document.querySelectorAll<TestInput>(
+      "fieldset input",
+    )) {
+      if (!ADMIN_ROLES.partner.permissions.some((p) => p === checkbox.value))
+        assert(checkbox.disabled);
+    }
+    w.document.querySelector(".admin-console")!.remove();
+    await mountAdminDashboard(
+      {
+        ...principal,
+        playable: true,
+        permissions: ADMIN_ROLES.partner.permissions,
+      },
+      "production",
+      true,
+    );
+    await flush();
+    assert(w.document.querySelector('a[href="/"]'));
+    assert.deepEqual(
+      [...w.document.querySelectorAll(".admin-nav button")].map(
+        (b) => b.textContent,
+      ),
+      ["BXH", "Live Editor ↗", "Kho quà", "Tra cứu & trao quà", "Lịch sử"],
+    );
+    [...w.document.querySelectorAll<TestButton>(".admin-nav button")]
+      .find((b) => b.textContent === "Kho quà")!
+      .click();
+    await flush();
+    assert(
+      w.document
+        .querySelector(".admin-content")!
+        .textContent!.includes("Test gift"),
+    );
+    assert.equal(w.document.querySelector(".admin-content form"), null);
+    assert.equal(w.document.querySelector(".admin-content button"), null);
   } finally {
     await vite.close();
     await w.happyDOM.close();

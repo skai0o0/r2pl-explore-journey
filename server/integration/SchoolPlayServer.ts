@@ -140,7 +140,9 @@ async function startSchoolPlayServer(
     ? new DemoAdminStore(pool, options.adminPortal)
     : undefined;
   const authConfig = options.portal ?? options.adminPortal;
-  const adminHttp = authConfig ? new AdminHttp(pool, authConfig) : undefined;
+  const adminHttp = authConfig
+    ? new AdminHttp(pool, authConfig, !!portal)
+    : undefined;
   const portalHttp =
     portal || adminPortal
       ? new PortalHttp((portal ?? adminPortal)!)
@@ -343,6 +345,7 @@ async function startSchoolPlayServer(
       }
       if (
         admin &&
+        !admin.playable &&
         (path === "/api/game" ||
           path.startsWith("/api/game/") ||
           [
@@ -380,6 +383,7 @@ async function startSchoolPlayServer(
       }
       if (
         admin &&
+        !admin.playable &&
         (path === "/api/game" ||
           path.startsWith("/api/game/") ||
           [
@@ -436,6 +440,8 @@ async function startSchoolPlayServer(
           response.writeHead(405).end();
           return;
         }
+        if (!canAdmin(admin, "gifts.manage"))
+          throw new PortalError(403, "PERMISSION_DENIED");
         if (!request.headers["content-type"]?.startsWith("application/json"))
           throw new PortalError(415, "JSON_REQUIRED");
         let size = 0;
@@ -499,6 +505,8 @@ async function startSchoolPlayServer(
             .end(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }));
           return;
         }
+        if (!canAdmin(admin, "map.edit"))
+          throw new PortalError(403, "PERMISSION_DENIED");
         let size = 0;
         const chunks: Buffer[] = [];
         for await (const chunk of request) {
@@ -778,14 +786,12 @@ async function startSchoolPlayServer(
         }
         response.end(JSON.stringify(result));
       } catch (e) {
-        response
-          .writeHead(e instanceof PortalError ? e.status : 503)
-          .end(
-            JSON.stringify({
-              error:
-                e instanceof PortalError ? e.code : "TEMPORARILY_UNAVAILABLE",
-            }),
-          );
+        response.writeHead(e instanceof PortalError ? e.status : 503).end(
+          JSON.stringify({
+            error:
+              e instanceof PortalError ? e.code : "TEMPORARILY_UNAVAILABLE",
+          }),
+        );
       }
       return;
     }
@@ -833,14 +839,20 @@ async function startSchoolPlayServer(
       } catch (e) {
         response
           .writeHead(
-            e instanceof TypeError || e instanceof RangeError ? 400 : 503,
+            e instanceof PortalError
+              ? e.status
+              : e instanceof TypeError || e instanceof RangeError
+                ? 400
+                : 503,
           )
           .end(
             JSON.stringify({
               error:
-                e instanceof TypeError || e instanceof RangeError
-                  ? "INVALID_COMMAND"
-                  : "TEMPORARILY_UNAVAILABLE",
+                e instanceof PortalError
+                  ? e.code
+                  : e instanceof TypeError || e instanceof RangeError
+                    ? "INVALID_COMMAND"
+                    : "TEMPORARILY_UNAVAILABLE",
             }),
           );
       }
@@ -909,7 +921,7 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/world") {
-        if (admin && !canAdmin(admin, "map.view")) {
+        if (admin && !portalActor && !canAdmin(admin, "map.view")) {
           response.writeHead(403).end();
           return;
         }
@@ -929,7 +941,10 @@ async function startSchoolPlayServer(
         return;
       }
       if (path === "/api/fixture/bootstrap") {
-        if (admin) {
+        if (
+          admin &&
+          (!admin.playable || url.searchParams.get("view") === "admin")
+        ) {
           json({
             mode: "admin",
             version: 1,
@@ -937,6 +952,7 @@ async function startSchoolPlayServer(
             principal: admin,
             csrfToken: gameCsrf(token!),
             environment: authConfig!.mode,
+            testProfilesSupported: !!portal,
             ...(adminPortal ? { demoAdminBridge: true } : {}),
           });
           return;
@@ -970,6 +986,7 @@ async function startSchoolPlayServer(
             campaignId: fixture.campaignId,
             adjacentOnly: true,
             headquarters: fixture.headquarters,
+            ...(admin?.playable ? { testProfiles: true } : {}),
           });
           return;
         }

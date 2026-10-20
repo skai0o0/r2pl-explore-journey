@@ -17,6 +17,10 @@ export const ALL_ADMIN_PERMISSIONS = Object.keys(
 export const ADMIN_ROLES = {
   full: { label: "Quản trị đầy đủ", permissions: ALL_ADMIN_PERMISSIONS },
   viewer: { label: "Quan sát viên", permissions: ["rankings.view"] },
+  partner: {
+    label: "Đối tác thử nghiệm · Chỉ xem",
+    permissions: ["rankings.view", "map.view", "gifts.view", "audit.view"],
+  },
   editor: {
     label: "Biên tập bản đồ",
     permissions: ["rankings.view", "map.view", "map.edit"],
@@ -69,4 +73,5 @@ export interface AdminAccountView {
   protectedRoot: boolean;
   login: "password" | "portal";
   revision: number;
+  testProfiles?: boolean;
 }
