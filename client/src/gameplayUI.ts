@@ -11,10 +11,6 @@ import {
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
 import { effectiveRewardOutcomes } from "../../shared/gameplay/giftPool.ts";
-import {
-  LANDMARK_HINTS,
-  LANDMARK_PUZZLES,
-} from "../../shared/gameplay/landmarkPuzzle.ts";
 import type { DevPlayer } from "../../shared/integration/devSession.ts";
 import { gameFetch } from "./gameHttp.ts";
 import { CarouselModal } from "./ui/carouselModal.ts";
@@ -64,8 +60,6 @@ export class GameplayUI {
     this._landmark ??= new LandmarkModal({
       onContributeCrystal: (id, amount) =>
         void this.command({ action: "contribute", target: id, amount }),
-      onGuessLandmark: (id, guess) =>
-        void this.command({ action: "guess", target: id, guess }),
       onRally: (id) => void this.command({ action: "rally", target: id }),
       onFocusLandmark: (x, z) => this.focus(x, z),
       onGuidePath: (x, z) => this.onGuidePath?.(x, z),
@@ -172,11 +166,7 @@ export class GameplayUI {
     return this.devMode || this.visibleObject(object);
   }
   objectName(object: WorldObject): string {
-    return objectDisplayName(
-      object,
-      object.kind !== "landmark" ||
-        !!this.view?.landmarks.find((l) => l.id === object.id)?.solved,
-    );
+    return objectDisplayName(object);
   }
   get open(): boolean {
     return !!(
@@ -208,12 +198,6 @@ export class GameplayUI {
     const school = SCHOOLS[this.player.slot]!.id;
     return {
       landmarkId: id,
-      landmarkKey: id,
-      name: l.name,
-      hint: LANDMARK_HINTS[id],
-      story: LANDMARK_PUZZLES[id]?.story,
-      hints: LANDMARK_PUZZLES[id]?.hints,
-      category: l.category,
       footprint: GAME_CONFIG.footprints.landmark,
       buffDescription: v.buff
         ? `${v.buff.name}: ${v.buff.description}`
@@ -223,11 +207,9 @@ export class GameplayUI {
       ),
       activeBeaconName:
         this.view?.activeBeacon && this.view.activeBeacon.landmarkId !== id
-          ? LANDMARKS.find((o) => o.id === this.view!.activeBeacon!.landmarkId)
-              ?.name
+          ? "Công trình bí ẩn"
           : undefined,
       rallied: v.rallied,
-      gameplayRole: l.gameplayRole,
       x: this.objects.find((o) => o.id === id)?.x ?? l.x,
       y: this.objects.find((o) => o.id === id)?.z ?? l.z,
       currentCrystals: v.pot,
@@ -239,9 +221,6 @@ export class GameplayUI {
       userCrystals: Number(this.view!.crystals),
       playerSchoolId: school,
       hasPath: v.hasPath,
-      nameGuessed: v.solved,
-      guessedBySchoolId: v.solved ? school : "",
-      guessCooldownUntil: v.cooldownUntil,
     };
   }
   pick(o: WorldObject): void {
@@ -505,21 +484,7 @@ export class GameplayUI {
         }
       }
 
-      if (c.action === "guess") {
-        if (!receipt.nextAvailableAtMs) {
-          notifyGameEvent("lm_guess_correct", {
-            crystals: GAME_CONFIG.landmark.puzzleBonusCrystals,
-            student_name: this.player?.label ?? "Bạn",
-            landmark_name:
-              this.objects.find((x) => x.id === c.target)?.name ?? "Địa danh",
-          });
-        } else {
-          notifyActionError(
-            "Giải đố chưa chính xác",
-            "Cần chờ 10 phút trước khi thử lại.",
-          );
-        }
-      } else if (c.action === "contribute") {
+      if (c.action === "contribute") {
         notifyActionSuccess(
           "Đóng góp Tinh Thể",
           `Đã nạp ${receipt.contributed ?? c.amount ?? 1} Tinh Thể vào Đèn hiệu công trình!`,
@@ -767,7 +732,7 @@ export class GameplayUI {
       focus.title = `Đi tới ${this.objectName(o)}`;
       focus.onclick = () => this.focus(o.x, o.z);
       open.textContent = this.devMode
-        ? `${o.name} · (${o.x}, ${o.z})`
+        ? `${this.objectName(o)} · (${o.x}, ${o.z})`
         : this.objectName(o);
       open.dataset.objectId = o.id;
       if (!this.devMode && o.kind === "landmark") {

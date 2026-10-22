@@ -155,7 +155,7 @@ Chạy `migrate:portal` bằng tài khoản triển khai trên database dành ri
 
 Webdev chỉ cần chốt với mình: domain game/portal và endpoint đăng nhập; stable student/campaign IDs; mapping 8 trường; tiêu chí km hợp lệ và phạm vi thời gian giải; lịch push/retry; dữ liệu BXH tổng/trường; quy trình khóa sinh viên và sửa km sau đối soát. Không cần chờ tài liệu vRace để bắt đầu nối sandbox. Khi có tài liệu thật, giữ API v1 này và viết adapter ở backend web tổng. Các điều khoản campaign/anti-cheat, hệ thống edu thật, credential vRace và hosting/TLS chưa được xác minh bằng sandbox này.
 
-Bản G-V1 local/dev đã nghiệm thu **PV01–PV18: 18/18 FULL**, với 8 trường HCMUT, OU, DTU, HPUNI, HSU, HUCE, NTU, HCMIU. Gameplay gồm Shared Knowledge/upkeep/consolidation, Landmark/puzzle/Beacon, UniStop 3 cấp, Treasure Map/Chest/Key/carousel, Running/Gift staging, leaderboard, notifications và Admin Map Editor.
+Bản G-V1 local/dev đã nghiệm thu **PV01–PV18: 18/18 FULL**, với 8 trường HCMUT, OU, DTU, HPUNI, HSU, HUCE, NTU, HCMIU. Gameplay gồm Shared Knowledge/upkeep/consolidation, Mystery Sites/Beacon, UniStop 3 cấp, Treasure Map/Chest/Key/carousel, Running/Gift staging, leaderboard, notifications và Admin Map Editor.
 
 Commit mã nguồn nghiệm thu Phase 3: **`b05e456`**; sửa GLB/procedural Z-Up: **`b743257`**. Bộ test đầy đủ: **142/142 PASS, 0 fail, 0 skip** khi bật PostgreSQL fixtures; build PASS. Commit cập nhật tài liệu xem `git log -1 --oneline`.
 
@@ -191,7 +191,7 @@ Database phải nằm trên loopback và có tên `r2pl_prep_test_*` hoặc `r2p
 - Chọn explorer ở menu trường. Tài khoản mới có **1.000 Points, 1.000 Crystal và 1 Key mỗi tier**; HQ có 400 ô Knowledge khởi tạo. Account đã chơi giữ số dư hiện tại.
 - Kéo để lia, cuộn để zoom; `H` về HQ, `L` đến địa danh, `O` xem toàn bản đồ, `I` đổi camera. Bấm minimap để dẫn đường. Menu **Địa danh · Tiếp tế · Running** có tọa độ X/Z, danh sách objects và **Hướng dẫn chơi**.
 - Click ô kề 4 cạnh để khám phá: fresh **1 Point**, giao lưu ô một trường khác **2 Points**, own/invalid **0 Points**. Shared Knowledge tối đa 2 trường; upkeep miễn 24h đầu rồi 1 Point/24h/cluster. Menu hiển thị hạn upkeep/consolidation và nút đóng góp.
-- Knowledge của trường cần chạm Landmark để giải đố/nạp Crystal. Giải đúng cộng 10% mốc vào pot một lần; sai chờ 10 phút. Thắp Beacon ở 1.000 Crystal; takeover tăng tuyến tính 1.050, 1.100… Buff metadata hiển thị ở HUD/ranking.
+- Góp Crystal tại công trình bí ẩn để thắp Beacon ở mốc 1.000; takeover tăng tuyến tính 1.050, 1.100… Buff metadata hiển thị ở HUD/ranking.
 - UniStop Aspire/Nitro/Predator có cooldown riêng từng người/từng trạm 12h/24h/24h; staging đã unlock trạm. Treasure Map dẫn tới Chest riêng của người nhận; Chest cần **1 Key đúng tier** và chỉ có một người thắng. Carousel hiển thị kết quả do server quyết định.
 - Bấm **Chạy giả lập 1 km · +10 Points** để sync Running vào ví đang chơi. Người chưa có km tuần vẫn quay/mở rương được; Gift slot khi chưa đủ eligibility hoặc hết stock fallback thành Crystal ×4 ở UniStop, ×10 ở Chest.
 - Xem leaderboard 8 trường, inventory và **Lịch sử & thông báo**. **Dev tools** bật/tắt thông tin chẩn đoán; giao diện chơi mặc định ẩn phần này.
@@ -209,7 +209,7 @@ Trong editor:
 
 Game hỗ trợ nạp tự động model 3D `.glb` theo quy ước đường dẫn:
 - **8 HQ:** `/models/hqs/<schoolId>_hq.glb` (`hcmut_hq.glb`, `hcmiu_hq.glb`, v.v.)
-- **10 Landmark:** `/models/landmarks/<landmarkId>.glb` (`fansipan.glb`, `halong.glb`, v.v.)
+- **10 công trình bí ẩn:** các GLB hiện có dùng đường dẫn đánh số `/models/landmarks/mysterios1.glb` trở đi; danh tính không hiển thị trong game.
 - **3 UniStop:** `/models/unistops/unistop_<tier>.glb` (`aspire`, `nitro`, `predator`)
 - **3 Chest:** `/models/chests/chest_<tier>.glb` (`aspire`, `nitro`, `predator`)
 - **Draco Decoder:** Nằm tại `/draco/` cho phép giải nén mesh nén tốc độ cao.
@@ -218,11 +218,11 @@ Game hỗ trợ nạp tự động model 3D `.glb` theo quy ước đường d�
 
 ### Nạp thêm GLB mới
 
-1. Copy file vào đúng thư mục trong `client/public/models/` theo quy ước trên. School ID viết thường: hcmut, ou, dtu, hpuni, hsu, huce, ntu, hcmiu. Landmark ID lấy từ `shared/gameplay/gameConfig.ts`; thanglong dùng `hoangthanhthanglong.glb`, cairang dùng `chonoicairang.glb`.
+1. Copy file vào đúng thư mục trong `client/public/models/` theo quy ước trên. School ID viết thường: hcmut, ou, dtu, hpuni, hsu, huce, ntu, hcmiu. Tên file công trình bí ẩn dùng lần lượt `mysterios1.glb`, `mysterios2.glb`…; không đặt theo địa danh.
 2. Thêm URL public vào mảng `models` trong `client/public/models/manifest.json`, ví dụ `/models/hqs/dtu_hq.glb`.
 3. Chạy `npm run build:client` rồi reload trình duyệt; launcher đang chạy phục vụ `dist/client`.
 
-GLB chuẩn glTF Y-Up được xoay X=π/2, auto-fit Box3 theo span hiện tại (HQ 20, Landmark 36, UniStop 10, Chest 2,5), căn tâm X-Y và đáy minZ=0,12. Footprint gameplay vẫn HQ 20×20, Landmark 40×40, UniStop theo layout, Chest 2×2. Procedural fallback dựng native Z-Up theo footprint, scale=1. HCMUT GLB, Aspire #1, Nitro #1, Núi Bà Đen, Đỉnh Fansipan và đủ 8 HQ đã được kiểm tra trên browser sau commit `b743257`.
+GLB chuẩn glTF Y-Up được xoay X=π/2, auto-fit Box3 theo span hiện tại (HQ 20, Landmark 36, UniStop 10, Chest 2,5), căn tâm X-Y và đáy minZ=0,12. Footprint gameplay vẫn HQ 20×20, Landmark 40×40, UniStop theo layout, Chest 2×2. Procedural fallback dựng native Z-Up theo footprint, scale=1. HCMUT GLB, Aspire #1, Nitro #1, một GLB công trình bí ẩn và đủ 8 HQ đã được kiểm tra trên browser sau commit `b743257`.
 
 ## CampaignProvider và biến môi trường
 
@@ -294,7 +294,7 @@ npm run build:client
 node --experimental-strip-types scripts/acceptance-gameplay.ts
 ```
 
-Giữ hai biến `R2PL_BOT_SIMULATION`/`R2PL_BOT_DATABASE_URL` như trên. Script tạo campaign UUID mới, dùng port tự cấp và in JSON có `url` để mở; nó đã xây đường Knowledge thật bằng cùng transaction cho HCMUT/OU tới Fansipan và ô giao lưu **(350, 200)**.
+Giữ hai biến `R2PL_BOT_SIMULATION`/`R2PL_BOT_DATABASE_URL` như trên. Script tạo campaign UUID mới, dùng port tự cấp và in JSON có `url` để mở; nó đã xây đường Knowledge thật bằng cùng transaction cho HCMUT/OU tới một công trình bí ẩn và ô giao lưu **(350, 200)**.
 
 Campaign này dùng RNG nghiệm thu do server giữ: draw đầu Aspire là Treasure Map, draw tiếp theo Predator là Gift slot (fallback nếu chưa đủ điều kiện), draw thứ ba là Gift slot. Có thể thử theo thứ tự Aspire UniStop → Predator UniStop khi chưa sync Running → sync 1 km, cấp stock Predator → mở Chest Predator. Launcher chơi chính `play:schools` dùng RNG bình thường.
 

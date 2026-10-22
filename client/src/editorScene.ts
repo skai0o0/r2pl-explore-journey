@@ -320,7 +320,11 @@ export class EditorScene {
         this.labels.set(o.id, label);
       }
       label.textContent =
-        o.kind === "hq" ? SCHOOLS[o.schoolSlot!]!.shortName : o.name;
+        o.kind === "hq"
+          ? SCHOOLS[o.schoolSlot!]!.shortName
+          : o.kind === "landmark"
+            ? "Công trình bí ẩn"
+            : o.name;
       const signature = `${o.kind}:${o.tier ?? ""}:${o.schoolSlot ?? ""}`;
       let entry = this.mounts.get(o.id);
       if (entry && entry.signature !== signature) {

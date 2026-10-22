@@ -8,7 +8,6 @@ export interface GameCommand {
   readonly key: string;
   readonly action:
     | "contribute"
-    | "guess"
     | "spin"
     | "open"
     | "running"
@@ -18,15 +17,12 @@ export interface GameCommand {
     | "scout";
   readonly target?: string;
   readonly amount?: number;
-  readonly guess?: string;
 }
 export interface LandmarkView {
   readonly id: string;
   readonly holder: number | null;
   readonly target: number;
   readonly pot: number;
-  readonly solved: boolean;
-  readonly cooldownUntil: number;
   readonly hasPath: boolean;
   readonly buff?: ActiveBeaconView | undefined;
   readonly rallied?: boolean | undefined;
@@ -98,9 +94,7 @@ export function parseGameCommand(input: unknown): GameCommand {
   if (
     Object.keys(v).some(
       (k) =>
-        !["ruleVersion", "key", "action", "target", "amount", "guess"].includes(
-          k,
-        ),
+        !["ruleVersion", "key", "action", "target", "amount"].includes(k),
     ) ||
     v.ruleVersion !== 1 ||
     typeof v.key !== "string" ||
@@ -110,7 +104,6 @@ export function parseGameCommand(input: unknown): GameCommand {
     typeof v.action !== "string" ||
     ![
       "contribute",
-      "guess",
       "spin",
       "open",
       "running",
@@ -133,17 +126,11 @@ export function parseGameCommand(input: unknown): GameCommand {
       Number(v.amount) > 100000)
   )
     throw new RangeError("Invalid amount");
-  if (
-    v.guess !== undefined &&
-    (typeof v.guess !== "string" || v.guess.length > 100)
-  )
-    throw new TypeError("Invalid guess");
   return {
     ruleVersion: 1,
     key: v.key as string,
     action: v.action as GameCommand["action"],
     ...(v.target === undefined ? {} : { target: v.target as string }),
     ...(v.amount === undefined ? {} : { amount: v.amount as number }),
-    ...(v.guess === undefined ? {} : { guess: v.guess as string }),
   };
 }

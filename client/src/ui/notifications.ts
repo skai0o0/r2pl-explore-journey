@@ -108,24 +108,6 @@ export const DEFAULT_NOTIFICATIONS: NotificationTemplate[] = [
     bodyTemplate: "Mất Đèn hiệu {landmark_name} vào tay {enemy_school}!",
     icon: "zap-off",
   },
-  {
-    id: "lm_guess_cooldown",
-    category: "landmark",
-    target: "personal",
-    titleTemplate: "Hồi chiêu giải đố sẵn sàng!",
-    bodyTemplate: "Hồi chiêu giải đố {landmark_name} đã sẵn sàng!",
-    icon: "hourglass",
-  },
-  {
-    id: "lm_guess_correct",
-    category: "landmark",
-    target: "school",
-    titleTemplate: "Giải đố thành công!",
-    bodyTemplate:
-      "{student_name} vừa giải đúng {landmark_name} (+{crystals} Tinh thể vào quỹ)! 🎉",
-    icon: "check-circle",
-  },
-
   // --- Gacha & Reward Category ---
   {
     id: "gacha_ready",

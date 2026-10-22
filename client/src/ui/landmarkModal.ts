@@ -5,21 +5,13 @@ import { Icons } from "./icons.ts";
 import {
   BEACON_CRYSTALS,
   getSchoolColor,
-  landmarkGuessReward,
   SCHOOL_ROSTER,
 } from "./v1Adapters.ts";
 
 export interface LandmarkModalData {
   landmarkId: string;
-  landmarkKey: string;
-  name: string;
-  hint?: string | undefined;
-  story?: string | undefined;
-  hints?: readonly string[] | undefined;
-  category: "scenic" | "iconic";
   footprint: { width: number; height: number };
   buffDescription: string;
-  gameplayRole: string;
   x: number;
   y: number;
   currentCrystals: number;
@@ -34,10 +26,6 @@ export interface LandmarkModalData {
   rallied?: boolean | undefined;
   playerSchoolId: string;
   hasPath?: boolean | undefined;
-  nameGuessed?: boolean | undefined;
-  guessedBySchoolId?: string | undefined;
-  guessedSchools?: any;
-  guessCooldownUntil?: number | undefined;
   distanceToPerimeter?: number;
   closestFrontier?: { x: number; z: number };
   // Aliases for compatibility
@@ -49,26 +37,10 @@ export interface LandmarkModalData {
 export interface LandmarkModalCallbacks {
   onContributeCrystal: (landmarkId: string, amount: number) => void;
   onContributeFuel?: (landmarkId: string, amount: number) => void;
-  onGuessLandmark?: (landmarkId: string, guess: string) => void;
   onFocusLandmark?: (x: number, y: number) => void;
   onGuidePath?: (x: number, y: number) => void;
   onConvertPoints?: (amount: number) => void;
   onRally?: (landmarkId: string) => void;
-}
-
-/** 10×10 cover grid: exactly 10 deterministic cells reveal the picture (90% hidden). */
-export function puzzleMaskGrid(key: string): string {
-  let seed = 2166136261;
-  for (const ch of key) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619);
-  const open = new Set<number>();
-  while (open.size < 10) {
-    seed = Math.imul(seed ^ (seed >>> 15), 2246822507) >>> 0;
-    open.add(seed % 100);
-  }
-  return Array.from(
-    { length: 100 },
-    (_, i) => `<i class="pz-cell${open.has(i) ? " open" : ""}"></i>`,
-  ).join("");
 }
 
 export class LandmarkModal {
@@ -79,7 +51,6 @@ export class LandmarkModal {
   private currentData: LandmarkModalData | null = null;
   private isOpen = false;
   private pending = false;
-  private countdownTimer: any = null;
   public onConvertPoints?: (amount: number) => void;
 
   constructor(callbacks: LandmarkModalCallbacks) {
@@ -134,10 +105,7 @@ export class LandmarkModal {
     fuel?: number;
   }): void {
     if (!this.isOpen || !this.currentData) return;
-    const matchId =
-      this.currentLandmarkId === data.landmarkId ||
-      this.currentData.landmarkKey === data.landmarkId;
-    if (matchId) {
+    if (this.currentLandmarkId === data.landmarkId) {
       if (data.schoolId) {
         this.currentData.litBySchoolId = data.schoolId;
         this.currentData.buffActive = true;
@@ -165,18 +133,11 @@ export class LandmarkModal {
 
   public open(data: LandmarkModalData): void {
     this.currentLandmarkId = data.landmarkId;
-    this.currentData = {
-      ...data,
-      guessCooldownUntil:
-        (data.guessCooldownUntil ?? 0) > Date.now()
-          ? data.guessCooldownUntil
-          : 0,
-    };
+    this.currentData = { ...data };
     this.isOpen = true;
     this.overlay.style.display = "flex";
     this.render();
     this.surface.open();
-    this.startCooldownTimer();
   }
 
   public show(data: LandmarkModalData): void {
@@ -188,7 +149,7 @@ export class LandmarkModal {
     this.overlay.setAttribute("aria-busy", String(value));
     this.overlay
       .querySelectorAll<HTMLButtonElement>(
-        "button[data-amount],#lm-rally,#lm-btn-guess-submit",
+        "button[data-amount],#lm-rally",
       )
       .forEach((button) => {
         if (value) {
@@ -203,39 +164,13 @@ export class LandmarkModal {
 
   public update(data: LandmarkModalData): void {
     if (!this.isOpen || this.currentLandmarkId !== data.landmarkId) return;
-    data = {
-      ...data,
-      guessCooldownUntil:
-        (data.guessCooldownUntil ?? 0) > Date.now()
-          ? data.guessCooldownUntil
-          : 0,
-    };
     if (JSON.stringify(this.currentData) === JSON.stringify(data)) return;
-    const input =
-      this.overlay.querySelector<HTMLInputElement>("#lm-guess-input");
-    const guess = input?.value ?? "";
-    const focused = document.activeElement === input;
     this.currentData = { ...data };
     this.render();
-    const next =
-      this.overlay.querySelector<HTMLInputElement>("#lm-guess-input");
-    if (next && !next.disabled) {
-      next.value = guess;
-      if (focused) next.focus();
-    }
-  }
-
-  public setGuessCooldown(untilTimestamp: number): void {
-    if (this.currentData) {
-      this.currentData.guessCooldownUntil = untilTimestamp;
-      this.render();
-      this.startCooldownTimer();
-    }
   }
 
   public close(): void {
     this.isOpen = false;
-    this.stopCooldownTimer();
     this.overlay.style.display = "none";
     this.surface.close();
     this.currentLandmarkId = null;
@@ -248,51 +183,6 @@ export class LandmarkModal {
 
   public getCurrentLandmarkId(): string | null {
     return this.currentLandmarkId;
-  }
-
-  private startCooldownTimer(): void {
-    this.stopCooldownTimer();
-    this.countdownTimer = setInterval(() => {
-      if (!this.isOpen || !this.currentData) {
-        this.stopCooldownTimer();
-        return;
-      }
-      const cd = this.currentData.guessCooldownUntil || 0;
-      const now = Date.now();
-      const remainingSec = Math.max(0, Math.ceil((cd - now) / 1000));
-      const timerEl = this.overlay.querySelector("#lm-guess-timer-text");
-      const submitBtn = this.overlay.querySelector(
-        "#lm-btn-guess-submit",
-      ) as HTMLButtonElement | null;
-      const guessInput = this.overlay.querySelector(
-        "#lm-guess-input",
-      ) as HTMLInputElement | null;
-
-      if (remainingSec > 0) {
-        const mm = String(Math.floor(remainingSec / 60)).padStart(2, "0");
-        const ss = String(remainingSec % 60).padStart(2, "0");
-        if (timerEl) {
-          timerEl.textContent = `Thời gian chờ thử lại: ${mm}:${ss}`;
-        }
-        if (submitBtn) submitBtn.disabled = true;
-        if (guessInput) guessInput.disabled = true;
-      } else {
-        if (
-          this.currentData.guessCooldownUntil &&
-          this.currentData.guessCooldownUntil > 0
-        ) {
-          this.currentData.guessCooldownUntil = 0;
-          this.render();
-        }
-      }
-    }, 1000);
-  }
-
-  private stopCooldownTimer(): void {
-    if (this.countdownTimer) {
-      clearInterval(this.countdownTimer);
-      this.countdownTimer = null;
-    }
   }
 
   private bindGlobalEvents(): void {
@@ -324,11 +214,6 @@ export class LandmarkModal {
       ? litSchool.name
       : "Chưa có trường nào thắp Đèn hiệu";
 
-    const categoryBadge =
-      data.category === "scenic"
-        ? `<span class="lm-category-tag scenic">${Icons.map(13)} DANH LAM THẮNG CẢNH</span>`
-        : `<span class="lm-category-tag iconic">${Icons.landmark(13)} CÔNG TRÌNH BIỂU TƯỢNG</span>`;
-
     const curCrystals =
       data.currentCrystals !== undefined
         ? data.currentCrystals
@@ -343,52 +228,9 @@ export class LandmarkModal {
     const crystalSource = data.crystalsBySchool || data.fuelBySchool || {};
     const myCrystals = crystalSource[data.playerSchoolId] || 0;
     const targetCrystals = maxCrystals;
-    const guessBonus = landmarkGuessReward(targetCrystals);
     // Personal user balances
     const userCrystals = data.userCrystals || 0;
     const capacity = data.contributionCapacity ?? userCrystals;
-
-    // Guessing status & cooldown
-    const now = Date.now();
-    const cooldownUntil = data.guessCooldownUntil || 0;
-    const isUnderCooldown = cooldownUntil > now;
-    const remainingSec = isUnderCooldown
-      ? Math.ceil((cooldownUntil - now) / 1000)
-      : 0;
-    const mm = String(Math.floor(remainingSec / 60)).padStart(2, "0");
-    const ss = String(remainingSec % 60).padStart(2, "0");
-
-    // Check if player's school has solved this landmark
-    const mySchoolId = data.playerSchoolId || "";
-    let mySchoolGuessed = false;
-
-    if (mySchoolId && data.guessedSchools) {
-      if (typeof (data.guessedSchools as any).get === "function") {
-        mySchoolGuessed = !!(data.guessedSchools as any).get(mySchoolId);
-      } else if (typeof data.guessedSchools === "object") {
-        mySchoolGuessed = !!(data.guessedSchools as any)[mySchoolId];
-      }
-    }
-
-    // Fallback if guessedSchools is not populated but guessedBySchoolId equals mySchoolId and nameGuessed is true
-    if (
-      !mySchoolGuessed &&
-      mySchoolId &&
-      data.guessedBySchoolId === mySchoolId &&
-      data.nameGuessed
-    ) {
-      mySchoolGuessed = true;
-    }
-
-    const nameGuessed = !!data.nameGuessed;
-    const guessedSchool = data.guessedBySchoolId
-      ? SCHOOL_ROSTER[data.guessedBySchoolId]
-      : null;
-    const guessedSchoolName = guessedSchool
-      ? guessedSchool.name
-      : data.guessedBySchoolId
-        ? data.guessedBySchoolId.toUpperCase()
-        : "";
 
     this.overlay.innerHTML = `
       <div class="lm-modal-dialog">
@@ -400,8 +242,7 @@ export class LandmarkModal {
               <span>ĐÈN HIỆU CỦA TRƯỜNG</span>
             </div>
             <div class="lm-title-wrap">
-              <h2 class="lm-title">${mySchoolGuessed ? data.name.toUpperCase() : "CÔNG TRÌNH BÍ ẨN"}</h2>
-              ${categoryBadge}
+              <h2 class="lm-title">CÔNG TRÌNH BÍ ẨN</h2>
             </div>
           </div>
           <button class="lm-modal-close" id="lm-btn-close" title="Đóng [Esc]" aria-label="Đóng công trình">
@@ -411,8 +252,6 @@ export class LandmarkModal {
 
         <!-- Scrollable Modal Content -->
         <div class="lm-modal-body">
-          <div class="landmark-puzzle-image ${mySchoolGuessed ? "solved" : "masked"}" data-mask-cells="${mySchoolGuessed ? 0 : 90}"><img src="/landmarks/${data.landmarkKey}.svg" alt="Hình gợi ý địa danh">${mySchoolGuessed ? "" : `<div class="pz-grid" aria-hidden="true">${puzzleMaskGrid(data.landmarkKey)}</div><span>Giải đố để mở ảnh</span>`}</div>
-          ${data.story ? `<details class="lm-story-details"><summary>Câu chuyện địa danh</summary><p class="lm-story">${data.story}</p></details>` : ""}
           <!-- 1. Beacon Status Banner -->
           <div class="lm-beacon-banner lm-flame-banner ${isLit ? "is-lit" : "is-unlit"}" style="--school-color: ${litSchoolColor};">
             <div class="lm-flame-status-left">
@@ -472,21 +311,6 @@ export class LandmarkModal {
               </div>
             </div>
 
-            <!-- Item 2: Landmark Guessing -->
-            <div class="checklist-item ${mySchoolGuessed ? "ok" : isUnderCooldown ? "wait" : "warn"}">
-              <span class="check-icon">${mySchoolGuessed ? "✓" : isUnderCooldown ? "·" : "?"}</span>
-              <div class="check-info">
-                <strong>Giải đố Địa danh (+${guessBonus} Tinh Thể vào quỹ · một lần/trường):</strong>
-                <span>${
-                  mySchoolGuessed
-                    ? `Trường bạn đã giải đố thành công! (+${guessBonus} Tinh Thể đã cộng)`
-                    : isUnderCooldown
-                      ? `Đoán sai: Đang trong thời gian chờ thử lại (${mm}:${ss})`
-                      : `Chưa giải đố (Dự đoán tên địa danh bên dưới để nhận +${guessBonus} Tinh Thể)`
-                }</span>
-              </div>
-            </div>
-
           </div>
 
           <!-- 2. Crystal Progress Bar -->
@@ -529,70 +353,6 @@ export class LandmarkModal {
             <div class="lm-buff-content">
               ${isLit ? data.buffDescription : "Đặc quyền được xác định khi trường thắp Đèn hiệu."}
             </div>
-          </div>
-
-          <!-- 4. Landmark Guessing Mini-Game UI Section -->
-          <div class="lm-guessing-card">
-            <div class="lm-guess-header">
-              <span class="lm-guess-icon">${Icons.target(16)}</span>
-              <span class="lm-guess-title">ĐOÁN TÊN CÔNG TRÌNH (+${guessBonus} TINH THỂ VÀO QUỸ · MỘT LẦN/TRƯỜNG)</span>
-            </div>
-
-            ${
-              mySchoolGuessed
-                ? `
-                <div class="lm-guess-solved-box">
-                  <span class="lm-guess-solved-icon">${Icons.check(16)}</span>
-                  <div class="lm-guess-solved-text">
-                    Trường bạn đã giải đố công trình này! (Thưởng giải đố đã được cộng vào tiến độ Đèn hiệu).
-                  </div>
-                </div>
-              `
-                : `
-                <div class="lm-guess-form">
-                  ${
-                    data.hints?.length
-                      ? `<ol class="lm-guess-hint lm-hint-list">${data.hints.map((h) => `<li>${h}</li>`).join("")}</ol>`
-                      : `<p class="lm-guess-hint">Gợi ý: ${data.hint || "Quan sát phần công trình hiện ra trong sương mù."}</p>`
-                  }
-                  ${
-                    data.guessedBySchoolId &&
-                    data.guessedBySchoolId !== mySchoolId &&
-                    nameGuessed
-                      ? `
-                      <div class="lm-guess-other-notice" style="margin-bottom: 8px; font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 5px;">
-                        ${Icons.sparkles(12)}
-                        <span>Trường <strong>${guessedSchoolName}</strong> đã giải đố trước đó. Trường bạn vẫn được giải đố một lần để cộng ${guessBonus} Tinh Thể vào quỹ công trình!</span>
-                      </div>
-                    `
-                      : ""
-                  }
-                  <div class="lm-guess-input-wrap">
-                    <input
-                      type="text"
-                      id="lm-guess-input"
-                      class="lm-guess-input ${isUnderCooldown ? "is-disabled" : ""}"
-                      placeholder="Nhập đầy đủ tên công trình…" aria-label="Đáp án tên công trình"
-                      ${isUnderCooldown ? "disabled" : ""}
-                      autocomplete="off"
-                    />
-                    <button
-                      id="lm-btn-guess-submit"
-                      class="lm-guess-submit-btn ${isUnderCooldown ? "is-disabled" : ""}"
-                      ${isUnderCooldown ? "disabled" : ""}
-                    >
-                      ${Icons.sparkles(14)}
-                      <span>Gửi Dự Đoán</span>
-                    </button>
-                  </div>
-                  ${
-                    isUnderCooldown
-                      ? `<div class="lm-guess-timer" id="lm-guess-timer-text">Thời gian chờ thử lại: ${mm}:${ss}</div>`
-                      : `<div class="lm-guess-hint">Mỗi lần đoán sai sẽ áp dụng thời gian chờ thử lại là ${GAME_CONFIG.landmark.wrongGuessCooldownMs / 60000} phút. Tên công trình không phân biệt hoa thường.</div>`
-                  }
-                </div>
-              `
-            }
           </div>
 
           <!-- 6. Contribution Actions: Nạp Tinh Thể (+10, +20, +50) & Quy đổi Điểm Tri Thức -->
@@ -685,36 +445,6 @@ export class LandmarkModal {
           }
         }
       });
-    });
-
-    // Guess Landmark Submit
-    const guessInput = this.overlay.querySelector(
-      "#lm-guess-input",
-    ) as HTMLInputElement | null;
-    const guessSubmitBtn = this.overlay.querySelector(
-      "#lm-btn-guess-submit",
-    ) as HTMLButtonElement | null;
-
-    const doSubmitGuess = () => {
-      if (this.pending || guessSubmitBtn?.disabled) return;
-      if (!guessInput || !this.currentLandmarkId) return;
-      const guess = guessInput.value.trim();
-      if (!guess) return;
-      if (this.callbacks.onGuessLandmark) {
-        this.callbacks.onGuessLandmark(this.currentLandmarkId, guess);
-      }
-    };
-
-    guessSubmitBtn?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      doSubmitGuess();
-    });
-
-    guessInput?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        doSubmitGuess();
-      }
     });
 
     const guideBtn = this.overlay.querySelector("#btn-guide-landmark");

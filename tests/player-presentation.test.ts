@@ -74,7 +74,7 @@ test("player mode is default and operator modes require explicit entry", () => {
   assert.equal(uiModeFromSearch("?mode=dev"), "dev");
   assert.equal(uiModeFromSearch("?admin=1"), "admin");
 });
-test("player names hide fixture ordinals and unsolved Landmark names", () => {
+test("player names hide fixture ordinals and all Landmark names", () => {
   assert.equal(
     campaignDisplayText("Running: +10 Points · R2PL-GIFT-ABC123"),
     "Thành tích chạy: +10 Điểm · R2PL-GIFT-ABC123",
@@ -92,12 +92,12 @@ test("player names hide fixture ordinals and unsolved Landmark names", () => {
     "Trụ sở HCMUT",
   );
   assert.equal(
-    objectDisplayName({ kind: "landmark", name: "Đỉnh Fansipan" }, false),
+    objectDisplayName({ kind: "landmark", name: "Đỉnh Fansipan" }),
     "Công trình bí ẩn",
   );
   assert.equal(
-    objectDisplayName({ kind: "landmark", name: "Đỉnh Fansipan" }, true),
-    "Đỉnh Fansipan",
+    objectDisplayName({ kind: "landmark", name: "Đỉnh Fansipan" }),
+    "Công trình bí ẩn",
   );
 });
 test("station labels obey footprint fog and label priority at close/overview zoom", () => {

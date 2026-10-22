@@ -12,8 +12,6 @@ export interface BeaconState {
   takeovers: number;
   lastCost?: number;
   pots: Record<string, number>;
-  solved: number[];
-  cooldowns: Record<string, number>;
 }
 export interface SchoolBeacon {
   version: 2;
@@ -179,8 +177,6 @@ export const emptyBeacon = (): BeaconState => ({
   holder: null,
   takeovers: 0,
   pots: {},
-  solved: [],
-  cooldowns: {},
 });
 export async function readState<T>(
   db: PoolClient,

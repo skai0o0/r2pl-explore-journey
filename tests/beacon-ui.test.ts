@@ -17,12 +17,8 @@ test("landmark funding uses combined capacity without inventory or a separate co
   });
   const data: LandmarkModalData = {
     landmarkId: "halong",
-    landmarkKey: "halong",
-    name: "Vịnh Hạ Long",
-    category: "scenic",
     footprint: { width: 40, height: 40 },
     buffDescription: "Đặc quyền khi thắp",
-    gameplayRole: "test",
     x: 575,
     y: 330,
     currentCrystals: 100,
@@ -35,8 +31,7 @@ test("landmark funding uses combined capacity without inventory or a separate co
     contributionCapacity: 1000,
     playerSchoolId: "hcmut",
     hasPath: true,
-    activeBeaconName: "Đỉnh Fansipan",
-    nameGuessed: true,
+    activeBeaconName: "Công trình bí ẩn",
   };
   try {
     modal.open(data);
@@ -61,9 +56,10 @@ test("landmark funding uses combined capacity without inventory or a separate co
       w.document.querySelector("#lm-rally") as unknown as { click(): void }
     ).click();
     assert.deepEqual(rallies, ["halong"]);
-    assert.match(w.document.body.textContent, /\+100 TINH THỂ VÀO QUỸ/);
+    assert.match(w.document.body.textContent, /CÔNG TRÌNH BÍ ẨN/);
+    assert.doesNotMatch(w.document.body.textContent, /DỰ ĐOÁN|Vịnh Hạ Long|Fansipan/);
     assert.match(w.document.body.textContent, /quỹ tại công trình cũ tiêu tán/);
-    assert(!/10% MỐC|5%|Tinh thể cá nhân/.test(w.document.body.textContent));
+    assert(!/10% MỐC|5%|Tinh thể cá nhân|Giải đố/.test(w.document.body.textContent));
     modal.update({ ...data, hasPath: false });
     assert(
       w.document.querySelector<TestButton>('[data-amount="1000"]')!.disabled,

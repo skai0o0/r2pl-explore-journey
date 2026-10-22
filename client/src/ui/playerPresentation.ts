@@ -73,9 +73,8 @@ export function uiModeFromSearch(search: string): UiMode {
 }
 export function objectDisplayName(
   object: Pick<WorldObject, "kind" | "name" | "tier">,
-  solved = true,
 ): string {
-  if (object.kind === "landmark" && !solved) return "Công trình bí ẩn";
+  if (object.kind === "landmark") return "Công trình bí ẩn";
   if (object.kind === "hq")
     return "Trụ sở " + object.name.replace(/\s+HQ$/i, "");
   if (object.kind === "unistop")

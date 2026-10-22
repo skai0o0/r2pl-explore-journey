@@ -276,15 +276,15 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
   assert.equal(getHqModelUrl("hcmiu"), "/models/hqs/hcmiu_hq.glb");
   assert.equal(
     getLandmarkModelUrl("fansipan"),
-    "/models/landmarks/fansipan.glb",
+    "/models/landmarks/mysterios1.glb",
   );
   assert.equal(
     getLandmarkModelUrl("thanglong"),
-    "/models/landmarks/hoangthanhthanglong.glb",
+    "/models/landmarks/mysterios7.glb",
   );
   assert.equal(
     getLandmarkModelUrl("cairang"),
-    "/models/landmarks/chonoicairang.glb",
+    "/models/landmarks/mysterios12.glb",
   );
   assert.equal(
     getUniStopModelUrl("aspire"),

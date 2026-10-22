@@ -1,3 +1,5 @@
+import { LANDMARKS } from "../../shared/gameplay/gameConfig.ts";
+
 /**
  * Model URL conventions and availability manifest for 3D GLB assets.
  * Standardizes naming conventions and avoids 404 console errors by
@@ -15,14 +17,9 @@ export const KNOWN_MODELS = new Set<string>([
   "/models/hqs/huce_hq.glb",
   "/models/hqs/ntu_hq.glb",
   "/models/hqs/hcmiu_hq.glb",
-  "/models/landmarks/fansipan.glb",
-  "/models/landmarks/halong.glb",
-  "/models/landmarks/nguhanhson.glb",
-  "/models/landmarks/phongnha.glb",
-  "/models/landmarks/nuibaden.glb",
-  "/models/landmarks/baden.glb",
-  "/models/landmarks/hoangthanhthanglong.glb",
-  "/models/landmarks/thanglong.glb",
+  ...Array.from({ length: 8 }, (_, index) =>
+    `/models/landmarks/mysterios${index + 1}.glb`,
+  ),
 ]);
 
 let manifestLoaded = false;
@@ -66,11 +63,25 @@ export function getHqModelUrl(schoolId: string): string {
 }
 
 export function getLandmarkModelUrl(landmarkId: string): string {
-  let normalized = landmarkId.toLowerCase();
-  if (normalized === "thanglong") normalized = "hoangthanhthanglong";
-  if (normalized === "cairang") normalized = "chonoicairang";
-  if (normalized === "baden" || normalized === "nuibaden") normalized = "nuibaden";
-  return `/models/landmarks/${normalized}.glb`;
+  const normalizedId = landmarkId.toLowerCase();
+  const existingAssetIndex: Readonly<Record<string, number>> = {
+    fansipan: 1,
+    halong: 2,
+    nguhanhson: 3,
+    phongnha: 4,
+    nuibaden: 5,
+    baden: 5,
+    thanglong: 7,
+    hoangthanhthanglong: 7,
+  };
+  const landmarkIndex = LANDMARKS.findIndex(
+    (landmark) => landmark.id === normalizedId,
+  );
+  const index =
+    existingAssetIndex[normalizedId] ??
+    (landmarkIndex >= 0 ? landmarkIndex + 3 : -1);
+  if (index < 0) return "/models/landmark.gltf";
+  return `/models/landmarks/mysterios${index}.glb`;
 }
 
 export function getUniStopModelUrl(tier: string): string {
@@ -80,3 +91,4 @@ export function getUniStopModelUrl(tier: string): string {
 export function getChestModelUrl(tier: string): string {
   return `/models/chests/chest_${tier.toLowerCase()}.glb`;
 }
+

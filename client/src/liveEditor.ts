@@ -249,7 +249,9 @@ export async function mountLiveEditor(
     for (const o of objects.filter(
       (o) =>
         (filter === "all" || o.kind === filter) &&
-        o.name.toLocaleLowerCase("vi").includes(query),
+        (o.kind === "landmark" ? "Công trình bí ẩn" : o.name)
+          .toLocaleLowerCase("vi")
+          .includes(query),
     )) {
       const b = document.createElement("button");
       b.className = "studio-object";
@@ -260,7 +262,7 @@ export async function mountLiveEditor(
         sub = document.createElement("small");
       icon.className = "studio-object-icon";
       icon.textContent = glyphs[o.kind];
-      name.textContent = o.name;
+      name.textContent = o.kind === "landmark" ? "Công trình bí ẩn" : o.name;
       sub.textContent = `${labels[o.kind]} · ${o.x}, ${o.z}`;
       text.append(name, sub);
       b.append(icon, text);
@@ -287,11 +289,16 @@ export async function mountLiveEditor(
       return;
     }
     const title = document.createElement("h2");
-    title.textContent = o.name;
+    title.textContent = o.kind === "landmark" ? "Công trình bí ẩn" : o.name;
     panel.append(title);
     const form = document.createElement("form");
     form.innerHTML = `<label>Tên hiển thị<input name="name" required maxlength="100"></label><div class="studio-coordinates"><label>Ô X<input name="x" type="number" step="1" required></label><label>Ô Z<input name="z" type="number" step="1" required></label></div>${o.kind === "unistop" || o.kind === "chest" ? '<label>Hạng<select name="tier"><option>aspire</option><option>nitro</option><option>predator</option></select></label>' : ""}<p class="studio-muted">Diện tích: ${o.width} × ${o.height} ô</p><button type="submit">Áp dụng vào bản nháp</button>`;
     (form.elements.namedItem("name") as HTMLInputElement).value = o.name;
+    if (o.kind === "landmark") {
+      const name = form.elements.namedItem("name") as HTMLInputElement;
+      name.value = "Công trình bí ẩn";
+      name.disabled = true;
+    }
     (form.elements.namedItem("x") as HTMLInputElement).value = String(o.x);
     (form.elements.namedItem("z") as HTMLInputElement).value = String(o.z);
     if (form.elements.namedItem("tier"))
@@ -301,7 +308,10 @@ export async function mountLiveEditor(
       const fields = new FormData(form);
       const next = {
         ...o,
-        name: String(fields.get("name")).trim(),
+        name:
+          o.kind === "landmark"
+            ? "Công trình bí ẩn"
+            : String(fields.get("name")).trim(),
         x: Number(fields.get("x")),
         z: Number(fields.get("z")),
         ...(fields.has("tier")

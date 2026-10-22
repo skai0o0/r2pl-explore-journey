@@ -69,11 +69,6 @@ export function nearestTarget(
 }
 
 export class CompassCard {
-  private solved = new Set<string>();
-  setSolvedLandmarks(ids: readonly string[]): void {
-    this.solved = new Set(ids);
-    this.refreshSoon();
-  }
   readonly element = document.createElement("section");
   readonly #objects: readonly WorldObject[];
   readonly #hooks: CompassHooks;
@@ -136,7 +131,7 @@ export class CompassCard {
       this.element.append(
         this.#row(
           "compass-landmark",
-          `Công trình gần nhất · ${this.solved.has(landmark.object.id) ? landmark.object.name : "Bí ẩn đang chờ bạn"}`,
+          "Công trình gần nhất · Công trình bí ẩn",
           landmark,
           "Mở đường để khám phá!",
         ),

@@ -32,8 +32,6 @@ export const LANDMARK_ROSTER = Object.fromEntries(
   LANDMARKS.map((l) => [l.id, l]),
 );
 export const BEACON_CRYSTALS = GAME_CONFIG.landmark.baseCrystals;
-export const landmarkGuessReward = (_target: number) =>
-  GAME_CONFIG.landmark.puzzleBonusCrystals;
 export const beaconOvertakeTarget = (current: number) =>
   current + GAME_CONFIG.landmark.activationStepCrystals;
 export type UniStopTier = RewardProfile;

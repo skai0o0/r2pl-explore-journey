@@ -64,14 +64,12 @@ const command = (
   action: GameCommand["action"],
   target?: string,
   amount?: number,
-  guess?: string,
 ): GameCommand => ({
   ruleVersion: 1,
   key: randomUUID(),
   action,
   ...(target ? { target } : {}),
   ...(amount ? { amount } : {}),
-  ...(guess ? { guess } : {}),
 });
 async function seedTile(c: Context, x: number, z: number, bits = 1) {
   const id = chunkId(Math.floor(x / 64), Math.floor(z / 64));
@@ -174,7 +172,7 @@ test(
         await http(
           c,
           actor,
-          command("guess", "fansipan", undefined, "Đỉnh Fansipan"),
+          command("contribute", "fansipan", 1000),
         );
         const target = (await c.game.view(actor)).landmarks.find(
           (l) => l.id === "fansipan",
@@ -184,7 +182,7 @@ test(
             await http(
               c,
               actor,
-              command("contribute", "fansipan", target - 100),
+              command("contribute", "fansipan", target),
             )
           ).status,
           "applied",
@@ -205,7 +203,7 @@ test(
 );
 
 test(
-  "HTTP contributions auto-convert only the shortage; puzzle fixed once; switch burns old pot and survives restart",
+  "HTTP contributions auto-convert only the shortage; switching beacons burns old pot and survives restart",
   { skip: !database, timeout: 30000 },
   async () =>
     fixture(async (c) => {
@@ -217,23 +215,16 @@ test(
         "UPDATE r2pl_v2.wallet_accounts SET balance=0,opening_balance=0 WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-crystals'",
         [c.campaign, a.actorId],
       );
-      const guess = command("guess", "fansipan", undefined, "Đỉnh Fansipan");
-      assert.equal((await http(c, a, guess)).status, "applied");
-      await http(
-        c,
-        b,
-        command("guess", "fansipan", undefined, "Đỉnh Fansipan"),
-      );
       assert.equal(
         (await c.game.view(a)).landmarks.find((l) => l.id === "fansipan")!.pot,
-        100,
+        0,
       );
       const before = await points(c, a),
-        cmd = command("contribute", "fansipan", 900);
+        cmd = command("contribute", "fansipan", 1000);
       const receipt = await http(c, a, cmd);
       assert.equal(receipt.status, "applied");
       assert.deepEqual(await http(c, a, cmd), receipt);
-      assert.equal(before - (await points(c, a)), 900n);
+      assert.equal(before - (await points(c, a)), 1000n);
       let view = await c.game.view(a);
       assert.equal(view.activeBeacon?.landmarkId, "fansipan");
       assert.equal(view.crystals, "0");
@@ -275,7 +266,6 @@ test(
         (await http(c, a, command("rally", "fansipan"))).reason,
         "BEACON_ALREADY_ACTIVE",
       );
-      await http(c, b, command("guess", "halong", undefined, "Vịnh Hạ Long"));
       assert.equal(
         (await http(c, b, command("contribute", "halong", 1000))).status,
         "applied",
@@ -298,16 +288,6 @@ test(
         null,
       );
       assert.equal(view.landmarks.find((l) => l.id === "fansipan")!.pot, 0);
-      await http(
-        c,
-        b,
-        command("guess", "fansipan", undefined, "Đỉnh Fansipan"),
-      );
-      assert.equal(
-        (await c.game.view(a)).landmarks.find((l) => l.id === "fansipan")!.pot,
-        0,
-        "burned puzzle cannot be farmed again",
-      );
       const restarted = new SignedGameplay(c.pool, c.play.fixture);
       await restarted.initialize();
       assert.deepEqual(

@@ -429,7 +429,7 @@ function updateTile(): void {
   if (object && object.kind !== "hq") {
     ui.knowledge.textContent =
       object.kind === "landmark"
-        ? "Giải đố và góp Tinh Thể để thắp Đèn Hiệu."
+        ? "Góp Tinh Thể để thắp Đèn Hiệu."
         : object.kind === "chest"
           ? "Dùng Chìa Khóa cùng cấp để mở rương."
           : "Nhận tài nguyên khi trường bạn giữ trạm.";
@@ -598,7 +598,7 @@ const world = new WorldView(
               : SCHOOLS[o.schoolSlot]!.color,
           x: o.x,
           z: o.z,
-          title: objectDisplayName(o, false),
+          title: objectDisplayName(o),
           detail: "",
           schoolSlot: o.schoolSlot,
           kind: o.kind,

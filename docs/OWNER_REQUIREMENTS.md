@@ -80,23 +80,7 @@ Tên viết tắt: HSU
 Đuôi email: @sinhvien.hoasen.edu.vn
 
 
-Các danh sách công trình bao gồm:
-
-
-a. Danh lam thắng cảnh:
-- Đỉnh Fansipan
-- Vịnh Hạ Long
-- Núi Ngũ Hành Sơn
-- Động Phong Nha
-- Núi Bà Đen
-
-
-b. Công trình biểu tượng:
-- Hoàng thành Thăng Long
-- Cảng Hải Phòng
-- Kinh Thành Huế
-- Toà nhà Bitexco
-- Chợ nổi Cái Răng
+Hiện có 10 công trình bí ẩn. Tên và phân loại địa danh không xuất hiện trong giao diện; mã định danh nội bộ được giữ ổn định để tương thích dữ liệu.
 
 
 Tính năng mới:
@@ -150,7 +134,7 @@ Cơ chế:
 ·       Sinh viên của trường A có thể sử dụng 1 điểm để biến ô tri thức của trường B thành ô tri thức chung.
 ·       Nếu sau 1 ngày sinh viên trường B không cung cấp 1 điểm  thì ô tri thức đó sẽ trở thành ô tri thức của trường A.
 * Cơ chế thắp sáng công trình:
-·           Đoán tên địa danh: sương mù sẽ che phủ 90% công trình, sinh viên dựa vào hint để đoán tên địa danh. Đoán đúng trường đó sẽ nhận 10% tiến độ thắp sáng ( tương đương 10 tinh thể). Tên địa danh viết thường hết, đoán sai cooldown 10 phút
+·           Ghi chú cũ: cơ chế đoán tên địa danh đã được gỡ; cả 10 công trình hiện dùng nhãn “Công trình bí ẩn” và không cộng thưởng từ câu đố.
 ·           Trường hợp 1 trường thắp sáng: Trường cần 100 tinh thể để thắp sáng địa danh
 ·           Trường hợp nhiều trường thắp sáng cùng lúc:Trường nào cán mốc 100 tinh thể trước địa danh đó thuộc về trường đó
 ·         Trường hợp trường A muốn chiếm lấy địa danh của trường B: Số tinh thể chênh lệch phải lớn 20 tức trường A sử dụng 120 tinh thể trong khi trường trường B chỉ sử dụng 100 tinh thể thì địa danh đang thuộc trường B sẽ trở thành của trường A

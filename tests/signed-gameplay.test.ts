@@ -247,14 +247,12 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
       action: string,
       target?: string,
       amount?: number,
-      guess?: string,
     ) => ({
       ruleVersion: 1,
       key: randomUUID(),
       action,
       ...(target ? { target } : {}),
       ...(amount ? { amount } : {}),
-      ...(guess ? { guess } : {}),
     });
 
     // 1. unistop_predator_1 is initially neutral -> rejected with KNOWLEDGE_PATH_REQUIRED
@@ -354,28 +352,7 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
     );
     await path(pool, campaign, 0);
     await path(pool, campaign, 1);
-    result = await g.command(a, cmd("guess", "fansipan", undefined, "sai"));
-    assert(result.nextAvailableAtMs! > Date.now());
-    assert.equal(
-      (await g.command(a, cmd("guess", "fansipan", undefined, "Đỉnh Fansipan")))
-        .reason,
-      "GUESS_COOLDOWN",
-    );
-    await pool.query(
-      "UPDATE r2pl_v2.game_state SET data=jsonb_set(data,'{cooldowns,0}','0') WHERE campaign_id=$1 AND scope='beacon' AND id='fansipan'",
-      [campaign],
-    );
-    await g.command(a, cmd("guess", "fansipan", undefined, "Đỉnh Fansipan"));
-    assert.equal(
-      (await g.view(a)).landmarks.find((l) => l.id === "fansipan")!.pot,
-      100,
-    );
-    await g.command(a, cmd("guess", "fansipan", undefined, "Đỉnh Fansipan"));
-    assert.equal(
-      (await g.view(a)).landmarks.find((l) => l.id === "fansipan")!.pot,
-      100,
-    );
-    await g.command(a, cmd("contribute", "fansipan", 900));
+    await g.command(a, cmd("contribute", "fansipan", 1000));
     assert.equal(
       (await g.view(a)).landmarks.find((l) => l.id === "fansipan")!.holder,
       0,
@@ -384,11 +361,7 @@ test("signed rewards enforce cooldown, matching tier, finite Chest winner, Gift 
       (await g.view(rival)).landmarks.find((l) => l.id === "fansipan")!.target,
       1100,
     );
-    await g.command(
-      rival,
-      cmd("guess", "fansipan", undefined, "Đỉnh Fansipan"),
-    );
-    await g.command(rival, cmd("contribute", "fansipan", 1000));
+    await g.command(rival, cmd("contribute", "fansipan", 1100));
     assert.equal(
       (await g.view(a)).landmarks.find((l) => l.id === "fansipan")!.holder,
       1,

@@ -975,7 +975,6 @@
   }
   .requirements-checklist-card,
   .loot-table-card,
-  .lm-guessing-card,
   .lm-contribution-card,
   .lm-schools-leaderboard,
   .lm-beacon-banner,
@@ -991,8 +990,7 @@
   .checklist-header,
   .loot-table-header,
   .lm-section-title,
-  .lm-contrib-title,
-  .lm-guess-header {
+  .lm-contrib-title {
     background: none;
     padding: 0 0 12px;
     font-size: 11px;
@@ -1060,8 +1058,6 @@
     font-variant-numeric: tabular-nums;
   }
   .guidance-note,
-  .lm-story,
-  .lm-guess-hint,
   .lm-contrib-info,
   .lm-deposit-label {
     color: var(--muted);
@@ -1070,7 +1066,6 @@
   }
   .guidance-primary,
   .btn-open-chest,
-  .lm-guess-submit-btn,
   .btn-claim-reward {
     min-height: 44px;
     border: 1px solid var(--cyan);
@@ -1136,21 +1131,6 @@
     padding: 10px 12px;
     min-height: 44px;
   }
-  .lm-guess-input-wrap {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .lm-guess-input {
-    flex: 1;
-    min-width: 160px;
-  }
-  .lm-guess-solved-box {
-    background: var(--cyan-tint);
-    color: var(--cyan-bright);
-    border: 0;
-    border-radius: 5px;
-  }
   .lm-flame-orb {
     box-shadow: none;
     animation: none;
@@ -1203,43 +1183,6 @@
     background: var(--cyan);
     box-shadow: none;
   }
-  .landmark-puzzle-image {
-    position: relative;
-    width: 100%;
-    height: 150px;
-    margin-bottom: 18px;
-    overflow: hidden;
-    background: var(--ink);
-    border-radius: 6px;
-  }
-  .landmark-puzzle-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .pz-grid {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    grid-template-rows: repeat(10, 1fr);
-  }
-  .pz-cell {
-    background: var(--ink);
-    border: 1px solid #a0b7c00c;
-  }
-  .pz-cell.open {
-    background: transparent;
-    border: 0;
-  }
-  .landmark-puzzle-image > span {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    font-size: 11px;
-    background: var(--ink);
-    padding: 4px 6px;
-  }
   .chest-art-banner {
     background: var(--cyan-tint);
     padding: 20px;
@@ -1288,8 +1231,6 @@
     border: 1px solid var(--line);
   }
   .btn-view-map-loc { min-height: 44px; background: var(--surface-raised); color: var(--cyan-bright); border: 1px solid var(--line-bright); box-shadow: none; }
-  .lm-story-details { margin: 0 0 18px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-  .lm-story-details summary { cursor: pointer; min-height: 32px; }
   .carousel-confetti-canvas {
     pointer-events: none;
   }

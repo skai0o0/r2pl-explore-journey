@@ -65,7 +65,6 @@ const actionNames: Record<GameCommand["action"], string> = {
   running: "Đồng bộ Running",
   upkeep: "Duy trì Shared Knowledge",
   consolidate: "Đóng góp consolidation",
-  guess: "Giải đố địa danh",
   contribute: "Đóng góp Crystal",
   spin: "Quay UniStop",
   open: "Mở Chest",
@@ -79,7 +78,6 @@ const rejectionMessages: Record<string, string> = {
   CHEST_NOT_DISCOVERED: "Bạn chưa tìm thấy Chest này",
   KNOWLEDGE_PATH_REQUIRED:
     "Tri thức trường cần chạm công trình; Trạm tiếp tế phải thuộc trường bạn.",
-  GUESS_COOLDOWN: "Chưa hết thời gian chờ đoán lại",
   UNKNOWN_OBJECT: "Đối tượng đã thay đổi; tải bản đồ mới",
   BEACON_ALREADY_ACTIVE: "Đèn hiệu này đang hoạt động cho trường bạn",
   RALLY_COOLDOWN:
@@ -92,13 +90,6 @@ const rejectionMessages: Record<string, string> = {
   "Unknown school cluster": "Cluster đã kết thúc hoặc không thuộc trường bạn",
 };
 const initialBeacon = emptyBeacon;
-const normalize = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replaceAll("đ", "d")
-    .replace(/[^a-z0-9]/g, "");
 export class SignedGameplay {
   private pool: Pool;
   private fixture: SchoolPlayFixture;
@@ -431,8 +422,6 @@ export class SignedGameplay {
               ? ownBeacon.lastCost
               : nextBeaconTarget(b, ownBeacon),
           pot: b.pots[String(actor.schoolSlot)] ?? 0,
-          solved: b.solved.includes(actor.schoolSlot),
-          cooldownUntil: b.cooldowns[String(actor.schoolSlot)] ?? 0,
           hasPath: !!o && (await this.path(db, o, actor.schoolSlot)),
           buff:
             b.holder === null
@@ -883,11 +872,13 @@ export class SignedGameplay {
     if (!o) throw new RuleRejection("UNKNOWN_OBJECT");
     if (
       c.action === "contribute" ||
-      c.action === "guess" ||
       c.action === "rally"
     ) {
       if (o.kind !== "landmark" || !(await this.path(db, o, a.schoolSlot)))
         throw new RuleRejection("KNOWLEDGE_PATH_REQUIRED");
+      const landmarkName =
+        LANDMARKS.find((landmark) => landmark.id === o.id)?.name ??
+        "Công trình bí ẩn";
       const b = await this.state(db, "beacon", o.id, initialBeacon()),
         slot = String(a.schoolSlot);
       const school = await schoolBeacon(
@@ -915,79 +906,52 @@ export class SignedGameplay {
             this.fixture.campaignId,
             a.schoolSlot,
             "Hiệu triệu thắp đèn hiệu",
-            `${a.schoolName} kêu gọi cùng góp vào ${o.name}. Tiến độ ${b.pots[slot] ?? 0}/${currentTarget} Tinh thể.`,
+            `${a.schoolName} kêu gọi cùng góp vào ${landmarkName}. Tiến độ ${b.pots[slot] ?? 0}/${currentTarget} Tinh thể.`,
           ],
         );
         await emitNotification(db, this.fixture.campaignId, {
           key: `rally:${a.actorId}:${key.toString("hex")}`,
           kind: "rally",
           title: "Hiệu triệu thắp đèn",
-          body: `${a.schoolName} kêu gọi cùng góp vào ${o.name}.`.slice(0, 500),
+          body: `${a.schoolName} kêu gọi cùng góp vào ${landmarkName}.`.slice(0, 500),
           schoolSlot: a.schoolSlot,
         });
         return {
           status: "applied",
           reason: null,
-          message: `Đã hiệu triệu cùng trường tới ${o.name}`,
+          message: `Đã hiệu triệu cùng trường tới ${landmarkName}`,
         };
       }
-      if (c.action === "guess") {
-        if (!GAME_CONFIG.landmark.puzzleEnabled)
-          throw new RuleRejection("PUZZLE_DISABLED");
-        if (b.solved.includes(a.schoolSlot))
-          return {
-            status: "applied",
-            reason: null,
-            message: "Đã giải đố · 0 Crystal",
-          };
-        if ((b.cooldowns[slot] ?? 0) > now)
-          throw new RuleRejection("GUESS_COOLDOWN");
-        const l = LANDMARKS.find((l) => l.id === o.id)!;
-        if (normalize(c.guess ?? "") !== normalize(l.name)) {
-          b.cooldowns[slot] = now + GAME_CONFIG.landmark.wrongGuessCooldownMs;
-          await this.save(db, "beacon", o.id, b);
-          return {
-            status: "applied",
-            reason: null,
-            message: "Sai đáp án · chờ 10 phút",
-            nextAvailableAtMs: b.cooldowns[slot],
-          };
-        }
-        b.solved.push(a.schoolSlot);
-        b.pots[slot] =
-          (b.pots[slot] ?? 0) + GAME_CONFIG.landmark.puzzleBonusCrystals;
-      } else {
-        if (!c.amount) throw new RuleRejection("AMOUNT_REQUIRED");
-        if (b.holder === a.schoolSlot)
-          throw new RuleRejection("BEACON_ALREADY_ACTIVE");
-        const amount = Math.min(
-          c.amount,
-          Math.max(0, currentTarget - (b.pots[slot] ?? 0)),
+      if (!c.amount) throw new RuleRejection("AMOUNT_REQUIRED");
+      if (b.holder === a.schoolSlot)
+        throw new RuleRejection("BEACON_ALREADY_ACTIVE");
+      const amount = Math.min(
+        c.amount,
+        Math.max(0, currentTarget - (b.pots[slot] ?? 0)),
+      );
+      deposited = amount;
+      const wallet = (
+        await db.query<{ balance: string }>(
+          "SELECT balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-crystals' FOR UPDATE",
+          [this.fixture.campaignId, a.actorId],
+        )
+      ).rows[0];
+      const available = BigInt(wallet?.balance ?? "0");
+      const shortage = Number(
+        BigInt(amount) > available ? BigInt(amount) - available : 0n,
+      );
+      if (shortage > 0) {
+        await this.change(
+          db,
+          a,
+          key,
+          "fixture-credit",
+          -shortage * GAME_CONFIG.landmark.pointsPerCrystal,
         );
-        deposited = amount;
-        const wallet = (
-          await db.query<{ balance: string }>(
-            "SELECT balance::text FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-crystals' FOR UPDATE",
-            [this.fixture.campaignId, a.actorId],
-          )
-        ).rows[0];
-        const available = BigInt(wallet?.balance ?? "0");
-        const shortage = Number(
-          BigInt(amount) > available ? BigInt(amount) - available : 0n,
-        );
-        if (shortage > 0) {
-          await this.change(
-            db,
-            a,
-            key,
-            "fixture-credit",
-            -shortage * GAME_CONFIG.landmark.pointsPerCrystal,
-          );
-          await this.change(db, a, key, "fixture-crystals", shortage);
-        }
-        await this.change(db, a, key, "fixture-crystals", -amount);
-        b.pots[slot] = (b.pots[slot] ?? 0) + amount;
+        await this.change(db, a, key, "fixture-crystals", shortage);
       }
+      await this.change(db, a, key, "fixture-crystals", -amount);
+      b.pots[slot] = (b.pots[slot] ?? 0) + amount;
       let lit = false;
       if (b.holder !== a.schoolSlot && (b.pots[slot] ?? 0) >= currentTarget) {
         if (school.active && school.active !== o.id) {
@@ -1034,7 +998,7 @@ export class SignedGameplay {
           "INSERT INTO r2pl_v2.game_events(campaign_id,title,body) VALUES($1,$2,$3)",
           [
             this.fixture.campaignId,
-            `Đèn hiệu ${o.name}`,
+            `Đèn hiệu ${landmarkName}`,
             `${a.schoolName} đã thắp sáng Beacon`,
           ],
         );

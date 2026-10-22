@@ -318,7 +318,6 @@ export class WorldView {
   #privateCatalog: readonly WorldObject[] = [];
   #previewCatalog = new Map<string, WorldObject>();
   #catalog: readonly WorldObject[];
-  readonly #solvedLandmarks = new Set<string>();
   readonly #isDev: boolean;
   #selectedObject: string | undefined;
   #hoveredObject: string | undefined;
@@ -736,7 +735,6 @@ export class WorldView {
       id: string;
       holder: number | null;
       target: number;
-      solved?: boolean;
     }[],
   ): void {
     const digest = JSON.stringify(beacons);
@@ -746,16 +744,14 @@ export class WorldView {
       this.#beacons.remove(child);
       this.#disposeGroup(child);
     }
-    this.#solvedLandmarks.clear();
     for (const beacon of beacons) {
-      if (beacon.solved) this.#solvedLandmarks.add(beacon.id);
       const index = this.#markers.findIndex((m) => m.id === beacon.id),
         marker = this.#markers[index];
       if (!marker) continue;
       const title = this.#markerElements[index]?.querySelector("b");
       const landmark = this.#catalog.find((o) => o.id === beacon.id);
       if (title && landmark)
-        title.textContent = objectDisplayName(landmark, !!beacon.solved);
+        title.textContent = objectDisplayName(landmark);
       const detail = this.#markerElements[index]?.querySelector("small");
       if (detail)
         detail.textContent =
@@ -907,7 +903,7 @@ export class WorldView {
         kind: o.kind,
         x: o.x,
         z: o.z,
-        title: objectDisplayName(o, false),
+        title: objectDisplayName(o),
         detail: "",
         ...(school ? { color: school.color, schoolSlot: school.slot } : {}),
       };
@@ -1113,7 +1109,6 @@ export class WorldView {
     this.#schoolSlot = slot;
     this.#selectedObject = undefined;
     this.#hoveredObject = undefined;
-    this.#solvedLandmarks.clear();
     this.#beaconDigest = "";
     this.#sharedDigest = "";
     this.#replica = undefined;
@@ -1541,7 +1536,6 @@ export class WorldView {
     if (object) {
       this.#objectTooltip.textContent = objectDisplayName(
         object,
-        object.kind !== "landmark" || this.#solvedLandmarks.has(object.id),
       );
       this.#objectTooltip.style.transform = `translate3d(${x + 12}px, ${y + 12}px, 0)`;
     }

@@ -84,8 +84,11 @@ export function validateEditorLayout(
       !SCHOOLS.some((s) => s.slot === o.schoolSlot && o.id === `hq-${s.id}`)
     )
       throw new TypeError("Trụ sở không thuộc trường thi đấu.");
-    if (o.kind === "landmark" && !LANDMARKS.some((l) => l.id === o.id))
-      throw new TypeError("Công trình không hợp lệ.");
+    if (o.kind === "landmark") {
+      const landmark = LANDMARKS.find((l) => l.id === o.id);
+      if (!landmark) throw new TypeError("Công trình không hợp lệ.");
+      (o as { name: string }).name = landmark.name;
+    }
     if (
       ["unistop", "chest"].includes(o.kind) &&
       !["aspire", "nitro", "predator"].includes(o.tier ?? "")

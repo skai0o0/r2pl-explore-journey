@@ -310,9 +310,6 @@ export interface LandmarkCandidateRules {
   /** Crystals needed for first light when no school owns the landmark. */
   readonly firstLightTarget: bigint;
   readonly overtake: LandmarkOvertakeRule;
-  /** Crystals credited toward the landmark for one correct puzzle answer. */
-  readonly correctPuzzleContribution: bigint;
-  readonly wrongAnswerCooldownMs: bigint;
 }
 
 export interface LandmarkSchoolContribution {
@@ -320,15 +317,9 @@ export interface LandmarkSchoolContribution {
   readonly crystals: bigint;
 }
 
-export interface LandmarkSchoolTimestamp {
-  readonly schoolSlot: number;
-  readonly atMs: bigint;
-}
-
 export interface LandmarkState {
   readonly ownerSchoolSlot: number | null;
   readonly contributions: readonly LandmarkSchoolContribution[];
-  readonly wrongPuzzleAtMsBySchool: readonly LandmarkSchoolTimestamp[];
 }
 
 export interface LandmarkContributionInput {
@@ -338,16 +329,9 @@ export interface LandmarkContributionInput {
   readonly atMs: bigint;
 }
 
-export interface LandmarkPuzzleInput {
-  readonly schoolSlot: number;
-  readonly correct: boolean;
-  readonly atMs: bigint;
-}
-
 export type LandmarkRejectReason =
   | "invalid_argument"
-  | "insufficient_crystals"
-  | "puzzle_cooldown";
+  | "insufficient_crystals";
 
 export type LandmarkDecision =
   | {
@@ -371,11 +355,6 @@ function assertLandmarkRules(rules: LandmarkCandidateRules): void {
   } else {
     throw new TypeError("overtake must be a discriminated rule");
   }
-  assertNonnegativeBigInt(
-    rules.correctPuzzleContribution,
-    "correctPuzzleContribution",
-  );
-  assertNonnegativeBigInt(rules.wrongAnswerCooldownMs, "wrongAnswerCooldownMs");
 }
 
 function contributionOf(state: LandmarkState, schoolSlot: number): bigint {
@@ -395,28 +374,6 @@ function withContribution(
     .concat({ schoolSlot, crystals })
     .sort((a, b) => a.schoolSlot - b.schoolSlot);
   return { ...state, contributions: rows };
-}
-
-function withWrongPuzzleAt(
-  state: LandmarkState,
-  schoolSlot: number,
-  atMs: bigint,
-): LandmarkState {
-  const rows = state.wrongPuzzleAtMsBySchool
-    .filter((row) => row.schoolSlot !== schoolSlot)
-    .concat({ schoolSlot, atMs })
-    .sort((a, b) => a.schoolSlot - b.schoolSlot);
-  return { ...state, wrongPuzzleAtMsBySchool: rows };
-}
-
-function lastWrongPuzzleAt(
-  state: LandmarkState,
-  schoolSlot: number,
-): bigint | null {
-  for (const row of state.wrongPuzzleAtMsBySchool) {
-    if (row.schoolSlot === schoolSlot) return row.atMs;
-  }
-  return null;
 }
 
 function overtakeThreshold(
@@ -457,10 +414,6 @@ function assertLandmarkState(state: LandmarkState): void {
     assertSchoolSlot(row.schoolSlot);
     assertNonnegativeBigInt(row.crystals, "contribution.crystals");
   }
-  for (const row of state.wrongPuzzleAtMsBySchool) {
-    assertSchoolSlot(row.schoolSlot);
-    assertNonnegativeBigInt(row.atMs, "wrongPuzzle.atMs");
-  }
 }
 
 export function evaluateLandmarkContribution(
@@ -500,47 +453,3 @@ export function evaluateLandmarkContribution(
   };
 }
 
-export function evaluateLandmarkPuzzle(
-  state: LandmarkState,
-  input: LandmarkPuzzleInput,
-  rules: LandmarkCandidateRules,
-): LandmarkDecision {
-  assertLandmarkRules(rules);
-  assertLandmarkState(state);
-  assertSchoolSlot(input.schoolSlot);
-  assertFlag(input.correct, "correct");
-  assertNonnegativeBigInt(input.atMs, "atMs");
-  const lastWrong = lastWrongPuzzleAt(state, input.schoolSlot);
-  if (
-    lastWrong !== null &&
-    input.atMs < lastWrong + rules.wrongAnswerCooldownMs
-  ) {
-    return { kind: "reject", reason: "puzzle_cooldown" };
-  }
-  if (!input.correct) {
-    return {
-      kind: "apply",
-      crystalsAdded: 0n,
-      next: withWrongPuzzleAt(state, input.schoolSlot, input.atMs),
-      ownerSchoolSlot: state.ownerSchoolSlot,
-    };
-  }
-  const actorTotal =
-    contributionOf(state, input.schoolSlot) + rules.correctPuzzleContribution;
-  const ownerSchoolSlot = proposedOwner(
-    state,
-    input.schoolSlot,
-    actorTotal,
-    rules,
-  );
-  const next = {
-    ...withContribution(state, input.schoolSlot, actorTotal),
-    ownerSchoolSlot,
-  };
-  return {
-    kind: "apply",
-    crystalsAdded: rules.correctPuzzleContribution,
-    next,
-    ownerSchoolSlot,
-  };
-}

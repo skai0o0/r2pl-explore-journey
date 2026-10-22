@@ -63,13 +63,9 @@
 
   * Tie-breaker: Earliest timestamp reaching the score, then lower `schoolSlot`.
 
-## 3. Landmarks, Puzzles & Beacon Illumination (`C-02`, `C-09`)
+## 3. Mystery Sites & Beacon Illumination (`C-02`)
 
-* **10 Official Landmarks:**
-
-  * *Danh lam thắng cảnh:* (1) Đỉnh Fansipan, (2) Vịnh Hạ Long, (3) Núi Ngũ Hành Sơn, (4) Động Phong Nha, (5) Núi Bà Đen.
-
-  * *Công trình biểu tượng:* (6) Hoàng thành Thăng Long, (7) Cảng Hải Phòng, (8) Kinh thành Huế, (9) Tòa nhà Bitexco, (10) Chợ nổi Cái Răng.
+* **10 Mystery Sites:** All ten sites use the same player-facing name, “Công trình bí ẩn”; their names are not revealed by puzzles, hints, labels or notifications.
 
 * **Beacon & Takeover (`C-02`):**
 
@@ -80,8 +76,6 @@
   * **First Illumination Threshold:** **1,000 Crystals** (configurable to `100` in `gameConfig.ts`).
 
   * **Takeover Threshold:** Linear `+5%` of base per takeover (`1000 -> 1050 -> 1100 -> 1150...`).
-
-  * **Puzzle / Hint Bonus (`C-09`):** Enabled as a configurable module (ported from V1 `landmarkModal.ts` + `landmarkPuzzle.ts`): solving the Landmark puzzle grants `+10%` of the current target (`100 Crystals` on base `1000`) once per school per Landmark; wrong guess triggers a **10-minute cooldown**.
 
   * **Buffs:** Active Beacon holder receives the Landmark's school buff metadata on the HUD/leaderboard until another school takes over the Beacon.
 

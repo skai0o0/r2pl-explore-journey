@@ -11,7 +11,6 @@ import {
   evaluateContestDefense,
   evaluateKnowledgeDecay,
   evaluateLandmarkContribution,
-  evaluateLandmarkPuzzle,
   evaluateSharedKnowledgeEntry,
   resolveContestPhase,
 } from "../shared/gameplay/candidates.ts";
@@ -23,7 +22,6 @@ import { evaluateDevExplore } from "../shared/gameplay/devRules.ts";
 
 const HOUR_MS = 3_600_000n;
 const DAY_MS = 24n * HOUR_MS;
-const MINUTE_MS = 60_000n;
 
 const devConfig = (cost: bigint): DevExploreConfig => ({
   ruleVersion: 0,
@@ -78,15 +76,12 @@ const landmarkRules = (
 ): LandmarkCandidateRules => ({
   firstLightTarget: 100n,
   overtake: { kind: "absolute_margin", margin: 20n },
-  correctPuzzleContribution: 10n,
-  wrongAnswerCooldownMs: 10n * MINUTE_MS,
   ...overrides,
 });
 
 const emptyLandmark = (): LandmarkState => ({
   ownerSchoolSlot: null,
   contributions: [],
-  wrongPuzzleAtMsBySchool: [],
 });
 
 // --- evaluateDevExplore ------------------------------------------------------
@@ -558,7 +553,6 @@ test("landmark overtake uses absolute margin boundaries", () => {
       { schoolSlot: 0, crystals: 100n },
       { schoolSlot: 1, crystals: 0n },
     ],
-    wrongPuzzleAtMsBySchool: [],
   };
   const challenge = (crystalAmount: bigint) =>
     evaluateLandmarkContribution(
@@ -580,7 +574,6 @@ test("landmark overtake supports relative percent and repeated contribution", ()
   const rules = landmarkRules({
     firstLightTarget: 1_000n,
     overtake: { kind: "relative_percent", percent: 5n },
-    correctPuzzleContribution: 100n,
   });
   let state: LandmarkState = emptyLandmark();
   const first = evaluateLandmarkContribution(
@@ -650,104 +643,6 @@ test("landmark contribution rejects insufficient crystals and zero amounts", () 
       rules,
     ),
     { kind: "reject", reason: "invalid_argument" },
-  );
-});
-
-test("landmark puzzle grants explicit contribution and cools wrong answers", () => {
-  const rules = landmarkRules({
-    correctPuzzleContribution: 10n,
-    wrongAnswerCooldownMs: 10n * MINUTE_MS,
-  });
-  const wrong = evaluateLandmarkPuzzle(
-    emptyLandmark(),
-    { schoolSlot: 0, correct: false, atMs: 1_000n },
-    rules,
-  );
-  assert.equal(wrong.kind, "apply");
-  assert.equal(wrong.kind === "apply" && wrong.crystalsAdded, 0n);
-  assert.equal(
-    wrong.kind === "apply" && wrong.next.wrongPuzzleAtMsBySchool.length,
-    1,
-  );
-  const cooled = wrong.kind === "apply" ? wrong.next : emptyLandmark();
-
-  assert.deepEqual(
-    evaluateLandmarkPuzzle(
-      cooled,
-      { schoolSlot: 0, correct: true, atMs: 1_000n + 10n * MINUTE_MS - 1n },
-      rules,
-    ),
-    { kind: "reject", reason: "puzzle_cooldown" },
-  );
-  const retried = evaluateLandmarkPuzzle(
-    cooled,
-    { schoolSlot: 0, correct: true, atMs: 1_000n + 10n * MINUTE_MS },
-    rules,
-  );
-  assert.equal(retried.kind, "apply");
-  assert.equal(retried.kind === "apply" && retried.crystalsAdded, 10n);
-  assert.equal(
-    retried.kind === "apply" &&
-      retried.next.contributions.find((row) => row.schoolSlot === 0)?.crystals,
-    10n,
-  );
-});
-
-test("landmark puzzle cooldown is per school and state stays deterministic", () => {
-  const rules = landmarkRules();
-  const wrongA = evaluateLandmarkPuzzle(
-    emptyLandmark(),
-    { schoolSlot: 0, correct: false, atMs: 500n },
-    rules,
-  );
-  const state = wrongA.kind === "apply" ? wrongA.next : emptyLandmark();
-  assert.deepEqual(
-    evaluateLandmarkPuzzle(
-      state,
-      { schoolSlot: 15, correct: true, atMs: 501n },
-      rules,
-    ),
-    {
-      kind: "apply",
-      crystalsAdded: 10n,
-      next: {
-        ownerSchoolSlot: null,
-        contributions: [{ schoolSlot: 15, crystals: 10n }],
-        wrongPuzzleAtMsBySchool: [{ schoolSlot: 0, atMs: 500n }],
-      },
-      ownerSchoolSlot: null,
-    },
-  );
-  const input = {
-    schoolSlot: 0,
-    crystalAmount: 10n,
-    availableCrystals: 10n,
-    atMs: 1n,
-  };
-  assert.deepEqual(
-    evaluateLandmarkContribution(emptyLandmark(), input, rules),
-    evaluateLandmarkContribution(emptyLandmark(), input, rules),
-  );
-  assert.throws(() =>
-    evaluateLandmarkContribution(
-      emptyLandmark(),
-      { ...input, schoolSlot: 16 },
-      rules,
-    ),
-  );
-  assert.throws(() =>
-    evaluateLandmarkContribution(
-      emptyLandmark(),
-      input,
-      landmarkRules({ firstLightTarget: 0n }),
-    ),
-  );
-  assert.throws(() =>
-    evaluateLandmarkPuzzle(
-      emptyLandmark(),
-      { schoolSlot: 0, correct: false, atMs: -1n },
-      rules,
-    ),
   );
 });
 
