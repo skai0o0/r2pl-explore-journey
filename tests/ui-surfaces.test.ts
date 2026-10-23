@@ -100,6 +100,7 @@ test("UniStop refresh preserves focus and scroll, displays rare odds, and yields
     cooldownUntil: 0,
     profileReady: true,
     hasWeeklyRunningPoints: true,
+    giftStock: 1,
   };
   try {
     stop.open(view);

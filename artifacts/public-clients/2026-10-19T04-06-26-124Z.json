@@ -1,0 +1,85 @@
+{
+  "origin": "https://play.skai0o0.id.vn",
+  "requestedClients": 20,
+  "durationSeconds": 15,
+  "rampSeconds": 10,
+  "assets": "none",
+  "connected": 20,
+  "healthy": 20,
+  "applied": 94,
+  "noChange": 20,
+  "rejected": 2,
+  "wsReceivedMB": 10.8,
+  "httpErrors": 0,
+  "transportErrors": 0,
+  "elapsedSeconds": 31.8707329,
+  "steadySeconds": 18.732572200000003,
+  "interrupted": false,
+  "ackMs": {
+    "count": 116,
+    "p50": 258.855,
+    "p95": 507.962,
+    "p99": 692.655,
+    "max": 738.988
+  },
+  "generatorTimerSlipMs": {
+    "count": 5,
+    "p50": 2.759,
+    "p95": 5.692,
+    "p99": 5.692,
+    "max": 5.692
+  },
+  "projectionObservedMs": {
+    "count": 94,
+    "p50": 402.096,
+    "p95": 622.6,
+    "p99": 800.033,
+    "max": 800.033
+  },
+  "projectionMissingAtEnd": 0,
+  "websocketM2": {
+    "receivedBytes": 10802950,
+    "sentBytes": 5320,
+    "resyncs": 0,
+    "retries": 0,
+    "closeCodes": {},
+    "closeReasons": {},
+    "errors": {},
+    "frameKinds": {
+      "16": 20,
+      "17": 116,
+      "18": 765,
+      "21": 500,
+      "22": 460
+    },
+    "steadyReceiveMbps": 0.9961984825554281
+  },
+  "http": {
+    "requests": 371,
+    "errors": 0,
+    "decodedBodyBytes": 564780,
+    "contentLengthBytes": 0,
+    "responsesWithContentLength": 0,
+    "latencyMs": {
+      "count": 371,
+      "p50": 298.457,
+      "p95": 1651.375,
+      "p99": 2234.68,
+      "max": 2380.377
+    },
+    "statuses": {
+      "200": 371
+    },
+    "steadyDecodedBodyMbps": 0.23994142139219937
+  },
+  "failures": {},
+  "limitations": [
+    "One machine/IP and network path; not 200 independent networks",
+    "Protocol clients, no rendering/FPS or browser cache",
+    "M2 bytes exclude Colyseus framing, TLS/TCP and handshake overhead",
+    "HTTP body counts are decoded, not exact wire bytes; content-length is partial",
+    "Shell assets exclude 3D models, textures and lazy chunks",
+    "Projection observed is receipt of private own-school state, not a rendered pixel",
+    "Result measures this route and workload, not a Cloudflare capacity limit"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "observedFromVideo": {
+    "portalDashboardReceives": [
+      "game_campaign",
+      "game_challenge",
+      "game_return"
+    ],
+    "portalButtonBeforeAndAfter": "Bắt đầu từ Game",
+    "gameEntry": "https://skai0o0.id.vn/?entry=portal",
+    "returnsTo": "https://predatorleague.acervietnam.com.vn/portal/r2pl",
+    "identityMode": "AMTECH staff / Live Editor"
+  },
+  "publicPartnerModule": {
+    "url": "https://predatorleague.acervietnam.com.vn/build/assets/r2pl-BymmNjen.js",
+    "behavior": "r2pl.handoffId selects connectUrl plus consent form; missing handoffId selects startUrl plus Start from Game button"
+  },
+  "productionAccessLogObservation": {
+    "localTimeWindow": "2026-10-19 20:28–20:29 Asia/Saigon",
+    "observed": "GET /api/portal/config 200",
+    "notObserved": [
+      "POST /api/partner/v1/members",
+      "POST /api/partner/v1/launches",
+      "POST /api/portal/session"
+    ]
+  },
+  "diagnosis": "Previous configuration sent handoff directly to dashboard /portal/r2pl. Correct GET receiver /portal/r2pl/login was supplied by owner and verified: 400 without parameters, 302 to dashboard with valid-format handoff. Production login URL and legacy redirect now use /portal/r2pl/login.",
+  "productionChangesThisInvestigation": true,
+  "secretsStored": false,
+  "previousMissingHandlerInference": "Superseded: wrong configured route, not evidence that partner lacked a handler.",
+  "resolution": "Verified end-to-end with owner-provided test account: partner sign-in, Game start, consent/connect, one-use ticket exchange and Production Live Editor all succeeded after using /portal/r2pl/login."
+}

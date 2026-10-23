@@ -463,13 +463,16 @@ export function writeTerrainTile(
   }
 
   const hasPublic = publicKnowledge?.hasChunk(id) ?? false;
-  const publicMask = hasPublic ? publicKnowledge!.maskAt(id, local) : 0;
+  const mask = replica.maskAt(id, local);
+  // Own school is immediate; the public rival layer intentionally arrives later.
+  const publicMask = hasPublic
+    ? (publicKnowledge!.maskAt(id, local) & ~(1 << schoolSlot)) | mask
+    : 0;
   if (!replica.isDiscovered(id, local) && !publicMask) {
     pixels[offset + 3] = 0;
     return;
   }
   const pair = shared.get(z * 1000 + x);
-  const mask = replica.maskAt(id, local);
   const slots =
     !hasPublic && pair?.length === 2
       ? pair

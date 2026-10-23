@@ -6,6 +6,7 @@ import {
 import { chunkBounds, chunkCoordinatesForId } from "../world/coordinates.ts";
 import { schoolBit } from "../world/registry.ts";
 import type { Delta, PublicDelta, PublicSnapshot, Snapshot } from "./m2.ts";
+import type { TilePatch } from "./mapStream.ts";
 
 interface ReplicaChunk {
   readonly mask: Uint8Array;
@@ -111,6 +112,31 @@ export class ProjectionReplica {
     ).getUint16(localIndex * 2, true);
   }
 
+  applyPatch(patch: TilePatch): DeltaResult {
+    const chunk = this.#chunks.get(patch.chunkId);
+    if (!chunk) return "resync";
+    if (patch.nextRevision <= chunk.revision) return "duplicate";
+    if (patch.baseRevision > chunk.revision) return "resync";
+    // Validate the entire packet before touching any tile.
+    if (
+      patch.tiles.some(
+        (t) =>
+          (t.mask & ~schoolBit(this.#slot)) !== 0 ||
+          typeof t.discovered !== "boolean",
+      )
+    )
+      throw new Error("Unauthorized school patch");
+    const view = new DataView(chunk.mask.buffer);
+    for (const tile of patch.tiles) {
+      view.setUint16(tile.localIndex * 2, tile.mask, true);
+      const bit = 1 << (tile.localIndex & 7);
+      if (tile.discovered) chunk.fog[tile.localIndex >> 3]! |= bit;
+      else chunk.fog[tile.localIndex >> 3]! &= ~bit;
+    }
+    chunk.revision = patch.nextRevision;
+    return "applied";
+  }
+
   isDiscovered(chunkId: number, localIndex: number): boolean {
     const chunk = this.#chunks.get(chunkId);
     if (
@@ -140,7 +166,9 @@ export class PublicKnowledgeReplica {
     return this.#chunks.get(id)?.revision;
   }
   applySnapshot(snapshot: PublicSnapshot): void {
-    if ((this.#chunks.get(snapshot.chunkId)?.revision ?? -1n) > snapshot.revision)
+    if (
+      (this.#chunks.get(snapshot.chunkId)?.revision ?? -1n) > snapshot.revision
+    )
       return;
     if (snapshot.mask.byteLength !== CHUNK_MASK_BYTES)
       throw new Error("Invalid public snapshot size");
@@ -183,5 +211,16 @@ export class PublicKnowledgeReplica {
     if (!chunk || local < 0 || local >= 4096)
       throw new RangeError("Unknown public chunk or local index");
     return new DataView(chunk.mask.buffer).getUint16(local * 2, true);
+  }
+  applyPatch(patch: TilePatch): DeltaResult {
+    const chunk = this.#chunks.get(patch.chunkId);
+    if (!chunk) return "resync";
+    if (patch.nextRevision <= chunk.revision) return "duplicate";
+    if (patch.baseRevision > chunk.revision) return "resync";
+    const view = new DataView(chunk.mask.buffer);
+    for (const tile of patch.tiles)
+      view.setUint16(tile.localIndex * 2, tile.mask, true);
+    chunk.revision = patch.nextRevision;
+    return "applied";
   }
 }

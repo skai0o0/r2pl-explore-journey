@@ -168,13 +168,22 @@ test("eight-school playable server shares durable bot/student world with actor-p
       "incoming credit never erases a committed debit",
     );
     assert.equal(credited?.ledgerConserved, true);
-    const bots = server.startBots(1);
-    await bots;
+    const bots = server.startBots({ count: 24, durationSeconds: 2 });
+    const botDeadline = Date.now() + 5000;
+    while (
+      server.getBotTelemetry().status === "starting" &&
+      Date.now() < botDeadline
+    )
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(server.getBotTelemetry().status, "running");
     const schoolStats = (await (
       await fetch(`${base}/api/fixture/bots`, { headers })
     ).json()) as { schoolSlot: number; bots: unknown[] };
     assert.equal(schoolStats.schoolSlot, 0);
     assert.equal(schoolStats.bots.length, 3);
+    await bots;
+    assert.equal(server.getBotTelemetry().status, "idle");
+    assert.equal(server.getBotTelemetry().bots.length, 0);
     assert.equal(await server.accounts.profile("forged"), null);
     await peer.close();
     peer = undefined;

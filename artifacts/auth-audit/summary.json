@@ -1,0 +1,104 @@
+{
+  "productionChanged": true,
+  "publicProbeCount": 29,
+  "publicProbeLog": "production-probes.json",
+  "secretScan": {
+    "files": 14,
+    "matchingSecretFiles": 0,
+    "scope": "Production dist/client js/html/json/map"
+  },
+  "databaseRole": {
+    "name": "r2pl_production",
+    "superuser": false,
+    "createRole": false,
+    "createDatabase": false,
+    "bypassRls": false
+  },
+  "findings": [
+    {
+      "id": "AUTH-01",
+      "issue": "Unauthenticated GET /api/fixture/world invokes syncStops and can update computed UniStop ownership/arrivals",
+      "impact": "Unauthorized trigger of server-computed synchronization; not arbitrary SQL or client-selected balances",
+      "fix": "Require authenticated portal player or admin before synchronization",
+      "state": "Deployed to isolated Production release; post-deploy public checks PASS"
+    },
+    {
+      "id": "AUTH-02",
+      "issue": "Matchmaking allocates room/seat before instance-level WebSocket authentication",
+      "impact": "Anonymous resource allocation/DoS surface; does not grant authenticated gameplay mutation authority",
+      "fix": "Static authentication before allocation, revalidate on WS join, pass auth context in HTTP adapter, bound body, origin/method validation and safe HTTP error status",
+      "state": "Deployed to isolated Production release; post-deploy public checks PASS"
+    },
+    {
+      "id": "NET-01",
+      "issue": "PostgreSQL listens on all network addresses; UFW inactive and default input accepts",
+      "mitigationPresent": "pg_hba restricts incoming database login to loopback and Tailscale with password authentication; no proof of successful unauthorized DB connection",
+      "state": "Configuration finding only; no firewall or database changes"
+    }
+  ],
+  "validation": {
+    "headFocusedTests": {
+      "pass": 7,
+      "fail": 0,
+      "skip": 0
+    },
+    "productionBaselineFocusedTests": {
+      "baseline": "1dd08e7 inferred from service start time and commit history",
+      "pass": 6,
+      "fail": 0,
+      "skip": 0
+    },
+    "typecheck": "PASS",
+    "clientBuild": "PASS",
+    "productionMainPid": "1575060",
+    "productionIndexSha256": "850abed2009754438d663ae2e2f480c5b0aa45b86eec39df31dbdd981d8faa46",
+    "postDeployPublicProbes": {
+      "pass": 32,
+      "log": "production-probes-after.json"
+    },
+    "partnerLoginBrowserCheck": "PASS: real test-account sign-in on partner website → Game start → /portal/r2pl/login → consent/connect → #launch ticket → Production Live Editor at game root; no editor changes published",
+    "partnerLoginHandlerCheck": {
+      "configuredEndpoint": "https://predatorleague.acervietnam.com.vn/portal/r2pl/login",
+      "legacyRedirectPreservesThreeParameters": true,
+      "validParametersResponse": 302,
+      "redirectPath": "/portal/r2pl",
+      "authenticatedExchangeTested": true
+    },
+    "partnerLoginScreenshot": "production-partner-login-success.png"
+  },
+  "preparedProductionPatch": "production-auth-only.tar",
+  "limitations": [
+    "No load test or complete penetration-test guarantee",
+    "PostgreSQL listener/firewall finding is unchanged; deployment scope was auth only.",
+    "Production AMTECH staff sign-in tested; student gameplay and running sync not exercised with the staff account."
+  ],
+  "deployment": {
+    "baseline": "1dd08e7d65d9c42879f02d43937565230b19d211",
+    "changedFiles": {
+      "server/integration/SchoolPlayServer.ts": "a925bab60dd786ca4b08f11aca96ab4bc44739d7e9ecd3d05d694ab503d3e597",
+      "server/realtime/GatewayRoom.ts": "a9bee00c7121eb3f2682bc82c782e4478aa1fadcc59f72edad32e3baf80dffd3"
+    },
+    "clientSha256": "850abed2009754438d663ae2e2f480c5b0aa45b86eec39df31dbdd981d8faa46",
+    "release": "/opt/r2pl-production-auth-20261019-1e94wydb/release",
+    "rollback": "/opt/r2pl-production-auth-20261019-1e94wydb/rollback",
+    "otherPids": {
+      "r2pl-standalone.service": "590867",
+      "r2pl-portal.service": "590874"
+    },
+    "productionChanged": true,
+    "deployedAtUTC": "2026-10-19T12:57:41Z",
+    "mainPid": "1265540",
+    "verification": "PASS"
+  },
+  "partnerLoginConfiguration": {
+    "portalLoginUrl": "https://predatorleague.acervietnam.com.vn/portal/r2pl/login",
+    "release": "/opt/r2pl-production-auth-20261019-1e94wydb/release",
+    "backupDirectory": "/opt/r2pl-production-auth-20261019-1e94wydb/partner-login-83tfg1ln",
+    "mainPid": "1575060",
+    "updatedAtUTC": "2026-10-19T13:47:02Z",
+    "clientUnchanged": true,
+    "contractUnchanged": true,
+    "demoPortalUnchanged": true,
+    "legacyLoginRedirect": true
+  }
+}

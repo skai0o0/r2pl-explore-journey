@@ -1,0 +1,72 @@
+{
+  "origin": "https://play.skai0o0.id.vn",
+  "requestedClients": 2,
+  "durationSeconds": 8,
+  "rampSeconds": 1,
+  "assets": "none",
+  "connected": 2,
+  "healthy": 2,
+  "applied": 2,
+  "noChange": 4,
+  "rejected": 0,
+  "wsReceivedMB": 0.87,
+  "httpErrors": 0,
+  "transportErrors": 0,
+  "elapsedSeconds": 16.367012199999998,
+  "steadySeconds": 10.5177778,
+  "interrupted": false,
+  "ackMs": {
+    "count": 6,
+    "p50": 423.391,
+    "p95": 775.495,
+    "p99": 775.495,
+    "max": 775.495
+  },
+  "projectionObservedMs": {
+    "count": 2,
+    "p50": 580.37,
+    "p95": 885.568,
+    "p99": 885.568,
+    "max": 885.568
+  },
+  "projectionMissingAtEnd": 0,
+  "websocketM2": {
+    "receivedBytes": 872934,
+    "sentBytes": 336,
+    "frameKinds": {
+      "16": 2,
+      "17": 6,
+      "18": 52,
+      "21": 51
+    },
+    "steadyReceiveMbps": 0.019704542531788417
+  },
+  "http": {
+    "requests": 26,
+    "errors": 0,
+    "decodedBodyBytes": 42626,
+    "contentLengthBytes": 0,
+    "responsesWithContentLength": 0,
+    "latencyMs": {
+      "count": 26,
+      "p50": 796.813,
+      "p95": 1756.767,
+      "p99": 1762.546,
+      "max": 1762.546
+    },
+    "statuses": {
+      "200": 26
+    },
+    "steadyDecodedBodyMbps": 0.030185844009748903
+  },
+  "failures": {},
+  "limitations": [
+    "One machine/IP and network path; not 200 independent networks",
+    "Protocol clients, no rendering/FPS or browser cache",
+    "M2 bytes exclude Colyseus framing, TLS/TCP and handshake overhead",
+    "HTTP body counts are decoded, not exact wire bytes; content-length is partial",
+    "Shell assets exclude 3D models, textures and lazy chunks",
+    "Projection observed is receipt of private own-school state, not a rendered pixel",
+    "Result measures this route and workload, not a Cloudflare capacity limit"
+  ]
+}

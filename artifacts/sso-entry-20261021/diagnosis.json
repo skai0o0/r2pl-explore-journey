@@ -1,0 +1,22 @@
+{
+  "commit": "06ed070116bf4785e7e48843aaeb3e2696198a90",
+  "localUpdate": "fast-forward from 885d7e1; tracked worktree unchanged after pull",
+  "testedAccount": "SV001",
+  "observedFlow": [
+    "Portal /portal/r2pl: start button",
+    "Game /?entry=portal: creates PKCE verifier/challenge",
+    "Portal /portal/r2pl: required unchecked confirmation + disabled connect button",
+    "Confirm then submit: Game successfully opens HCMUT test profile"
+  ],
+  "repeatWithExistingGameSession": "Starting from Portal again still returns to the required confirmation form",
+  "partnerPublicAsset": "https://predatorleague.acervietnam.com.vn/build/assets/r2pl-DzwkRFK4.js",
+  "partnerUiCondition": {
+    "noHandoffId": "POST startUrl; start button",
+    "withHandoffId": "POST connectUrl; confirmed checkbox required; button disabled unless checked"
+  },
+  "gameSource": "client/src/portalSession.ts:149-194",
+  "finding": "Expected PKCE round-trip plus a mandatory Portal confirmation step; Game accepts the resulting launch ticket and enters successfully",
+  "recommendedChange": "Portal login handler should complete members/launches and redirect to launchUrl automatically for already authenticated, previously consenting users; retain consent UI when consent is missing",
+  "repositoryCodeChanged": false,
+  "productionChanged": false
+}

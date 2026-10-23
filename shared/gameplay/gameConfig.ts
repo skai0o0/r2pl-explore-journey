@@ -321,6 +321,12 @@ export const BEACON_BUFF_CONFIG = {
   comeback: { tiles: 10, spins: 1, points: 5 },
 } as const;
 export const GAME_CONFIG = {
+  realtime: {
+    schoolBatchMs: 100,
+    rivalBatchMs: 12_000,
+    objectPollMs: 500,
+    fallbackPollMs: 60_000,
+  },
   notifications: {
     liveTtlMs: 60_000,
     queueTtlMs: 30_000,

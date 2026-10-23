@@ -10,10 +10,11 @@ import {
   decodePublicSnapshot,
   decodeSnapshot,
   encodeExplore,
+  encodeLiveSubscribe,
   encodeResync,
-  encodeSubscribe,
   M2_KIND,
 } from "../../shared/protocol/m2.ts";
+import { decodeTilePatch } from "../../shared/protocol/mapStream.ts";
 import {
   ProjectionReplica,
   PublicKnowledgeReplica,
@@ -126,7 +127,7 @@ export class BotPeer {
       if (!this.#intentional && this.#room === room)
         this.#fail("Bot connection closed unexpectedly");
     });
-    this.#send(encodeSubscribe(this.chunks));
+    this.#send(encodeLiveSubscribe(this.chunks));
     const deadline = performance.now() + 10000;
     while (
       this.#ready.size < this.chunks.length &&
@@ -173,6 +174,21 @@ export class BotPeer {
         this.resyncs++;
         this.#send(encodeResync(delta.chunkId));
       }
+    } else if (
+      frame.kind === M2_KIND.SCHOOL_PATCH ||
+      frame.kind === M2_KIND.PUBLIC_PATCH
+    ) {
+      const own = frame.kind === M2_KIND.SCHOOL_PATCH;
+      const patch = decodeTilePatch(frame.payload, own);
+      const result = own
+        ? this.#replica.applyPatch(patch)
+        : this.#public.applyPatch(patch);
+      if (result === "resync") {
+        this.resyncs++;
+        this.#send(encodeResync(patch.chunkId));
+      } else if (own)
+        for (const tile of patch.tiles)
+          this.#learn(patch.chunkId, tile.localIndex);
     } else if (frame.kind === M2_KIND.ACK) {
       const ack = decodeAck(frame.payload);
       const hex = Buffer.from(ack.key).toString("hex");

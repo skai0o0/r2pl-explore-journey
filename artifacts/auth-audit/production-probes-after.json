@@ -1,0 +1,198 @@
+{
+  "checkedAtUTC": "2026-10-19T12:58:29.424Z",
+  "origin": "https://skai0o0.id.vn",
+  "probes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "status": 200,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/world",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "POST",
+      "path": "/matchmake/joinOrCreate/m2",
+      "status": 400,
+      "error": "MATCHMAKING_REJECTED"
+    },
+    {
+      "method": "POST",
+      "path": "/matchmake/create/m2",
+      "status": 404,
+      "error": "NOT_FOUND"
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/bootstrap",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/game",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/game/tile?index=500500",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/me",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/chests",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/receipts",
+      "status": 401,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin",
+      "status": 403,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/editor",
+      "status": 403,
+      "error": "ADMIN_REQUIRED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/gifts",
+      "status": 403,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/gift-pool",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/game",
+      "status": 403,
+      "error": "CSRF_REJECTED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin",
+      "status": 403,
+      "error": "CSRF_REJECTED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/editor/draft",
+      "status": 403,
+      "error": "CSRF_REJECTED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/gifts/redeem",
+      "status": 403,
+      "error": "CSRF_REJECTED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/fixture/bots/start",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/fixture/bots/stop",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/rewards",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/partner/v1/members",
+      "status": 401,
+      "error": "INVALID_SIGNATURE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/partner/v1/running",
+      "status": 401,
+      "error": "INVALID_SIGNATURE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/partner/v1/launches",
+      "status": 401,
+      "error": "INVALID_SIGNATURE"
+    },
+    {
+      "method": "POST",
+      "path": "/api/portal/session",
+      "status": 401,
+      "error": "INVALID_LAUNCH"
+    },
+    {
+      "method": "POST",
+      "path": "/api/portal/ws-ticket",
+      "status": 403,
+      "error": "CSRF_REJECTED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/dummy/v1/me",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/.env",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/.env.portal",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/.git/config",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/artifacts/partner-credentials/.env.production",
+      "status": 404,
+      "error": null
+    },
+    {
+      "method": "GET",
+      "path": "/matchmake/joinOrCreate/m2",
+      "status": 405,
+      "error": "METHOD_NOT_ALLOWED"
+    }
+  ]
+}

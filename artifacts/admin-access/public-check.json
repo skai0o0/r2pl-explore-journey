@@ -1,0 +1,106 @@
+{
+  "results": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/admin",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/admin/login",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/accounts",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/audit",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/rankings",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/editor",
+      "status": 403,
+      "expected": 403,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/gift-pool",
+      "status": 403,
+      "expected": 403,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/gifts",
+      "status": 403,
+      "expected": 403,
+      "pass": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/fixture/world",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/accounts",
+      "status": 403,
+      "expected": 403,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin",
+      "status": 403,
+      "expected": 403,
+      "pass": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin-auth/login",
+      "status": 403,
+      "expected": 403,
+      "pass": true
+    }
+  ],
+  "passed": true,
+  "health": {
+    "mode": "production",
+    "contractVersion": 1,
+    "fixtureOnly": false,
+    "schools": 8,
+    "botStatus": "idle"
+  },
+  "contractVersion": 1,
+  "campaignId": "2e00774c-4a8f-4c58-bff6-ed9092901d8f",
+  "portalLoginUrl": "https://predatorleague.acervietnam.com.vn/portal/r2pl/login"
+}

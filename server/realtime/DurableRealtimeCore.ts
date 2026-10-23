@@ -1,4 +1,6 @@
 import { performance } from "node:perf_hooks";
+import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import type { Snapshot } from "../../shared/protocol/m2.ts";
 import {
   ACK_STATUS,
   decodeExplore,
@@ -18,6 +20,10 @@ import {
   REASON,
   type Reason,
 } from "../../shared/protocol/m2.ts";
+import {
+  encodeTilePatch,
+  type TilePatch,
+} from "../../shared/protocol/mapStream.ts";
 import { CHUNK_SIZE } from "../../shared/world/constants.ts";
 import {
   chunkCoordinatesForId,
@@ -53,6 +59,7 @@ interface Session {
   generation: number;
   tokens: number;
   lastRefill: number;
+  liveBatch: boolean;
 }
 
 export interface CorrelatedActionTrace {
@@ -84,6 +91,64 @@ export class DurableRealtimeCore {
   readonly #traces = new Map<string, CorrelatedActionTrace>();
   readonly #traceCorrelationIds: ReadonlySet<string> | undefined;
   #relayTimer: NodeJS.Timeout | undefined;
+  #schoolTimer: NodeJS.Timeout | undefined;
+  #publicTimer: NodeJS.Timeout | undefined;
+  readonly #dirtySchools = new Map<string, { slot: number; id: number }>();
+  readonly #schoolSnapshots = new Map<string, Snapshot>();
+  readonly #publicBatches = new Map<
+    number,
+    { base: bigint; next: bigint; gap: boolean; tiles: Map<number, number> }
+  >();
+  #flushingSchools = false;
+  #flushingPublic = false;
+  onCommittedChange?: () => void;
+
+  /** Feed only authenticated, opted-in players; bytes are encoded once per school. */
+  sendMapState(slot: number, bytes: Uint8Array, initialOnly = false): void {
+    for (const session of this.#sessions.values()) {
+      if (
+        !session.liveBatch ||
+        session.identity.schoolSlot !== slot ||
+        !session.subscriptions.size ||
+        session.outbound.closed
+      )
+        continue;
+      if (initialOnly && this.#mapReady.has(session)) continue;
+      if (!initialOnly && !this.#mapReady.has(session)) continue;
+      if (
+        session.outbound.enqueue(
+          bytes,
+          () => session.liveBatch && session.subscriptions.size > 0,
+        )
+      )
+        this.#mapReady.add(session);
+    }
+  }
+  readonly #mapReady = new WeakSet<Session>();
+
+  needsMapSnapshot(slot: number): boolean {
+    return [...this.#sessions.values()].some(
+      (s) =>
+        s.liveBatch &&
+        s.identity.schoolSlot === slot &&
+        s.subscriptions.size > 0 &&
+        !s.outbound.closed &&
+        !this.#mapReady.has(s),
+    );
+  }
+
+  get liveSchoolSlots(): number[] {
+    return [
+      ...new Set(
+        [...this.#sessions.values()]
+          .filter(
+            (s) =>
+              s.liveBatch && s.subscriptions.size > 0 && !s.outbound.closed,
+          )
+          .map((s) => s.identity.schoolSlot),
+      ),
+    ];
+  }
 
   constructor(
     authority: M35FixtureAuthority,
@@ -131,12 +196,31 @@ export class DurableRealtimeCore {
     if (this.#relayTimer) throw new Error("Relay already started");
     this.#relayTimer = setInterval(() => this.#pollRelay(), intervalMs);
     this.#relayTimer.unref();
+    this.#schoolTimer = setInterval(() => {
+      void this.flushSchoolChanges().catch(() =>
+        this.metrics.count("school_batch_errors"),
+      );
+    }, GAME_CONFIG.realtime.schoolBatchMs);
+    this.#publicTimer = setInterval(() => {
+      void this.flushPublicChanges().catch(() =>
+        this.metrics.count("public_batch_errors"),
+      );
+    }, GAME_CONFIG.realtime.rivalBatchMs);
+    this.#schoolTimer.unref();
+    this.#publicTimer.unref();
     this.#pollRelay();
   }
 
   stopRelay(): void {
     if (this.#relayTimer) clearInterval(this.#relayTimer);
     this.#relayTimer = undefined;
+    clearInterval(this.#schoolTimer);
+    clearInterval(this.#publicTimer);
+    this.#schoolTimer = undefined;
+    this.#publicTimer = undefined;
+    this.#dirtySchools.clear();
+    this.#schoolSnapshots.clear();
+    this.#publicBatches.clear();
   }
 
   async drainOutbox(): Promise<number> {
@@ -148,6 +232,7 @@ export class DurableRealtimeCore {
   }
 
   async resyncViews(): Promise<void> {
+    this.onCommittedChange?.();
     await this.#resyncAll();
   }
 
@@ -198,6 +283,7 @@ export class DurableRealtimeCore {
       generation: 0,
       tokens: 20,
       lastRefill: performance.now(),
+      liveBatch: false,
     };
     this.#sessions.set(sessionId, session);
     session.outbound.enqueue(encodeHello(identity.schoolSlot));
@@ -244,6 +330,10 @@ export class DurableRealtimeCore {
           );
           break;
         case M2_KIND.SUBSCRIBE:
+          await this.#subscribe(session, decodeSubscribe(frame.payload));
+          break;
+        case M2_KIND.SUBSCRIBE_LIVE:
+          session.liveBatch = true;
           await this.#subscribe(session, decodeSubscribe(frame.payload));
           break;
         case M2_KIND.RESYNC:
@@ -339,6 +429,11 @@ export class DurableRealtimeCore {
       session.identity.schoolSlot,
       id,
     );
+    if (session.liveBatch)
+      this.#schoolSnapshots.set(
+        `${session.identity.schoolSlot}:${id}`,
+        snapshot,
+      );
     if (session.subscriptions.get(id) !== generation || session.outbound.closed)
       return;
     if (
@@ -491,6 +586,8 @@ export class DurableRealtimeCore {
   }
 
   async #publish(event: CommittedFixtureDelta): Promise<void> {
+    this.onCommittedChange?.();
+    this.#queueLiveChanges(event);
     const trace = this.#traces.get(event.commandKeyHex);
     if (trace) {
       trace.outboxClaimReturnedMs = event.claimReturnedAtMs;
@@ -510,6 +607,7 @@ export class DurableRealtimeCore {
           | Awaited<ReturnType<M35FixtureAuthority["publicSnapshot"]>>
           | undefined;
         for (const session of this.#sessions.values()) {
+          if (session.liveBatch) continue;
           const generation = session.subscriptions.get(event.chunkId);
           if (generation === undefined || session.outbound.closed) continue;
           const current = session.publicRevisions.get(event.chunkId);
@@ -564,13 +662,18 @@ export class DurableRealtimeCore {
               const subscribers = this.#subscribers.get(
                 `${event.schoolSlot}:${id}`,
               );
-              if (!subscribers?.size) return;
+              if (
+                !subscribers?.size ||
+                ![...subscribers].some((s) => !s.liveBatch)
+              )
+                return;
               const snapshot = await this.#authority.snapshot(
                 event.schoolSlot,
                 id,
               );
               const bytes = encodeSnapshot(snapshot);
               for (const session of subscribers) {
+                if (session.liveBatch) continue;
                 const generation = session.subscriptions.get(id);
                 if (
                   generation === undefined ||
@@ -625,6 +728,7 @@ export class DurableRealtimeCore {
         this.metrics.observe("fanout_candidates", subscribers.size);
         let recipients = 0;
         for (const session of subscribers) {
+          if (session.liveBatch) continue;
           const generation = session.subscriptions.get(event.chunkId);
           if (generation === undefined || session.outbound.closed) continue;
           const current = session.revisions.get(event.chunkId);
@@ -665,6 +769,219 @@ export class DurableRealtimeCore {
       },
       "relay",
     );
+  }
+
+  #queueLiveChanges(event: CommittedFixtureDelta): void {
+    if (
+      [...this.#sessions.values()].some(
+        (s) => s.liveBatch && s.subscriptions.has(event.chunkId),
+      )
+    ) {
+      const batch = this.#publicBatches.get(event.chunkId);
+      if (!batch)
+        this.#publicBatches.set(event.chunkId, {
+          base: event.publicRevision - 1n,
+          next: event.publicRevision,
+          gap: false,
+          tiles: new Map([[event.localIndex, event.publicMask]]),
+        });
+      else if (event.publicRevision > batch.next) {
+        batch.gap ||= event.publicRevision !== batch.next + 1n;
+        batch.next = event.publicRevision;
+        batch.tiles.set(event.localIndex, event.publicMask);
+      }
+    }
+    const { chunkX, chunkZ } = chunkCoordinatesForId(event.chunkId);
+    const x = chunkX * 64 + (event.localIndex % 64);
+    const z = chunkZ * 64 + Math.floor(event.localIndex / 64);
+    const radius = this.#authority.fogRevealRadius;
+    for (
+      let cz = Math.floor(Math.max(0, z - radius) / 64);
+      cz <= Math.floor(Math.min(999, z + radius) / 64);
+      cz++
+    )
+      for (
+        let cx = Math.floor(Math.max(0, x - radius) / 64);
+        cx <= Math.floor(Math.min(999, x + radius) / 64);
+        cx++
+      ) {
+        const id = chunkId(cx, cz),
+          key = `${event.schoolSlot}:${id}`;
+        if ([...(this.#subscribers.get(key) ?? [])].some((s) => s.liveBatch))
+          this.#dirtySchools.set(key, { slot: event.schoolSlot, id });
+      }
+  }
+
+  async flushSchoolChanges(): Promise<void> {
+    if (this.#flushingSchools) return;
+    this.#flushingSchools = true;
+    const pending = [...this.#dirtySchools];
+    this.#dirtySchools.clear();
+    try {
+      for (const [key, { slot, id }] of pending) {
+        try {
+          await this.#queues.enqueue(
+            this.#sectorForChunk(id),
+            async () => {
+              const peers = [...(this.#subscribers.get(key) ?? [])].filter(
+                (s) => s.liveBatch && !s.outbound.closed,
+              );
+              if (!peers.length) {
+                this.#schoolSnapshots.delete(key);
+                return;
+              }
+              const snapshot = await this.#authority.snapshot(slot, id);
+              const previous = this.#schoolSnapshots.get(key);
+              const full = encodeSnapshot(snapshot);
+              let patch: Uint8Array | undefined;
+              if (previous && previous.viewRevision < snapshot.viewRevision) {
+                const before = new DataView(
+                  previous.mask.buffer,
+                  previous.mask.byteOffset,
+                  previous.mask.byteLength,
+                );
+                const after = new DataView(
+                  snapshot.mask.buffer,
+                  snapshot.mask.byteOffset,
+                  snapshot.mask.byteLength,
+                );
+                const tiles: TilePatch["tiles"][number][] = [];
+                for (let local = 0; local < 4096; local++) {
+                  const discovered = !!(
+                    snapshot.fog[local >> 3]! &
+                    (1 << (local & 7))
+                  );
+                  if (
+                    before.getUint16(local * 2, true) !==
+                      after.getUint16(local * 2, true) ||
+                    discovered !==
+                      !!(previous.fog[local >> 3]! & (1 << (local & 7)))
+                  )
+                    tiles.push({
+                      localIndex: local,
+                      mask: after.getUint16(local * 2, true),
+                      discovered,
+                    });
+                }
+                if (tiles.length)
+                  patch = encodeTilePatch(
+                    {
+                      chunkId: id,
+                      baseRevision: previous.viewRevision,
+                      nextRevision: snapshot.viewRevision,
+                      tiles,
+                    },
+                    true,
+                  );
+                if (patch && patch.length >= full.length) patch = undefined;
+              }
+              for (const session of peers) {
+                const current = session.revisions.get(id),
+                  generation = session.subscriptions.get(id);
+                if (
+                  generation === undefined ||
+                  (current ?? -1n) >= snapshot.viewRevision
+                )
+                  continue;
+                const bytes =
+                  patch &&
+                  current !== undefined &&
+                  current >= previous!.viewRevision
+                    ? patch
+                    : full;
+                if (
+                  session.outbound.enqueue(
+                    bytes,
+                    () => session.subscriptions.get(id) === generation,
+                  )
+                )
+                  session.revisions.set(id, snapshot.viewRevision);
+              }
+              this.#schoolSnapshots.set(key, snapshot);
+              this.metrics.count("school_batches");
+            },
+            "relay",
+          );
+        } catch {
+          this.#dirtySchools.set(key, { slot, id });
+          this.metrics.count("school_batch_retries");
+        }
+      }
+    } finally {
+      this.#flushingSchools = false;
+    }
+  }
+
+  async flushPublicChanges(): Promise<void> {
+    if (this.#flushingPublic) return;
+    this.#flushingPublic = true;
+    const pending = [...this.#publicBatches];
+    this.#publicBatches.clear();
+    try {
+      for (const [id, batch] of pending) {
+        try {
+          await this.#queues.enqueue(
+            this.#sectorForChunk(id),
+            async () => {
+              const patch = encodeTilePatch({
+                chunkId: id,
+                baseRevision: batch.base,
+                nextRevision: batch.next,
+                tiles: [...batch.tiles].map(([localIndex, mask]) => ({
+                  localIndex,
+                  mask,
+                })),
+              });
+              let recovery:
+                | Awaited<ReturnType<M35FixtureAuthority["publicSnapshot"]>>
+                | undefined;
+              let full: Uint8Array | undefined;
+              for (const session of this.#sessions.values()) {
+                const generation = session.subscriptions.get(id),
+                  current = session.publicRevisions.get(id);
+                if (
+                  !session.liveBatch ||
+                  generation === undefined ||
+                  session.outbound.closed ||
+                  (current ?? -1n) >= batch.next
+                )
+                  continue;
+                if (
+                  batch.gap ||
+                  current === undefined ||
+                  current < batch.base ||
+                  patch.length >= 8214
+                ) {
+                  recovery ??= await this.#authority.publicSnapshot(id);
+                  full ??= encodePublicSnapshot(recovery);
+                  if (
+                    session.outbound.enqueue(
+                      full,
+                      () => session.subscriptions.get(id) === generation,
+                    )
+                  )
+                    session.publicRevisions.set(id, recovery.revision);
+                } else if (
+                  session.outbound.enqueue(
+                    patch,
+                    () => session.subscriptions.get(id) === generation,
+                  )
+                )
+                  session.publicRevisions.set(id, batch.next);
+              }
+              this.metrics.count("public_batches");
+            },
+            "relay",
+          );
+        } catch {
+          const newer = this.#publicBatches.get(id);
+          this.#publicBatches.set(id, { ...(newer ?? batch), gap: true });
+          this.metrics.count("public_batch_retries");
+        }
+      }
+    } finally {
+      this.#flushingPublic = false;
+    }
   }
 
   #sectorForChunk(id: number): number {

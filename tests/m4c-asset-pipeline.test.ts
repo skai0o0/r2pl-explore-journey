@@ -283,6 +283,14 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
     "/models/landmarks/mysterios7.glb",
   );
   assert.equal(
+    getLandmarkModelUrl("kinhthanhhue"),
+    "/models/landmarks/mysterios10.glb",
+  );
+  assert.equal(
+    getLandmarkModelUrl("bitexco"),
+    "/models/landmarks/mysterios11.glb",
+  );
+  assert.equal(
     getLandmarkModelUrl("cairang"),
     "/models/landmarks/mysterios12.glb",
   );
@@ -312,6 +320,12 @@ test("Phase 3 GLB auto-loader conventions, faction tinting and chest lid rotatio
     "hcmiu",
   ]) {
     assert.equal(isModelAvailable(`/models/hqs/${school}_hq.glb`), true);
+  }
+  for (let index = 1; index <= 12; index++) {
+    assert.equal(
+      isModelAvailable(`/models/landmarks/mysterios${index}.glb`),
+      true,
+    );
   }
   assert.equal(isModelAvailable("/models/landmarks/nonexistent.glb"), false);
 

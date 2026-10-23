@@ -14,6 +14,7 @@ export const M2_KIND = {
   SUBSCRIBE: 2,
   RESYNC: 3,
   PRODUCTION_MUTATION: 4,
+  SUBSCRIBE_LIVE: 5,
   HELLO: 16,
   ACK: 17,
   SNAPSHOT: 18,
@@ -21,6 +22,9 @@ export const M2_KIND = {
   ERROR: 20,
   PUBLIC_SNAPSHOT: 21,
   PUBLIC_DELTA: 22,
+  PUBLIC_PATCH: 23,
+  SCHOOL_PATCH: 24,
+  MAP_STATE: 25,
 } as const;
 export const ACK_STATUS = {
   TEST_APPLIED: 1,
@@ -230,6 +234,13 @@ export function decodeSubscribe(payload: Uint8Array): number[] {
   if (new Set(ids).size !== ids.length)
     throw new Error("Duplicate subscribed chunk");
   return ids;
+}
+/** Explicit opt-in: legacy clients retain their original frame vocabulary. */
+export function encodeLiveSubscribe(chunkIds: readonly number[]): Uint8Array {
+  return encodeFrame(
+    M2_KIND.SUBSCRIBE_LIVE,
+    decodeFrame(encodeSubscribe(chunkIds)).payload,
+  );
 }
 export function encodeResync(chunkId: number): Uint8Array {
   assertChunkId(chunkId);

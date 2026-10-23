@@ -35,6 +35,7 @@ import {
 } from "../../shared/world/coordinates.ts";
 import { pointWalletTarget } from "../persistence/TestPointWallet.ts";
 import { recordLedger } from "../persistence/WalletLedger.ts";
+import type { MapStateSource } from "../realtime/MapStateBatcher.ts";
 import { requireAdminPermission } from "./AdminAccessStore.ts";
 import {
   activeView,
@@ -330,11 +331,54 @@ export class SignedGameplay {
     const db = await this.pool.connect();
     try {
       await db.query("BEGIN");
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+        `signed-game:${this.fixture.campaignId}`,
+      ]);
       await this.captureReachedStops(db);
       await db.query("COMMIT");
     } catch (e) {
       await db.query("ROLLBACK");
       throw e;
+    } finally {
+      db.release();
+    }
+  }
+  async mapState(): Promise<MapStateSource> {
+    const db = await this.pool.connect();
+    try {
+      await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const objects = (
+        await db.query<{ data: WorldObject }>(
+          "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind' <> 'chest' ORDER BY id",
+          [this.fixture.campaignId],
+        )
+      ).rows.map((r) => r.data);
+      const storedBeacons = (
+        await db.query<{
+          id: string;
+          data: { holder: number | null };
+        }>(
+          "SELECT id,data FROM r2pl_v2.game_state WHERE campaign_id=$1 AND scope='beacon' ORDER BY id",
+          [this.fixture.campaignId],
+        )
+      ).rows.map((r) => ({
+        id: r.id,
+        holder: r.data.holder,
+      }));
+      await db.query("COMMIT");
+      return {
+        objects,
+        beacons: LANDMARKS.map(
+          (l) =>
+            storedBeacons.find((b) => b.id === l.id) ?? {
+              id: l.id,
+              holder: null,
+            },
+        ),
+      };
+    } catch (error) {
+      await db.query("ROLLBACK");
+      throw error;
     } finally {
       db.release();
     }

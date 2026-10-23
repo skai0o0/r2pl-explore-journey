@@ -1,0 +1,11 @@
+{
+  "portalLoginUrl": "https://predatorleague.acervietnam.com.vn/portal/r2pl/login",
+  "release": "/opt/r2pl-production-auth-20261019-1e94wydb/release",
+  "backupDirectory": "/opt/r2pl-production-auth-20261019-1e94wydb/partner-login-83tfg1ln",
+  "mainPid": "1575060",
+  "updatedAtUTC": "2026-10-19T13:47:02Z",
+  "clientUnchanged": true,
+  "contractUnchanged": true,
+  "demoPortalUnchanged": true,
+  "legacyLoginRedirect": true
+}

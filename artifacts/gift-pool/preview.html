@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>Pool quà — kiểm tra UI</title><link rel="stylesheet" href="/client/src/liveEditor.css"><body data-mode="admin"><main class="studio" style="display:block;padding:24px"><aside class="studio-inspector" style="width:280px;height:90vh"><p class="studio-eyebrow">KIỂM TRA GIAO DIỆN · DỮ LIỆU MẪU</p><details><summary>Pool quà thật</summary><div id="pool"></div></details></aside></main><script type="module">
+import { mountGiftPoolEditor } from '/client/src/giftPoolEditor.ts';
+import { giftPoolTotals } from '/shared/gameplay/giftPool.ts';
+let state={revision:0,items:[],totals:{aspire:0,nitro:0,predator:0}};
+mountGiftPoolEditor(document.querySelector('#pool'),async(path,body)=>{if(body){let item=state.items.find(x=>x.id===body.id);if(body.expectedRevision!==state.revision)throw Error('GIFT_POOL_CHANGED');if(body.action==='archive')item.active=false;else {const next={...body,id:body.id??crypto.randomUUID(),awarded:item?.awarded??0,active:true};state.items=state.items.filter(x=>x.id!==next.id);state.items.push(next);}state.revision++;state.totals=giftPoolTotals(state.items);}return structuredClone(state);});
+</script>

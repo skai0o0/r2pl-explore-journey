@@ -1,0 +1,137 @@
+diff --git a/server/integration/SchoolPlayServer.ts b/server/integration/SchoolPlayServer.ts
+index 7c42fca..1f71f06 100644
+--- a/server/integration/SchoolPlayServer.ts
++++ b/server/integration/SchoolPlayServer.ts
+@@ -238,7 +238,21 @@ async function startSchoolPlayServer(
+       const method = parts[1];
+       const roomName = parts[2] ?? "";
+       response.setHeader("Content-Type", "application/json; charset=utf-8");
+-      response.setHeader("Access-Control-Allow-Origin", "*");
++      const origin = request.headers.origin;
++      if (portal && origin && origin !== portal.config.publicOrigin) {
++        response
++          .writeHead(403)
++          .end(JSON.stringify({ error: "ORIGIN_REJECTED" }));
++        return;
++      }
++      response.setHeader(
++        "Access-Control-Allow-Origin",
++        portal?.config.publicOrigin ?? "*",
++      );
++      if (portal) {
++        response.setHeader("Access-Control-Allow-Credentials", "true");
++        response.setHeader("Vary", "Origin");
++      }
+       response.setHeader(
+         "Access-Control-Allow-Headers",
+         "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+@@ -258,19 +272,41 @@ async function startSchoolPlayServer(
+         return;
+       }
+       try {
++        if (
++          url.search ||
++          parts.length !== 3 ||
++          !["joinOrCreate", "join", "joinById", "reconnect"].includes(
++            method ?? "",
++          )
++        )
++          throw new PortalError(404, "NOT_FOUND");
++        if (!request.headers["content-type"]?.startsWith("application/json"))
++          throw new PortalError(415, "JSON_REQUIRED");
+         let bodyBytes = "";
+-        for await (const chunk of request) bodyBytes += chunk;
++        let size = 0;
++        for await (const chunk of request) {
++          size += Buffer.byteLength(chunk);
++          if (size > GAME_CONFIG.integration.maxBodyBytes)
++            throw new PortalError(413, "BODY_TOO_LARGE");
++          bodyBytes += chunk;
++        }
+         const options = bodyBytes ? JSON.parse(bodyBytes) : {};
+         const result = await matchMaker.controller.invokeMethod(
+-          method as any,
++          method!,
+           roomName,
+           options,
++          { headers: new Headers(), ip: request.socket.remoteAddress },
+         );
+         response.writeHead(200).end(JSON.stringify(result));
+-      } catch (err: any) {
++      } catch (err) {
+         response
+-          .writeHead(err.code || 500)
+-          .end(JSON.stringify({ error: err.message }));
++          .writeHead(err instanceof PortalError ? err.status : 400)
++          .end(
++            JSON.stringify({
++              error:
++                err instanceof PortalError ? err.code : "MATCHMAKING_REJECTED",
++            }),
++          );
+       }
+       return;
+     }
+@@ -846,6 +882,10 @@ async function startSchoolPlayServer(
+         return;
+       }
+       if (path === "/api/fixture/world") {
++        if (portal && !portalActor && !admin) {
++          response.writeHead(401).end();
++          return;
++        }
+         await gameplay.syncStops();
+         const rows = await pool.query<{ data: unknown }>(
+           "SELECT data FROM r2pl_v2.game_world_objects WHERE campaign_id=$1 AND data->>'kind' <> 'chest' ORDER BY id",
+diff --git a/server/realtime/GatewayRoom.ts b/server/realtime/GatewayRoom.ts
+index 668730c..66c463d 100644
+--- a/server/realtime/GatewayRoom.ts
++++ b/server/realtime/GatewayRoom.ts
+@@ -1,4 +1,4 @@
+-import { type Client, Room } from "@colyseus/core";
++import { type Client, ErrorCode, Room, ServerError } from "@colyseus/core";
+ import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+ import type { OutboundSink } from "./OutboundQueue.ts";
+ import type { SyntheticIdentity } from "./SyntheticAuth.ts";
+@@ -22,6 +22,17 @@ export interface GatewayCore {
+ 
+ export function createGatewayRoom(core: GatewayCore, auth: GatewayAuth) {
+   return class GatewayRoom extends Room {
++    // Authenticate before matchmaking can allocate rooms or reserve seats.
++    static override async onAuth(
++      _token: string,
++      options: { token?: unknown },
++    ): Promise<SyntheticIdentity> {
++      try {
++        return await auth.authenticate(options?.token);
++      } catch {
++        throw new ServerError(ErrorCode.AUTH_FAILED, "UNAUTHORIZED");
++      }
++    }
+     onCreate(): void {
+       this.maxClients = 2000;
+       this.autoDispose = false;
+@@ -45,19 +56,13 @@ export function createGatewayRoom(core: GatewayCore, auth: GatewayAuth) {
+       }
+     }
+ 
+-    async onAuth(
+-      _client: Client,
+-      options: { token?: unknown },
+-    ): Promise<SyntheticIdentity> {
+-      const identity = await auth.authenticate(options?.token);
+-      return identity;
+-    }
+-
+-    onJoin(
++    async onJoin(
+       client: Client,
+       _options: unknown,
+       identity: SyntheticIdentity,
+-    ): void {
++    ): Promise<void> {
++      // A session can expire or be revoked between HTTP reservation and WS join.
++      if (auth.revalidate) await auth.validate!(identity);
+       core.addSession(client.sessionId, identity, {
+         send: (bytes) => client.sendBytes("m2", bytes),
+         close: (reason) => client.leave(4000, reason),

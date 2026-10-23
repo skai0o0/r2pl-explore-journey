@@ -1,0 +1,112 @@
+R2PL — PLAN TRIỂN KHAI ĐỒ HOẠ & UI THEO MOCKUP ĐÃ DUYỆT
+Ngày: 17/10/2026
+Workspace: C:\Users\Nem\Desktop\explore-journey
+
+LỆNH KHỞI ĐỘNG CHO CHAT TRIỂN KHAI
+Hãy đọc AGENTS.md và toàn bộ plan này, xem mockup HTML cùng các ảnh tham chiếu bên dưới, sau đó triển khai trực tiếp vào game thật theo các chặng. Đây là yêu cầu code end-to-end trên local/dev, không dừng ở đề xuất hay tạo thêm mockup. Giữ nguyên luật chơi, dữ liệu và server authority. Kiểm tra từng chặng trong browser, sửa lỗi rồi tiếp tục đến khi đạt các tiêu chí nghiệm thu. Không tự deploy hoặc thay cấu hình production trong nhiệm vụ này.
+
+1. NGUỒN THAM CHIẾU VÀ QUYẾT ĐỊNH ĐÃ CHỐT
+
+- Chuẩn thị giác: artifacts/ui-mockup/road-to-mockup.html, gồm lần tinh chỉnh popup/menu gọn nhất. Đọc template.html và scene.js cùng thư mục để hiểu cách dựng; HTML là bản xem trước độc lập, không phải frontend để nhúng vào game.
+- Ảnh: artifacts/ui-mockup/preview-v2.jpg (cảnh + HUD), compact-menu.jpg (toolbar), compact-popup.jpg (popup). Bản HTML mới nhất quyết định khi ảnh và mã khác nhau.
+- Logo gốc: campaigne-assets/Headline.png. Dùng đúng ảnh, giữ tỉ lệ và khoảng trống thị giác; đưa asset cần dùng vào luồng build của client.
+- Phong cách: cảnh quan 3D cách điệu, chạng vạng xanh lạnh, HQ rõ và sáng hơn môi trường, cây xanh trầm, nước xanh xám, ánh sáng kiến trúc ấm vừa đủ. Công nghệ thể hiện qua hình khối, typography và nét cyan mảnh.
+- UI tối graphite/navy, chữ trắng ngà, cyan dịu. Không thêm viền neon khắp nơi, hiệu ứng kính dày hay panel phủ kín bản đồ.
+- Chỉ một HUD gọn ở góc trên trái: logo, tên/trường sinh viên, tiến trình và nút công cụ. Không có minimap thường trực hoặc bảng toạ độ/trạng thái ô ở góc dưới phải trong chế độ người chơi.
+- Popup/menu phải gọn như phiên bản mới nhất: toolbar desktop khoảng 300px, popup thông thường khoảng 350px; padding 13–18px, khoảng nhóm 8–13px, bo góc nhỏ. Nội dung dài có thể dùng dialog rộng hơn theo nhu cầu; không ép mọi modal vào 350px.
+- Tham khảo hai skill đã cài: C:/Users/Nem/.codex/skills/redesign-skill/SKILL.md và C:/Users/Nem/.codex/skills/minimalist-skill/SKILL.md. Mockup và yêu cầu này ưu tiên khi skill gợi ý nền sáng, pastel hoặc khoảng trắng quá lớn.
+
+2. PHẠM VI VÀ NHỮNG RÀNG BUỘC CẦN GIỮ
+
+- Triển khai bằng strict TypeScript, Three.js, CSS và kiến trúc hiện tại; tái sử dụng các modal, asset loader và command thật.
+- UI dùng thông tin đăng nhập, ví, tiến trình, BXH, cooldown và inventory thật. Không mang tên sinh viên mẫu, số 412/28/6, BXH giả hay thao tác trừ điểm local trong mockup sang game.
+- Giữ phân biệt điểm cá nhân, số ô/tri thức trường, tiến trình khám phá và các loại BXH theo hợp đồng hiện có. Label phải phản ánh đúng dữ liệu; không đổi ý nghĩa số liệu để giống mockup.
+- Không đổi ruleVersion, giá mở ô, footprint, luật adjacency, thưởng, vị trí công trình, seed địa hình, auth, API đối tác hoặc database schema chỉ để thay hình ảnh.
+- Các tham số gameplay vẫn ở shared/gameplay/gameConfig.ts. Tách cấu hình màu, ánh sáng, chất lượng render và motion vào module presentation có kiểu rõ ràng trong client.
+- Game đang chạy production tại skai0o0.id.vn; portal.skai0o0.id.vn và play.skai0o0.id.vn là sandbox. Chỉ dùng local/dev hoặc sandbox được xác minh là synthetic để kiểm thử mutation; không tiêu tài nguyên hay đổi trạng thái production.
+- Giữ đủ chức năng dev/admin và Live Map Editor. UI gọn áp dụng trước cho player; không xoá công cụ operator hoặc hạ quyền truy cập.
+- Không tạo báo cáo Markdown mới trong docs/. Làm trực tiếp một agent theo AGENTS.md.
+
+3. BẢN ĐỒ MÃ NGUỒN ĐỂ BẮT ĐẦU
+
+- client/src/main.ts và client/index.html: khởi tạo session, WorldView, MiniMap, HUD, selection, transport và event.
+- client/src/ui/statsOverlay.ts: thông tin sinh viên, ví, số liệu và menu/BXH hiện tại.
+- client/src/gameplayUI.ts, rewardsPanel.ts, rewardSession.ts: luồng game, inventory/reward và trạng thái command.
+- client/src/ui/*Modal.ts, notificationBanner.ts, studentActionDock.ts, tileTooltip.ts: popup, thông báo và hành động hiện có; xác minh module nào đang được mount trước khi sửa.
+- client/src/style.css, client/src/ui/v1.css: CSS đang dùng; kiểm tra import để tránh sửa stylesheet không được tải.
+- client/src/worldView.ts: renderer, camera, model/marker, visibility, picking và render scheduling.
+- client/src/terrainChunks.ts: geometry theo chunk, material, texture knowledge và terrainMist.
+- client/src/terrainBiomes.ts, terrainNature.ts, landscape.ts, natureProps.ts: địa hình, cảnh quan và cây cối.
+- client/src/assetPipeline.ts, assetRegistry.ts, assetLoader.ts: mount model, material, picking và dispose.
+- client/src/ui/playerPresentation.ts và shared/protocol/replica.ts: projection của trường, discovery và nhãn.
+- Lưu ý đã xác minh: worldView hiện dùng Z-up và renderer theo nhu cầu; mockup dùng Y-up và vòng lặp liên tục. Phải chuyển đúng hệ toạ độ và giữ cơ chế render tiết kiệm hiện có.
+
+4. THỨ TỰ TRIỂN KHAI
+
+CHẶNG A — HUD VÀ CÔNG CỤ, CÓ DỮ LIỆU THẬT
+
+1) Chạy game local bằng script phù hợp sau khi đọc README và scripts; ghi nhận màn hình hiện tại, trạng thái player/dev/admin và các luồng đang chạy. Giữ các thay đổi chưa commit của người dùng.
+2) Gom màu, spacing, typography, radius và layer UI thành token chung. Giữ font fallback hỗ trợ tiếng Việt; không phụ thuộc Bahnschrift có sẵn trên Windows để layout đúng trên điện thoại.
+3) Refactor HUD hiện tại theo mockup, nối vào dữ liệu thật. Bấm sinh viên mở profile; bấm tiến trình mở số liệu/ví. Tên dài có ellipsis và xem được đầy đủ trong profile.
+4) Một toolbar đóng/mở: về HQ, zoom, đổi góc nhìn, hành trang, BXH, toạ độ ô chọn và các lệnh cần thiết đang có. Giữ chức năng quay về trang giải/portal ở nơi dễ tìm. Chỉ thêm mục khi có hành động thật.
+5) Bỏ mount/update minimap cho player; chuyển các nút camera đang gắn trong minimap sang toolbar. Giữ riêng nhu cầu minimap của editor nếu có.
+6) Chuyển toạ độ và trạng thái chọn vào toolbar. Ô thường không bật bảng lớn. Giữ vòng chọn/hover nhẹ trên map.
+7) Không làm mất thao tác mở ô: giữ đường đi hoàn chỉnh cho chọn ô + nút mở, chế độ mở nhanh nếu đang có, tìm ô tiếp theo, thông báo thiếu điểm/không liền kề và pending. Hiển thị chi phí khi cần quyết định; chỉ cập nhật kết quả sau phản hồi authoritative, xử lý reject/resync đúng luồng cũ.
+
+Đạt chặng A khi: đăng nhập thật vào local/sandbox, đọc đúng số liệu, mở ô thành công/thất bại có feedback, điều khiển map và mọi mục toolbar đều dùng được; không có listener tham chiếu DOM đã xoá.
+
+CHẶNG B — HỆ POPUP/MENU NHẤT QUÁN VÀ GỌN
+
+1) Tạo hoặc refactor primitive dùng chung cho dialog/popover: header, close, content, footer, chiều rộng theo nội dung, giới hạn chiều cao và scroll nội bộ.
+2) Áp dụng cho profile, tiến trình/ví, inventory, BXH, UniStop, rương, landmark/puzzle, quay thưởng và popup liên quan đang hoạt động. Giữ nguyên dữ liệu/command, trạng thái đang gửi, cooldown, disabled, lỗi và phần thưởng.
+3) Mobile dùng sheet gọn cho công cụ; dialog thích ứng chiều ngang và safe-area. Nút chính/đóng có vùng chạm tối thiểu 44px; không giảm cỡ chữ quá mức để nhồi nội dung.
+4) Escape, đóng ngoài panel khi phù hợp, focus trap cho dialog modal, trả focus về nút mở và aria-expanded/aria-modal đúng. Khi đóng vì click ngoài không để click đó đồng thời mở ô hoặc tiêu điểm trên map. Modal chặn input camera phía sau.
+5) Thông báo/toast ngắn, không che dài hạn. Không thêm banner trang trí thường trực. Tôn trọng prefers-reduced-motion.
+6) Nút đổi ngày/chạng vạng và slider sương của mockup phục vụ xem thiết kế: mặc định player dùng preset chạng vạng đã duyệt. Để công cụ tinh chỉnh ở dev/editor; không đưa nút mở vùng mẫu, reset mẫu hay mật độ sương debug vào luồng player.
+
+Đạt chặng B khi: mở/đóng được tất cả popup thực, nội dung dài/cuộn/tiếng Việt không tràn, không popup lồng bị kẹt, camera không nhận thao tác xuyên UI.
+
+CHẶNG C — SƯƠNG MỀM DỰA TRÊN DISCOVERY THẬT
+
+1) Tách rõ hai việc: màu/opacity sương trên cảnh quan và quyền hiển thị công trình/vật phẩm. Điều chỉnh sương tuyệt đối không mở discovery.
+2) Dùng own-school projection/bitset và knowledge texture hiện có làm đầu vào. Feather biên từ vùng đã khám phá thực, kể cả đường cong, hành lang một ô, vùng rời nhau và lỗ chưa khám phá; không dùng vòng tròn HQ hoặc bán kính giả từ mockup.
+3) Mở rộng cách lấy mẫu ở biên chunk để sương liền mạch khi pan/zoom, ở mọi LOD và khi nhận snapshot/delta/resync. Chunk chưa nhận dữ liệu được xem là chưa khám phá; không mượn mask trường khác. Chỉ cập nhật texture/vùng biên liên quan khi dữ liệu đổi.
+4) Địa hình, nước và thiên nhiên công khai phải còn nhìn được dưới màn sương xanh lạnh trong; feather không biến thành đường tile sắc hoặc khoảng hở ở seam. Cây/model scenery cũng phải nhất quán với fog, không chỉ phủ một mặt phẳng lên nền.
+5) UniStop chưa khám phá và rương chưa được server cho biết phải ẩn toàn bộ: model, phụ kiện, shadow, glow/đèn, particle, marker, tooltip và raycast tương tác. Không tạo dấu hiệu cảnh quan phụ làm lộ vị trí. Dữ liệu rương riêng vẫn theo quyền server.
+6) Giữ predicate discovery/footprint đã được duyệt trong game; hiệu ứng tan sương không được tự mở quyền. Kiểm tra asset mount bất đồng bộ để không ló model một frame trước khi áp visibility. Player không được bật bypass dev bằng thay đổi cosmetic.
+
+Đạt chặng C khi: mask thật quyết định discovery; sương mềm xuyên chunk; không nhìn thấy hoặc click được UniStop/rương ẩn dù giảm opacity debug hay đổi góc máy; đăng nhập lại/chuyển trường/resync không giữ thông tin cũ.
+
+CHẶNG D — MÔI TRƯỜNG VÀ ÁNH SÁNG THEO MOCKUP
+
+1) Chuyển palette/lighting/tone mapping của mockup vào renderer thật sau khi đổi đúng hệ trục và đơn vị world. Mặc định chạng vạng, HQ rõ, không nhuộm mất nhận diện màu trường.
+2) Chỉnh vật liệu cỏ, bờ sông/đá, đường đi, nước, cây và lớp chuyển màu theo biome. Giữ địa hình deterministic và footprint/foundation đúng; không dựng lại world thật thành tiểu cảnh HQ của mockup.
+3) Làm nền công trình tự nhiên hơn: tiếp đất rõ, vùng sân/đường chuyển tiếp, cây và đèn công khai bố trí hợp lý ngoài lối đi/hitbox. Áp dụng cho các HQ hiện có, không chỉ HCMUT.
+4) Một nguồn bóng chính trong phạm vi camera gần, fill nhẹ và bóng tiếp xúc vừa phải; có mức chất lượng thấp cho thiết bị yếu. Tránh cấp nhiều PointLight đổ bóng cho từng cây/cột đèn. Model HQ hiện có là trọng tâm, không thay bằng procedural fallback khi asset hợp lệ.
+5) Giữ chunk culling, instancing/merge và LOD. Không tạo mesh/DOM cho từng ô trong một triệu ô; không tính lại toàn thế giới mỗi frame. Giữ render theo nhu cầu, chỉ schedule liên tục khi animation còn hoạt động; dừng khi tab ẩn hoặc hiệu ứng kết thúc.
+6) Dispose geometry/material/texture/render target/listener đúng vòng đời; kiểm tra chu kỳ đổi trường, pan nhiều chunk và editor publish. Không bật post-processing nặng chỉ để giống ảnh.
+
+Đạt chặng D khi: HQ, thiên nhiên và fog cùng một hướng ánh sáng; asset không nổi/lún; seam không lộ; player và editor đều đọc được map và chọn đúng ô sau các thay đổi.
+
+CHẶNG E — KIỂM THỬ VÀ CHỐT BẢN
+
+- Chạy typecheck, build client và kiểm tra lint trong phạm vi thay đổi; phân biệt lỗi có sẵn với lỗi mới, xử lý lỗi mới.
+- Chạy các test hiện có liên quan: player-presentation, terrain-biomes, tile-action, tile-fx, world-layout, m4c-asset-pipeline và school-play-integration; bổ sung test có ý nghĩa cho discovery xuyên chunk, visibility/raycast và stale state nếu logic thay đổi. Nếu phải sửa server/protocol, chạy thêm test tương ứng.
+- Browser local/dev: profile, inventory, BXH, camera, chọn/mở ô, pending/reject/thiếu điểm, UniStop, rương, landmark, notification, reconnect và đồng bộ người chơi cùng trường. Không chỉ chụp màn hình tĩnh.
+- So sánh tối thiểu 320px, 390px, 768px và 1440px; điện thoại dọc/ngang, tên dài, số lớn, inventory dài, popup lỗi và loading. Kiểm tra không scroll ngang, không nút ngoài viewport, HUD không che vùng tương tác chính.
+- Kiểm tra nhiều HQ/trường, tài khoản mới và tài khoản đã khám phá nhiều; không lộ dữ liệu sau chuyển phiên. Smoke test editor chọn/đặt công trình và publish ở môi trường local/dev.
+- Ghi FPS/frame time khi pan/zoom và tan sương trên cảnh gần HQ, nhiều cây/công trình và khi zoom xa; ghi rõ thiết bị, viewport và quality tier. Mục tiêu 60 FPS desktop và tối thiểu 30 FPS mobile trên thiết bị tham chiếu; nếu chỉ mô phỏng viewport, không tuyên bố đã đo hiệu năng điện thoại thật. Không chạy load test hạ tầng hoặc profiling diện rộng bị AGENTS.md đóng băng.
+- Lưu screenshot desktop/mobile và một chuỗi trước/sau khám phá để đối chiếu mockup; cung cấp tóm tắt thay đổi, kiểm thử, hạn chế còn lại và đường dẫn chạy local. Không tạo báo cáo dài trong docs/.
+
+5. CHECKLIST NGHIỆM THU CUỐI
+
+[ ] Game thật dùng HUD compact theo logo/palette đã duyệt; không còn minimap/bảng ô cố định cho player.
+[ ] Toolbar và mọi popup gọn, đồng bộ, keyboard/touch dùng được; không có mục demo trong player.
+[ ] Toàn bộ dữ liệu và hành động là thật, không mất tính năng khi dọn UI.
+[ ] Terrain/scenery thấy được qua sương; biên tan mềm theo discovery thật và liền mạch giữa chunk.
+[ ] UniStop/rương chưa được phép thấy không lộ hình, bóng, label, FX hay hitbox.
+[ ] Tất cả HQ hiện có hoà với cảnh quan, giữ đúng model, nền và vị trí gameplay.
+[ ] Dữ liệu riêng, luật chơi, portal integration và khả năng editor không bị thay đổi ngoài phạm vi.
+[ ] Build/typecheck và các kiểm thử liên quan đạt; lỗi còn lại được mô tả đúng thực tế.
+[ ] Có ảnh đối chiếu và đo hiệu năng local có ngữ cảnh; không tuyên bố đạt production khi mới chạy mockup.
+[ ] Chưa deploy hoặc sửa production trong nhiệm vụ này.

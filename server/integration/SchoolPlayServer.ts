@@ -12,8 +12,10 @@ import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
 import { canAdmin } from "../../shared/integration/adminAccess.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import { ACK_STATUS } from "../../shared/protocol/m2.ts";
+import { encodeMapState } from "../../shared/protocol/mapStream.ts";
 import type { BotRole } from "../../shared/simulation/schoolBots.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
+import { MapStateBatcher } from "../realtime/MapStateBatcher.ts";
 import { AdminHttp } from "./AdminHttp.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { DemoAdminStore } from "./DemoAdminPortal.ts";
@@ -203,6 +205,46 @@ async function startSchoolPlayServer(
       : undefined,
   );
   await realtime.server.listen(ports.websocket, "127.0.0.1");
+  const mapBatcher = new MapStateBatcher();
+  let mapReading = false,
+    stopsDirty = true;
+  realtime.core.onCommittedChange = () => {
+    stopsDirty = true;
+  };
+  const mapTimer = setInterval(() => {
+    const slots = realtime.core.liveSchoolSlots;
+    if (mapReading || !slots.length) return;
+    mapReading = true;
+    void (async () => {
+      if (stopsDirty) {
+        stopsDirty = false;
+        try {
+          await gameplay.syncStops();
+        } catch (error) {
+          stopsDirty = true;
+          throw error;
+        }
+      }
+      const source = await gameplay.mapState();
+      for (const { slot, batch } of mapBatcher.update(
+        source,
+        slots,
+        Date.now(),
+      ))
+        realtime.core.sendMapState(slot, encodeMapState(batch));
+      for (const slot of slots) {
+        if (!realtime.core.needsMapSnapshot(slot)) continue;
+        const snapshot = mapBatcher.snapshot(slot);
+        if (snapshot)
+          realtime.core.sendMapState(slot, encodeMapState(snapshot), true);
+      }
+    })()
+      .catch(() => realtime.core.metrics.count("map_state_poll_errors"))
+      .finally(() => {
+        mapReading = false;
+      });
+  }, GAME_CONFIG.realtime.objectPollMs);
+  mapTimer.unref();
   const address = realtime.transport.server?.address();
   if (!address || typeof address === "string")
     throw new Error("Missing WebSocket address");
@@ -715,6 +757,18 @@ async function startSchoolPlayServer(
             "/models/hqs/huce_hq.glb",
             "/models/hqs/ntu_hq.glb",
             "/models/hqs/hcmiu_hq.glb",
+            "/models/landmarks/mysterios1.glb",
+            "/models/landmarks/mysterios2.glb",
+            "/models/landmarks/mysterios3.glb",
+            "/models/landmarks/mysterios4.glb",
+            "/models/landmarks/mysterios5.glb",
+            "/models/landmarks/mysterios6.glb",
+            "/models/landmarks/mysterios7.glb",
+            "/models/landmarks/mysterios8.glb",
+            "/models/landmarks/mysterios9.glb",
+            "/models/landmarks/mysterios10.glb",
+            "/models/landmarks/mysterios11.glb",
+            "/models/landmarks/mysterios12.glb",
             "/models/hq.gltf",
             "/models/landmark.gltf",
           ],
@@ -1124,6 +1178,7 @@ async function startSchoolPlayServer(
       web.listen(ports.web, "127.0.0.1", ready);
     });
   } catch (error) {
+    clearInterval(mapTimer);
     realtime.core.stopRelay();
     await realtime.server.gracefullyShutdown(false);
     throw error;
@@ -1310,6 +1365,7 @@ async function startSchoolPlayServer(
   const close = async (): Promise<void> => {
     notifications.close();
     clearInterval(lifecycleTimer);
+    clearInterval(mapTimer);
     stopped = true;
     await stopBots();
     await new Promise<void>((ready) => {

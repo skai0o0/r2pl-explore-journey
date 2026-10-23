@@ -1,0 +1,93 @@
+{
+  "origin": "https://play.skai0o0.id.vn",
+  "requestedClients": 200,
+  "durationSeconds": 20,
+  "rampSeconds": 60,
+  "assets": "none",
+  "connected": 199,
+  "healthy": 183,
+  "applied": 31,
+  "noChange": 159,
+  "rejected": 0,
+  "wsReceivedMB": 87.55,
+  "httpErrors": 334,
+  "transportErrors": 17,
+  "elapsedSeconds": 92.4803884,
+  "steadySeconds": 30.013467099999993,
+  "interrupted": false,
+  "ackMs": {
+    "count": 190,
+    "p50": 795.703,
+    "p95": 1164.115,
+    "p99": 2934.546,
+    "max": 3329.372
+  },
+  "generatorTimerSlipMs": {
+    "count": 18,
+    "p50": 1.811,
+    "p95": 11.335,
+    "p99": 11.335,
+    "max": 11.335
+  },
+  "projectionObservedMs": {
+    "count": 28,
+    "p50": 2148.666,
+    "p95": 2633.325,
+    "p99": 2644.381,
+    "max": 2644.381
+  },
+  "projectionMissingAtEnd": 3,
+  "websocketM2": {
+    "receivedBytes": 87550418,
+    "sentBytes": 39165,
+    "resyncs": 0,
+    "retries": 380,
+    "closeCodes": {
+      "1006": 17
+    },
+    "closeReasons": {},
+    "errors": {
+      "Bot transport error": 17
+    },
+    "frameKinds": {
+      "16": 199,
+      "17": 755,
+      "18": 5339,
+      "21": 4975,
+      "22": 1902
+    },
+    "steadyReceiveMbps": 0.8719104631533892
+  },
+  "http": {
+    "requests": 1894,
+    "errors": 334,
+    "decodedBodyBytes": 1731888,
+    "contentLengthBytes": 0,
+    "responsesWithContentLength": 0,
+    "latencyMs": {
+      "count": 1894,
+      "p50": 7242.667,
+      "p95": 12009.769,
+      "p99": 12075.442,
+      "max": 12118.274
+    },
+    "statuses": {
+      "200": 1560
+    },
+    "steadyDecodedBodyMbps": 0.4608459247282365
+  },
+  "failures": {
+    "CLIENT_START_FAILED": 1,
+    "HTTP_TRANSPORT_OR_TIMEOUT": 334,
+    "CLIENT_OPERATION_FAILED": 523
+  },
+  "limitations": [
+    "One machine/IP and network path; not 200 independent networks",
+    "Protocol clients, no rendering/FPS or browser cache",
+    "M2 bytes exclude Colyseus framing, TLS/TCP and handshake overhead",
+    "HTTP body counts are decoded, not exact wire bytes; content-length is partial",
+    "Shell assets exclude 3D models, textures and lazy chunks",
+    "Projection observed is receipt of private own-school state, not a rendered pixel",
+    "Result measures this route and workload, not a Cloudflare capacity limit"
+  ]
+}

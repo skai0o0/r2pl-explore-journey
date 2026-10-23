@@ -13,6 +13,7 @@ import {
   type WorldObject,
 } from "../../shared/gameplay/gameConfig.ts";
 import type { TileAction } from "../../shared/gameplay/tileAction.ts";
+import { canAdmin } from "../../shared/integration/adminAccess.ts";
 import {
   ACK_STATUS,
   decodeAck,
@@ -22,11 +23,17 @@ import {
   decodePublicSnapshot,
   decodeSnapshot,
   encodeExplore,
+  encodeLiveSubscribe,
   encodeResync,
   encodeSubscribe,
   M2_KIND,
   REASON,
 } from "../../shared/protocol/m2.ts";
+import {
+  decodeMapState,
+  decodeTilePatch,
+  type MapBeacon,
+} from "../../shared/protocol/mapStream.ts";
 import {
   ProjectionReplica,
   PublicKnowledgeReplica,
@@ -81,7 +88,31 @@ if (demoDisclaimer) demoDisclaimer.hidden = !showDemoDisclaimer;
 const session = await loadGameSession();
 if ("testProfiles" in session && session.testProfiles === true) {
   const { mountPartnerTestControls } = await import("./partnerTestControls.ts");
-  mountPartnerTestControls(session.players[0]!.slot);
+  let dashboardAllowed = false;
+  try {
+    const response = await gameFetch("/api/fixture/bootstrap?view=admin");
+    if (response.ok) {
+      const bootstrap = (await response.json()) as {
+        mode?: unknown;
+        principal?: { permissions?: unknown };
+      };
+      dashboardAllowed =
+        bootstrap.mode === "admin" &&
+        canAdmin(
+          {
+            permissions: Array.isArray(bootstrap.principal?.permissions)
+              ? (bootstrap.principal.permissions as NonNullable<
+                  Parameters<typeof canAdmin>[0]["permissions"]
+                >)
+              : [],
+          },
+          "rankings.view",
+        );
+    }
+  } catch {
+    // Dashboard entry stays hidden when the permission check is unavailable.
+  }
+  mountPartnerTestControls(session.players[0]!.slot, dashboardAllowed);
 }
 const publicWorld: WorldObject[] =
   session === LEGACY_DEV_SESSION
@@ -752,6 +783,39 @@ if (session.fixtureOnly) {
     });
   }
 }
+let mapStreamReady = false;
+let lastMapStreamAt = 0;
+const streamBeacons = new Map<string, MapBeacon>();
+function paintBeacons(): void {
+  if (latestView)
+    world.setBeacons(
+      latestView.landmarks.map((beacon) => ({
+        ...beacon,
+        ...(mapStreamReady ? streamBeacons.get(beacon.id) : undefined),
+      })),
+    );
+}
+function applyWorldObjects(objects: WorldObject[]): void {
+  if (JSON.stringify(objects) === JSON.stringify(publicWorld)) return;
+  world.updateObjects(objects);
+  publicWorld.splice(0, publicWorld.length, ...objects);
+  miniMap.setObjects([...publicWorld, ...privateObjects]);
+  if (selectedBuilding)
+    selectedBuilding = publicWorld.find((o) => o.id === selectedBuilding!.id);
+  if (session.headquarters)
+    for (const hq of publicWorld.filter((o) => o.kind === "hq")) {
+      const area = session.headquarters.find(
+        (h) => h.schoolSlot === hq.schoolSlot,
+      );
+      if (area)
+        Object.assign(area, {
+          x: hq.x - hq.width / 2,
+          z: hq.z - hq.height / 2,
+        });
+      for (const p of players.filter((p) => p.slot === hq.schoolSlot))
+        Object.assign(p.home, { x: hq.x, z: hq.z });
+    }
+}
 function refreshRanking(): void {
   void gameFetch("/api/game/ranking")
     .then((r) => r.json())
@@ -763,42 +827,29 @@ function refreshRanking(): void {
 refreshRanking();
 window.setInterval(refreshRanking, 5000);
 window.setInterval(() => {
+  if (
+    document.hidden ||
+    (mapStreamReady &&
+      room &&
+      Date.now() - lastMapStreamAt < GAME_CONFIG.realtime.fallbackPollMs)
+  )
+    return;
   void gameFetch("/api/fixture/world", { cache: "no-store" })
     .then((r) => {
       if (!r.ok) throw new Error("Layout unavailable");
       return r.json();
     })
     .then((v: { objects: WorldObject[] }) => {
-      if (JSON.stringify(v.objects) === JSON.stringify(publicWorld)) return;
-      world.updateObjects(v.objects);
-      publicWorld.splice(0, publicWorld.length, ...v.objects);
-      miniMap.setObjects([...publicWorld, ...privateObjects]);
-      if (selectedBuilding)
-        selectedBuilding = publicWorld.find(
-          (o) => o.id === selectedBuilding!.id,
-        );
-      if (session.headquarters)
-        for (const hq of publicWorld.filter((o) => o.kind === "hq")) {
-          const area = session.headquarters.find(
-            (h) => h.schoolSlot === hq.schoolSlot,
-          );
-          if (area)
-            Object.assign(area, {
-              x: hq.x - hq.width / 2,
-              z: hq.z - hq.height / 2,
-            });
-          for (const p of players.filter((p) => p.slot === hq.schoolSlot))
-            Object.assign(p.home, { x: hq.x, z: hq.z });
-        }
+      applyWorldObjects(v.objects);
     })
     .catch(() => {});
-}, GAME_CONFIG.editor.pollMs);
+}, GAME_CONFIG.realtime.fallbackPollMs);
 const gameplay = new GameplayUI(
   publicWorld,
   (x, z) => world.focus(x, z, 100),
   (view) => {
     latestView = view;
-    world.setBeacons(view.landmarks);
+    paintBeacons();
     const sharedTiles = new Map<number, readonly number[]>();
     for (const cluster of view.shared)
       for (const tile of cluster.tileIndexes ?? [])
@@ -910,7 +961,12 @@ function subscribeNow(): void {
   if (!bootComplete && !bootChunks.size)
     for (const id of ids) bootChunks.add(id);
   ui.viewport.textContent = String(ids.length);
-  room.sendBytes("m2", encodeSubscribe(ids));
+  room.sendBytes(
+    "m2",
+    session === LEGACY_DEV_SESSION
+      ? encodeSubscribe(ids)
+      : encodeLiveSubscribe(ids),
+  );
 }
 
 function explore(): void {
@@ -986,28 +1042,6 @@ function handleFrame(raw: Uint8Array): void {
         if (ack.status === ACK_STATUS.TEST_APPLIED) {
           ui.action.textContent = "";
           world.playReveal(action.tile.x, action.tile.z, player.slot);
-
-          if (session !== LEGACY_DEV_SESSION) {
-            const fogChunks = new Set<number>();
-            for (
-              let dz = -GAME_CONFIG.world.fogRevealRadius;
-              dz <= GAME_CONFIG.world.fogRevealRadius;
-              dz++
-            )
-              for (
-                let dx = -GAME_CONFIG.world.fogRevealRadius;
-                dx <= GAME_CONFIG.world.fogRevealRadius;
-                dx++
-              ) {
-                const x = action.tile.x + dx,
-                  z = action.tile.z + dz;
-                if (x >= 0 && z >= 0 && x < 1000 && z < 1000)
-                  fogChunks.add(
-                    chunkId(Math.floor(x / 64), Math.floor(z / 64)),
-                  );
-              }
-            for (const id of fogChunks) room?.sendBytes("m2", encodeResync(id));
-          }
         } else if (ack.status === ACK_STATUS.TEST_NO_CHANGE) {
           activity(
             "Ô này đã có tri thức của trường bạn · không mất Điểm.",
@@ -1069,6 +1103,46 @@ function handleFrame(raw: Uint8Array): void {
           );
         break;
       }
+      case M2_KIND.SCHOOL_PATCH:
+      case M2_KIND.PUBLIC_PATCH: {
+        const own = frame.kind === M2_KIND.SCHOOL_PATCH;
+        const patch = decodeTilePatch(frame.payload, own);
+        const result = own
+          ? replica.applyPatch(patch)
+          : publicKnowledge.applyPatch(patch);
+        if (result === "resync") requestChunkResync(patch.chunkId);
+        else if (result === "applied") {
+          world.paintPatch(
+            patch.chunkId,
+            patch.tiles.map((t) => t.localIndex),
+            replica,
+            own ? undefined : publicKnowledge,
+          );
+          if (own) {
+            miniMap.paintProjection(patch.chunkId, replica);
+            updateTile();
+          }
+        }
+        break;
+      }
+      case M2_KIND.MAP_STATE: {
+        const batch = decodeMapState(frame.payload);
+        if (batch.reset) streamBeacons.clear();
+        mapStreamReady = true;
+        lastMapStreamAt = Date.now();
+        const objects = new Map(
+          (batch.reset ? [] : publicWorld).map((o) => [o.id, o]),
+        );
+        for (const id of batch.removed) objects.delete(id);
+        for (const object of batch.objects) objects.set(object.id, object);
+        applyWorldObjects(
+          [...objects.values()].sort((a, b) => a.id.localeCompare(b.id)),
+        );
+        for (const beacon of batch.beacons)
+          streamBeacons.set(beacon.id, beacon);
+        paintBeacons();
+        break;
+      }
       case M2_KIND.ERROR:
         activity("Chưa thể thực hiện thao tác. Vui lòng thử lại.", "error");
         break;
@@ -1096,6 +1170,8 @@ async function connect(nextPlayer: Player): Promise<void> {
   }
   const previous = room;
   room = undefined;
+  mapStreamReady = false;
+  streamBeacons.clear();
   subscribed = "";
   resyncRequestedAt.clear();
   if (previous) void previous.leave();
@@ -1177,6 +1253,7 @@ async function connect(nextPlayer: Player): Promise<void> {
         return;
       }
       room = undefined;
+      mapStreamReady = false;
       subscribed = "";
       status("Đang kết nối lại…", false);
       reconnectTimer = window.setTimeout(() => void connect(player), 1200);

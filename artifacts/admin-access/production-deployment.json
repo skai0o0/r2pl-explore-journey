@@ -1,0 +1,23 @@
+{
+  "release": "/opt/r2pl-admin-20261019-k6gt99n4/release",
+  "previousRelease": "/opt/r2pl-production-auth-20261019-1e94wydb/release",
+  "health": {
+    "mode": "production",
+    "contractVersion": 1,
+    "fixtureOnly": false,
+    "schools": 8,
+    "botStatus": "idle"
+  },
+  "campaignId": "2e00774c-4a8f-4c58-bff6-ed9092901d8f",
+  "beforePids": {
+    "r2pl-game.service": "1575060",
+    "r2pl-standalone.service": "590867",
+    "r2pl-portal.service": "590874"
+  },
+  "afterPids": {
+    "r2pl-game.service": "1902314",
+    "r2pl-standalone.service": "590867",
+    "r2pl-portal.service": "590874"
+  },
+  "rollback": "Remove /etc/systemd/system/r2pl-game.service.d/110-admin-access.conf; daemon-reload; restart r2pl-game.service. Migration 009 is additive."
+}

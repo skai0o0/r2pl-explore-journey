@@ -41,7 +41,7 @@ test("partner controls switch only by school ID, reload after cookie rotation, a
     const { mountPartnerTestControls } = await vite.ssrLoadModule(
       "/src/partnerTestControls.ts",
     );
-    mountPartnerTestControls(0);
+    mountPartnerTestControls(0, true);
     const select = w.document.querySelector("select")!;
     assert.equal(select.options.length, 8);
     assert.equal(select.value, SCHOOLS[0]!.id);
@@ -57,7 +57,10 @@ test("partner controls switch only by school ID, reload after cookie rotation, a
     assert.equal(redirect, "/");
     assert(select.disabled);
     w.document.querySelector("nav")!.remove();
-    mountPartnerTestControls(0);
+    mountPartnerTestControls(0, false);
+    assert.equal(w.document.querySelector("a"), null);
+    w.document.querySelector("nav")!.remove();
+    mountPartnerTestControls(0, true);
     succeeds = false;
     redirect = "";
     const retry = w.document.querySelector("select")!;

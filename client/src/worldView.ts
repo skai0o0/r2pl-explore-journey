@@ -1345,6 +1345,38 @@ export class WorldView {
     this.#render();
   }
 
+  paintPatch(
+    id: number,
+    locals: readonly number[],
+    replica: ProjectionReplica,
+    publicKnowledge?: PublicKnowledgeReplica,
+  ): void {
+    if (!replica.hasChunk(id)) return;
+    this.#replica = replica;
+    if (publicKnowledge) this.#publicKnowledge = publicKnowledge;
+    const layer = this.#layer(id);
+    const { chunkX, chunkZ } = chunkCoordinatesForId(id);
+    for (const local of locals) {
+      if (!publicKnowledge)
+        this.#terrainChunks.discoveryFog.paintTile(id, local, replica);
+      this.#paintLocal(layer.pixels, id, local, replica);
+      if (!publicKnowledge) {
+        const x = chunkX * 64 + (local % 64),
+          z = chunkZ * 64 + Math.floor(local / 64);
+        for (const [dx, dz] of [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ])
+          this.#refreshTerrainTile(x + dx!, z + dz!, replica);
+      }
+    }
+    layer.texture.needsUpdate = true;
+    if (!publicKnowledge) this.#landscape.rebuildSoon(id, replica);
+    this.#render();
+  }
+
   paintTile(id: number, local: number, replica: ProjectionReplica): void {
     this.#terrainChunks.discoveryFog.paintTile(id, local, replica);
     this.#replica = replica;

@@ -2,7 +2,10 @@ import { SCHOOLS } from "../../shared/gameplay/gameConfig.ts";
 import { gameFetch } from "./gameHttp.ts";
 import "./partnerTestControls.css";
 
-export function mountPartnerTestControls(slot: number): void {
+export function mountPartnerTestControls(
+  slot: number,
+  dashboardAllowed: boolean,
+): void {
   const panel = document.createElement("nav");
   panel.className = "partner-test-controls";
   panel.setAttribute("aria-label", "Tài khoản đối tác thử nghiệm");
@@ -20,10 +23,12 @@ export function mountPartnerTestControls(slot: number): void {
     select.append(option);
   }
   label.append(select);
-  admin.href = "/admin";
-  admin.textContent = "Xem dashboard ↗";
+  if (dashboardAllowed) {
+    admin.href = "/admin";
+    admin.textContent = "Xem dashboard ↗";
+  }
   status.setAttribute("role", "status");
-  panel.append(label, admin, status);
+  panel.append(label, ...(dashboardAllowed ? [admin] : []), status);
   document.body.append(panel);
   select.onchange = async () => {
     select.disabled = true;

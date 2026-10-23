@@ -1,0 +1,14 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { rolldown } from 'rolldown';
+const root = new URL('./', import.meta.url);
+const bundle = await rolldown({ input: new URL('scene.js', root).pathname.replace(/^\/([A-Za-z]:)/, '$1') });
+const { output } = await bundle.generate({ format: 'iife', minify: true });
+await bundle.close();
+let html = await readFile(new URL('template.html', root), 'utf8');
+const logo = await readFile(new URL('../../campaigne-assets/Headline.png', root));
+const hq = await readFile(new URL('../../client/public/models/hqs/hcmut_hq.glb', root));
+html = html.replace('__LOGO__', 'data:image/png;base64,' + logo.toString('base64'));
+html = html.replace('__MODEL__', hq.toString('base64'));
+html = html.replace('__SCRIPT__', () => output[0].code.replaceAll('</script', '<\\/script'));
+await writeFile(new URL('road-to-mockup.html', root), html);
+console.log(`Standalone mockup: ${(Buffer.byteLength(html) / 1024 / 1024).toFixed(2)} MB`);

@@ -17,9 +17,22 @@ export const KNOWN_MODELS = new Set<string>([
   "/models/hqs/huce_hq.glb",
   "/models/hqs/ntu_hq.glb",
   "/models/hqs/hcmiu_hq.glb",
-  ...Array.from({ length: 8 }, (_, index) =>
+  ...Array.from({ length: 12 }, (_, index) =>
     `/models/landmarks/mysterios${index + 1}.glb`,
   ),
+  "/models/landmarks/fansipan.glb",
+  "/models/landmarks/halong.glb",
+  "/models/landmarks/nguhanhson.glb",
+  "/models/landmarks/phongnha.glb",
+  "/models/landmarks/nuibaden.glb",
+  "/models/landmarks/baden.glb",
+  "/models/landmarks/thanglong.glb",
+  "/models/landmarks/hoangthanhthanglong.glb",
+  "/models/landmarks/kinhthanhhue.glb",
+  "/models/landmarks/hue.glb",
+  "/models/landmarks/bitexco.glb",
+  "/models/landmarks/cairang.glb",
+  "/models/landmarks/chonoicairang.glb",
 ]);
 
 let manifestLoaded = false;
@@ -73,6 +86,13 @@ export function getLandmarkModelUrl(landmarkId: string): string {
     baden: 5,
     thanglong: 7,
     hoangthanhthanglong: 7,
+    canghaiphong: 9,
+    haiphong: 9,
+    kinhthanhhue: 10,
+    hue: 10,
+    bitexco: 11,
+    cairang: 12,
+    chonoicairang: 12,
   };
   const landmarkIndex = LANDMARKS.findIndex(
     (landmark) => landmark.id === normalizedId,

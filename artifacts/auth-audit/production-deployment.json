@@ -1,0 +1,18 @@
+{
+  "baseline": "1dd08e7d65d9c42879f02d43937565230b19d211",
+  "changedFiles": {
+    "server/integration/SchoolPlayServer.ts": "a925bab60dd786ca4b08f11aca96ab4bc44739d7e9ecd3d05d694ab503d3e597",
+    "server/realtime/GatewayRoom.ts": "a9bee00c7121eb3f2682bc82c782e4478aa1fadcc59f72edad32e3baf80dffd3"
+  },
+  "clientSha256": "850abed2009754438d663ae2e2f480c5b0aa45b86eec39df31dbdd981d8faa46",
+  "release": "/opt/r2pl-production-auth-20261019-1e94wydb/release",
+  "rollback": "/opt/r2pl-production-auth-20261019-1e94wydb/rollback",
+  "otherPids": {
+    "r2pl-standalone.service": "590867",
+    "r2pl-portal.service": "590874"
+  },
+  "productionChanged": true,
+  "deployedAtUTC": "2026-10-19T12:57:41Z",
+  "mainPid": "1265540",
+  "verification": "PASS"
+}
