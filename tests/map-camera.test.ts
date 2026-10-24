@@ -75,6 +75,54 @@ test("two fingers pan, pinch and twist without either release becoming a click",
   );
 });
 
+test("Shift-left drag orbits without a right-button browser gesture or gameplay click", () => {
+  const input = new MapCameraInput();
+  input.begin({ ...pointer(10, 20), shiftKey: true });
+  assert.deepEqual(input.move(pointer(30, 45)), {
+    kind: "orbit",
+    dx: 20,
+    dy: 25,
+  });
+  assert.equal(input.end(pointer(30, 45)), false);
+  input.begin({ ...pointer(10, 20), shiftKey: true });
+  assert.equal(
+    input.end(pointer(10, 20)),
+    false,
+    "Shift-click must not spend Points",
+  );
+  input.begin(pointer(10, 20));
+  assert.equal(
+    input.move({ ...pointer(30, 45), shiftKey: true })?.kind,
+    "pan",
+    "The mode is latched on press, rather than jumping when a modifier changes",
+  );
+  input.end(pointer(30, 45));
+  input.begin(pointer(10, 20));
+  assert.equal(input.end(pointer(10, 20)), true);
+});
+
+test("interrupted mouse and multi-touch gestures reset without phantom moves or clicks", () => {
+  const input = new MapCameraInput();
+  for (const button of [0, 1, 2]) {
+    input.begin(pointer(10, 20, 1, button));
+    input.move(pointer(40, 50, 1, button));
+    assert.deepEqual(input.cancel(), [1]);
+    assert.equal(input.active, false);
+    assert.equal(input.move(pointer(70, 80)), undefined);
+    assert.equal(input.end(pointer(70, 80)), false);
+  }
+  input.begin(pointer(0, 0));
+  input.begin(pointer(100, 0, 2));
+  assert.deepEqual(input.cancel(), [1, 2]);
+  assert.equal(input.end(pointer(100, 0, 2)), false);
+  input.begin(pointer(10, 20));
+  assert.equal(
+    input.end(pointer(10, 20)),
+    true,
+    "Input recovers after interruption",
+  );
+});
+
 test("rotation and tilt preserve Z-up terrain picking and clip depth in every quadrant", () => {
   for (const mode of ["isometric", "top-down"] as const) {
     for (const aspect of [16 / 9, 9 / 16]) {

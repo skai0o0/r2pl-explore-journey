@@ -675,11 +675,13 @@ export class WorldView {
     host.addEventListener("pointerleave", this.#pointerLeave);
     host.addEventListener("wheel", this.#wheel, { passive: false });
     window.addEventListener("resize", this.#render);
+    window.addEventListener("blur", this.#cancelCameraInput);
     this.#render();
   }
 
   dispose(): void {
     this.#disposed = true;
+    this.#cancelCameraInput();
     this.#clearObjectHover();
     this.#interactiveObjects.length = 0;
     this.#objectTooltip.remove();
@@ -694,6 +696,7 @@ export class WorldView {
     this.#host.removeEventListener("pointerleave", this.#pointerLeave);
     this.#host.removeEventListener("wheel", this.#wheel);
     window.removeEventListener("resize", this.#render);
+    window.removeEventListener("blur", this.#cancelCameraInput);
     window.clearTimeout(this.#revealTimer);
     window.clearTimeout(this.#rejectTimer);
     this.#landscape.dispose();
@@ -1717,6 +1720,7 @@ export class WorldView {
     this.#cameraInput.begin({
       pointerId: event.pointerId,
       button: event.button,
+      shiftKey: event.pointerType === "mouse" && event.shiftKey,
       x: event.clientX,
       y: event.clientY,
     });
@@ -1745,6 +1749,11 @@ export class WorldView {
 
   #pointerMove = (event: PointerEvent): void => {
     if (this.#cameraInput.active) {
+      // Some browser mouse-gesture handlers consume pointer-up outside the page.
+      if (event.pointerType === "mouse" && event.buttons === 0) {
+        this.#cancelCameraInput();
+        return;
+      }
       const hold = this.#holdPointer;
       if (
         hold &&
@@ -1900,6 +1909,18 @@ export class WorldView {
     this.#hoverElement.hidden = true;
     this.#onHover?.(undefined);
     this.#render();
+  };
+
+  #cancelCameraInput = (): void => {
+    const ids = this.#cameraInput.cancel();
+    this.#inspectedPointers.clear();
+    this.#clearObjectHover();
+    for (const id of ids)
+      if (this.#host.hasPointerCapture(id)) this.#host.releasePointerCapture(id);
+    this.#hovered = undefined;
+    this.#hoverElement.hidden = true;
+    this.#onHover?.(undefined);
+    if (!this.#disposed) this.#render();
   };
 
   #wheel = (event: WheelEvent): void => {

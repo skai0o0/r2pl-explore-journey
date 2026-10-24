@@ -5,6 +5,7 @@ export interface ScreenPoint {
 export interface CameraPointer extends ScreenPoint {
   pointerId: number;
   button: number;
+  shiftKey?: boolean;
 }
 export type CameraMotion =
   | { kind: "pan"; from: ScreenPoint; to: ScreenPoint }
@@ -45,7 +46,7 @@ export class MapCameraInput {
             start: pointer,
             last: pointer,
             moved: false,
-            orbit: pointer.button !== 0,
+            orbit: pointer.button !== 0 || pointer.shiftKey === true,
           }
         : undefined;
   }
@@ -95,5 +96,13 @@ export class MapCameraInput {
     this.pointers.delete(pointer.pointerId);
     this.drag = undefined;
     return click;
+  }
+
+  /** Browser gestures and focus changes can swallow the final pointer-up. */
+  cancel(): readonly number[] {
+    const ids = [...this.pointers.keys()];
+    this.pointers.clear();
+    this.drag = undefined;
+    return ids;
   }
 }

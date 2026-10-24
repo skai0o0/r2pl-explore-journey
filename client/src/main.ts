@@ -927,7 +927,7 @@ function announceCameraMode(log: boolean): void {
   get("camera-button").setAttribute("aria-label", `Đổi góc nhìn · ${label}`);
   worldHost.setAttribute(
     "aria-label",
-    `Bản đồ Hành trình Khám phá. ${label}. Kéo để pan; cuộn để zoom; kéo chuột phải hoặc giữa để xoay và nghiêng. Q/E xoay, I đổi góc nhìn. Hai ngón để pan, zoom và xoay.`,
+    `Bản đồ Hành trình Khám phá. ${label}. Kéo để pan; cuộn để zoom; giữ Shift và kéo chuột trái, hoặc kéo chuột giữa/phải để xoay và nghiêng. Q/E xoay, I đổi góc nhìn. Hai ngón để pan, zoom và xoay.`,
   );
   if (log && isDev) activity(`${label} · nhấn I để đổi góc nhìn`);
 }
