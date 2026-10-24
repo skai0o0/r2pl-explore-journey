@@ -95,6 +95,8 @@ export function getTerrainMoisture(x: number, z: number): number {
 export class TerrainBiomes {
   readonly #zones = new Map<number, Foundation[]>();
   readonly #rivers = [new Float32Array(1001), new Float32Array(1001)];
+  readonly #riverMinX = new Float32Array(1000);
+  readonly #riverMaxX = new Float32Array(1000);
   #foundations: Foundation[] = [];
   #signature = "";
   constructor(objects: readonly WorldObject[] = STAGING_OBJECTS) {
@@ -161,13 +163,18 @@ export class TerrainBiomes {
             const clearance = C.riverHalfWidth + C.shoreWidth + 4;
             const dz = Math.abs(z - zone.z),
               core = zone.halfZ + clearance;
-            if (
-              dz > core + 28 ||
-              Math.abs(x - zone.x) > zone.halfX + clearance + 12
-            )
-              continue;
+            if (dz > core + 28) continue;
             const t = Math.max(0, Math.min(1, (core + 28 - dz) / 28)),
-              blend = t * t * (3 - 2 * t);
+              lateral = Math.max(
+                0,
+                Math.min(
+                  1,
+                  (zone.halfX + clearance + 28 - Math.abs(baseline - zone.x)) /
+                    28,
+                ),
+              ),
+              blend =
+                t * t * (3 - 2 * t) * lateral * lateral * (3 - 2 * lateral);
             const side =
               500 +
                 (arm === 0 ? 500 - zone.z : zone.z - 500) * 0.48 +
@@ -176,12 +183,55 @@ export class TerrainBiomes {
                 ? -1
                 : 1;
             const edge = zone.x + side * (zone.halfX + clearance);
-            if (Math.abs(x - zone.x) < zone.halfX + clearance)
-              x += (edge - x) * blend;
+            // Fade the detour using the original path, not a hard cutoff on
+            // the displaced point: the latter made adjacent rows jump apart.
+            x +=
+              (side < 0 ? Math.min(0, edge - x) : Math.max(0, edge - x)) *
+              blend;
           }
         this.#rivers[arm]![z] = x;
       }
+    const reach = Math.ceil(C.riverHalfWidth + C.shoreWidth);
+    for (let row = 0; row < 1000; row++) {
+      const path = this.#rivers[row < 500 ? 0 : 1]!;
+      let min = Infinity,
+        max = -Infinity;
+      for (
+        let i = Math.max(0, row - reach);
+        i <= Math.min(1000, row + reach + 1);
+        i++
+      ) {
+        min = Math.min(min, path[i]!);
+        max = Math.max(max, path[i]!);
+      }
+      this.#riverMinX[row] = min - reach;
+      this.#riverMaxX[row] = max + reach;
+    }
     return true;
+  }
+
+  #riverDistance(x: number, z: number): number {
+    const row = Math.max(0, Math.min(999, Math.floor(z)));
+    if (x < this.#riverMinX[row]! || x > this.#riverMaxX[row]!) return Infinity;
+    const path = this.#rivers[row < 500 ? 0 : 1]!;
+    const reach = Math.ceil(C.riverHalfWidth + C.shoreWidth);
+    let squared = Infinity;
+    for (
+      let i = Math.max(0, row - reach);
+      i <= Math.min(999, row + reach);
+      i++
+    ) {
+      const start = path[i]!,
+        dx = path[i + 1]! - start;
+      const t = Math.max(
+        0,
+        Math.min(1, ((x - start) * dx + z - i) / (dx * dx + 1)),
+      );
+      squared = Math.min(squared, (x - start - t * dx) ** 2 + (z - i - t) ** 2);
+    }
+    // Distance to finite segments keeps banks bounded at sharp bends. An
+    // infinite tangent line painted long sand/water streaks across the map.
+    return Math.sqrt(squared);
   }
 
   isFoundation(x: number, z: number, margin = 0): boolean {
@@ -208,13 +258,7 @@ export class TerrainBiomes {
     z = Math.floor(z);
     if (this.isFoundation(x + 0.5, z + 0.5))
       return { height: 0, biome: "foundation", color: 0x689f38 };
-    const row = Math.max(0, Math.min(1000, z));
-    const path = this.#rivers[z < 500 ? 0 : 1]!;
-    const slope =
-      (path[Math.min(1000, row + 1)]! - path[Math.max(0, row - 1)]!) / 2;
-    const river =
-      Math.abs(x + 0.5 - path[row]!) / Math.sqrt(1 + slope * slope) -
-      C.riverHalfWidth;
+    const river = this.#riverDistance(x + 0.5, z + 0.5) - C.riverHalfWidth;
     const lake =
       Math.hypot(x + 0.5 - 500, z + 0.5 - 500) -
       C.lakeRadius +

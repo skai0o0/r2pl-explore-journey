@@ -169,6 +169,20 @@ test("central lake and both river arms have depressed water and sandy banks with
   assert.equal(field.getTerrainBiome(edge + 1, 500), "sand");
 });
 
+test("river detours do not stretch tangent-line water streaks across the terrain", () => {
+  const field = new TerrainBiomes();
+  // These rows used to paint up to 169 river tiles when a detour jumped.
+  // Include both sides of each bend so changing the sampled row cannot mask it.
+  for (const start of [374, 620]) {
+    for (let z = start; z < start + 18; z++) {
+      let waterTiles = 0;
+      for (let x = 0; x < 1000; x++)
+        if (field.sample(x, z).biome === "river") waterTiles++;
+      assert(waterTiles < 64, `river row ${z} spans ${waterTiles} tiles`);
+    }
+  }
+});
+
 test("chunk meshes contain real terraces, lit cliff faces and clipped edge chunks", () => {
   const field = new TerrainBiomes();
   let terrain: THREE.BufferGeometry | undefined;

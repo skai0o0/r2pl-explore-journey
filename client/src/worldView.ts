@@ -428,9 +428,9 @@ export class WorldView {
     dirLight.shadow.mapSize.set(2048, 2048);
     dirLight.shadow.camera.near = 10;
     dirLight.shadow.camera.far = 1500;
-    dirLight.shadow.bias = -0.0003;
-    dirLight.shadow.normalBias = 0.12;
-    dirLight.shadow.radius = 3;
+    dirLight.shadow.bias = -0.000015;
+    dirLight.shadow.normalBias = 0.015;
+    dirLight.shadow.radius = 1;
     this.#sun = dirLight;
     this.#scene.add(dirLight);
     this.#scene.add(dirLight.target);
