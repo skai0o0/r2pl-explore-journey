@@ -25,6 +25,20 @@ button { cursor:pointer; }
 .map-marker:hover {
   transform: translate(-50%, -55%) scale(1.08);
 }
+.map-marker.home-dot {
+  pointer-events: none;
+  transition: none;
+}
+.map-marker.home-dot .marker-copy { display: none; }
+.map-marker.home-dot .marker-glyph {
+  width: 9px;
+  height: 9px;
+  font-size: 0;
+  background: currentColor;
+  color: inherit;
+  border: 2px solid #e5fff5;
+}
+.map-marker[hidden] { display: none; }
 
 .marker-glyph {
   display: grid;
@@ -473,7 +487,8 @@ body[data-school="dusk"] .tile-panel button small {
   color: #e5fff5;
   background: #102720ed;
   font-size: 12px;
-  max-width: 260px;
+  max-width: min(260px, calc(100% - 16px));
+  text-align: center;
   pointer-events: none;
 }
 .object-hover-tooltip[hidden] {

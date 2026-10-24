@@ -6,6 +6,7 @@ export const SCENE_PRESENTATION = {
   distanceFog: { color: 0x24434b, density: 0.00012 },
   discoveryFog: { density: 0.48, feather: 2.5, color: [0.055, 0.12, 0.15] },
   homeSpan: 64,
+  nameTags: { hoverDelayMs: 150, holdDelayMs: 350, dragThresholdPx: 5 },
   camera: {
     azimuth: -Math.PI / 4,
     elevation: Math.atan(0.62 / Math.SQRT1_2),

@@ -333,8 +333,21 @@ export class WorldView {
   readonly #assetLoader = new ModelAssetLoader();
   #hoverFrame: number | undefined;
   #hoverPointer: { x: number; y: number } | undefined;
+  #nameTimer: ReturnType<typeof setTimeout> | undefined;
+  #nameCandidate: string | undefined;
+  #holdPointer: { id: number; x: number; y: number } | undefined;
+  #inspectedPointers = new Set<number>();
   #disposed = false;
   readonly #objectTooltip: HTMLElement;
+  readonly #objectOutline = new THREE.LineLoop(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({
+      color: 0x81e5dc,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+    }),
+  );
   readonly #assetRoots: THREE.Group[] = [];
   readonly #privateObjects = new THREE.Group();
   readonly #beacons = new THREE.Group();
@@ -612,6 +625,8 @@ export class WorldView {
     this.#objectTooltip.hidden = true;
     this.#objectTooltip.style.pointerEvents = "none";
     host.append(this.#objectTooltip);
+    this.#objectOutline.visible = false;
+    this.#scene.add(this.#objectOutline);
 
     this.#selection = document.createElement("div");
     this.#selection.className = "tile-selection";
@@ -668,6 +683,8 @@ export class WorldView {
     this.#clearObjectHover();
     this.#interactiveObjects.length = 0;
     this.#objectTooltip.remove();
+    this.#objectOutline.geometry.dispose();
+    this.#objectOutline.material.dispose();
     this.#host.removeEventListener("pointerdown", this.#pointerDown);
     this.#host.removeEventListener("pointermove", this.#pointerMove);
     this.#host.removeEventListener("pointerup", this.#pointerUp);
@@ -750,8 +767,7 @@ export class WorldView {
       if (!marker) continue;
       const title = this.#markerElements[index]?.querySelector("b");
       const landmark = this.#catalog.find((o) => o.id === beacon.id);
-      if (title && landmark)
-        title.textContent = objectDisplayName(landmark);
+      if (title && landmark) title.textContent = objectDisplayName(landmark);
       const detail = this.#markerElements[index]?.querySelector("small");
       if (detail)
         detail.textContent =
@@ -1560,21 +1576,65 @@ export class WorldView {
     if (this.#onPick(tile, object) !== false) this.#onPickObject?.(object);
   }
 
-  #setObjectHover(object: WorldObject | undefined, x = 0, y = 0): void {
+  #setObjectHover(object: WorldObject | undefined): void {
     const changed = this.#hoveredObject !== object?.id;
     this.#hoveredObject = object?.id;
     this.#host.style.cursor = object ? "pointer" : "";
     this.#objectTooltip.hidden = !object;
+    this.#objectOutline.visible = !!object;
     if (object) {
-      this.#objectTooltip.textContent = objectDisplayName(
-        object,
-      );
-      this.#objectTooltip.style.transform = `translate3d(${x + 12}px, ${y + 12}px, 0)`;
+      const corners = [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const;
+      const points = corners.map(([dx, dz]) => {
+        const wx = object.x + (dx * object.width) / 2,
+          wz = object.z + (dz * object.height) / 2;
+        return new THREE.Vector3(
+          wx - WORLD_WIDTH / 2,
+          WORLD_HEIGHT / 2 - wz,
+          this.#terrain.getTerrainHeight(wx, wz) + 0.18,
+        );
+      });
+      this.#objectOutline.geometry.setFromPoints(points);
+      this.#objectTooltip.textContent = objectDisplayName(object);
+      this.#positionObjectTooltip(object);
     }
     if (changed) this.#render();
   }
 
+  #positionObjectTooltip(object: WorldObject): void {
+    const width = this.#host.clientWidth,
+      height = this.#host.clientHeight;
+    const point = new THREE.Vector3(
+      object.x - WORLD_WIDTH / 2,
+      WORLD_HEIGHT / 2 - object.z,
+      this.#terrain.getTerrainHeight(object.x, object.z) +
+        Math.max(object.width, object.height) * 0.6,
+    ).project(this.#camera);
+    const half = this.#objectTooltip.offsetWidth / 2;
+    const x = Math.max(
+      half + 8,
+      Math.min(width - half - 8, ((point.x + 1) * width) / 2),
+    );
+    const y = Math.max(
+      this.#objectTooltip.offsetHeight + 8,
+      Math.min(height - 8, ((1 - point.y) * height) / 2),
+    );
+    this.#objectTooltip.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -100%)`;
+  }
+
+  #cancelNameTimer(): void {
+    clearTimeout(this.#nameTimer);
+    this.#nameTimer = undefined;
+    this.#nameCandidate = undefined;
+    this.#holdPointer = undefined;
+  }
+
   #clearObjectHover(): void {
+    this.#cancelNameTimer();
     if (this.#hoverFrame !== undefined) cancelAnimationFrame(this.#hoverFrame);
     this.#hoverFrame = undefined;
     this.#hoverPointer = undefined;
@@ -1650,6 +1710,7 @@ export class WorldView {
     if ((event.target as Element).closest(".map-marker")) return;
     if (![0, 1, 2].includes(event.button)) return;
     event.preventDefault();
+    const alreadyActive = this.#cameraInput.active;
     this.#clearObjectHover();
     this.#host.focus({ preventScroll: true });
     this.#host.setPointerCapture(event.pointerId);
@@ -1659,6 +1720,23 @@ export class WorldView {
       x: event.clientX,
       y: event.clientY,
     });
+    if (event.pointerType !== "mouse" && event.button === 0 && !alreadyActive) {
+      this.#pointerRay(event.clientX, event.clientY);
+      const object = this.#pickBuilding();
+      if (object) {
+        this.#holdPointer = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+        };
+        this.#nameTimer = setTimeout(() => {
+          if (!this.#holdPointer || this.#disposed) return;
+          this.#inspectedPointers.add(event.pointerId);
+          this.#pointerRay(event.clientX, event.clientY);
+          this.#setObjectHover(this.#pickBuilding());
+        }, P.nameTags.holdDelayMs);
+      }
+    }
     if (this.#animId !== undefined) {
       cancelAnimationFrame(this.#animId);
       this.#animId = undefined;
@@ -1667,6 +1745,14 @@ export class WorldView {
 
   #pointerMove = (event: PointerEvent): void => {
     if (this.#cameraInput.active) {
+      const hold = this.#holdPointer;
+      if (
+        hold &&
+        hold.id === event.pointerId &&
+        Math.hypot(event.clientX - hold.x, event.clientY - hold.y) >
+          P.nameTags.dragThresholdPx
+      )
+        this.#clearObjectHover();
       const motion = this.#cameraInput.move({
         pointerId: event.pointerId,
         button: event.button,
@@ -1674,6 +1760,7 @@ export class WorldView {
         y: event.clientY,
       });
       if (!motion) return;
+      this.#clearObjectHover();
       if (motion.kind === "orbit") {
         this.rotateCamera(
           -motion.dx * P.camera.orbitSensitivity,
@@ -1701,6 +1788,7 @@ export class WorldView {
       return;
     }
 
+    if (event.pointerType !== "mouse") return;
     // Coalesce input bursts into one bounded broad/narrow-phase pass per frame.
     this.#hoverPointer = { x: event.clientX, y: event.clientY };
     if (this.#hoverFrame === undefined) {
@@ -1712,9 +1800,23 @@ export class WorldView {
     this.#hoverFrame = undefined;
     const pointer = this.#hoverPointer;
     if (!pointer || this.#cameraInput.active || this.#disposed) return;
-    const rect = this.#pointerRay(pointer.x, pointer.y);
+    this.#pointerRay(pointer.x, pointer.y);
     const object = this.#pickBuilding();
-    this.#setObjectHover(object, pointer.x - rect.left, pointer.y - rect.top);
+    if (object?.id !== this.#nameCandidate) {
+      this.#cancelNameTimer();
+      this.#setObjectHover(undefined);
+      this.#nameCandidate = object?.id;
+      if (object)
+        this.#nameTimer = setTimeout(() => {
+          this.#nameTimer = undefined;
+          const latest = this.#hoverPointer;
+          if (!latest || this.#cameraInput.active || this.#disposed) return;
+          this.#pointerRay(latest.x, latest.y);
+          const current = this.#pickBuilding();
+          if (current?.id === this.#nameCandidate)
+            this.#setObjectHover(current);
+        }, P.nameTags.hoverDelayMs);
+    }
     if (object) {
       if (this.#hovered) {
         this.#hovered = undefined;
@@ -1747,6 +1849,8 @@ export class WorldView {
   };
 
   #pointerUp = (event: PointerEvent): void => {
+    const inspected = this.#inspectedPointers.delete(event.pointerId);
+    this.#clearObjectHover();
     const click = this.#cameraInput.end(
       {
         pointerId: event.pointerId,
@@ -1758,7 +1862,7 @@ export class WorldView {
     );
     if (this.#host.hasPointerCapture(event.pointerId))
       this.#host.releasePointerCapture(event.pointerId);
-    if (!click) return;
+    if (!click || inspected) return;
 
     this.#pointerRay(event.clientX, event.clientY);
     const object = this.#pickBuilding();
@@ -1934,7 +2038,10 @@ export class WorldView {
         (marker.kind !== "unistop" ||
           this.#isDev ||
           (!!object && this.isObjectDiscovered(object)));
-      element.hidden = !visible;
+      const home =
+        marker.kind === "hq" && marker.schoolSlot === this.#schoolSlot;
+      element.classList.toggle("home-dot", home);
+      element.hidden = !visible || !home;
       if (!visible) continue;
       element.style.left = "0";
       element.style.top = "0";
@@ -1944,6 +2051,17 @@ export class WorldView {
         "is-emphasized",
         marker.id === this.#selectedObject || marker.id === this.#hoveredObject,
       );
+    }
+    if (this.#hoveredObject && !this.#objectTooltip.hidden) {
+      const object = this.#displayObject(this.#hoveredObject);
+      if (
+        object &&
+        this.#interactiveObjects.some(
+          (entry) => entry.id === object.id && this.#interactiveEligible(entry),
+        )
+      )
+        this.#positionObjectTooltip(object);
+      else this.#setObjectHover(undefined);
     }
     for (const [id, mesh] of this.#unistopMeshes) {
       const object = this.#objectById.get(id);
