@@ -401,6 +401,96 @@ test("admin dashboard auth: protected root, local accounts, permission matrix, r
         codeChallenge: randomBytes(32).toString("base64url"),
       }),
     );
+    const formerStaff = await sso("sv001@amtech.vn");
+    for (const [email, schoolId, slot] of [
+      ["sv001@amtech.vn", "hcmut", 0],
+      ["sv002@amtech.vn", "hcmiu", 7],
+      ["sv003@amtech.vn", "ou", 1],
+    ] as const) {
+      await pool.query(
+        "INSERT INTO r2pl_v2.portal_student_overrides(campaign_id,email,school_id) VALUES($1,$2,$3)",
+        [config.campaignId, email, schoolId],
+      );
+      const member = {
+        externalStudentId:
+          email === "sv001@amtech.vn"
+            ? formerStaff.member.externalStudentId
+            : randomUUID(),
+        email: email.toUpperCase(),
+        emailVerified: true,
+        eduVerified: false,
+        schoolId: "amtech",
+        active: true,
+        displayName: email,
+      };
+      await assert.rejects(() =>
+        portal.upsertMember({ ...member, emailVerified: false }),
+      );
+      assert.deepEqual(await portal.upsertMember(member), {
+        externalStudentId: member.externalStudentId,
+        schoolId,
+        active: true,
+        role: "user",
+        playable: true,
+      });
+      const verifier = randomBytes(32).toString("base64url");
+      const launch = (await portal.launch({
+        externalStudentId: member.externalStudentId,
+        codeChallenge: createHash("sha256")
+          .update(verifier)
+          .digest("base64url"),
+      })) as { launchUrl: string };
+      const session = await portal.exchange({
+        ticket: new URLSearchParams(
+          new URL(launch.launchUrl).hash.slice(1),
+        ).get("launch"),
+        codeVerifier: verifier,
+      });
+      assert.equal(
+        (await portal.authenticate(session.token))?.schoolSlot,
+        slot,
+      );
+      assert.equal(await portal.authenticateAdmin(session.token), undefined);
+      assert.equal(
+        (
+          await call("/api/admin/rankings", undefined, {
+            Cookie: `__Host-r2pl_game=${session.token}`,
+          })
+        ).status,
+        401,
+      );
+      const actorId = (await portal.authenticate(session.token))!.actorId;
+      const wallet = await pool.query(
+        "SELECT balance FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+        [config.campaignId, actorId],
+      );
+      await portal.upsertMember(member);
+      assert.equal(
+        (await portal.authenticate(session.token))?.actorId,
+        actorId,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT balance FROM r2pl_v2.wallet_accounts WHERE campaign_id=$1 AND actor_id=$2 AND resource='fixture-credit'",
+            [config.campaignId, actorId],
+          )
+        ).rows[0].balance,
+        wallet.rows[0].balance,
+      );
+      await assert.rejects(
+        () =>
+          portal.upsertMember({ ...member, externalStudentId: randomUUID() }),
+        /IDENTITY_ALREADY_BOUND/,
+      );
+    }
+    assert.equal(await portal.authenticateAdmin(formerStaff.token), undefined);
+    assert.equal(
+      (await portal.authenticateAdmin(acer.token))?.permissions?.includes(
+        "rankings.view",
+      ),
+      true,
+    );
     const audit = await call("/api/admin/audit", undefined, root);
     assert.equal(audit.status, 200);
     assert(!JSON.stringify(audit.data).includes(password));

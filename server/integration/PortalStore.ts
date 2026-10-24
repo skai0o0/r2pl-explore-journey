@@ -13,7 +13,7 @@ import {
 } from "../../shared/integration/running.ts";
 import { authenticateAdminAccess } from "./AdminAccessStore.ts";
 import { NotificationStore } from "./NotificationStore.ts";
-import { bindTestProfile } from "./PartnerTestProfiles.ts";
+import { bindTestProfile, revokeTestPlay } from "./PartnerTestProfiles.ts";
 import type { PortalConfig } from "./PortalConfig.ts";
 import { PortalError } from "./PortalSignature.ts";
 import type { SchoolPlayActor } from "./SchoolPlayFixture.ts";
@@ -141,14 +141,27 @@ export class PortalStore {
     assertIdentifier(value.externalStudentId);
     if (String(value.externalStudentId).startsWith("partner-test:"))
       throw new PortalError(403, "TEST_PROFILE_MANAGED_LOCALLY");
-    if (isAmtechIdentity(value.email, value.emailVerified))
-      return this.upsertAdmin(value);
-    if (value.schoolId === "amtech")
+    const staff = isAmtechIdentity(value.email, value.emailVerified);
+    const email =
+      typeof value.email === "string" ? value.email.trim().toLowerCase() : "";
+    const override =
+      staff && email !== ROOT_ADMIN_EMAIL
+        ? (
+            await this.pool.query<{ school_id: string }>(
+              "SELECT school_id FROM r2pl_v2.portal_student_overrides WHERE campaign_id=$1 AND email=$2 AND active",
+              [this.config.campaignId, email],
+            )
+          ).rows[0]
+        : undefined;
+    if (staff && !override) return this.upsertAdmin(value);
+    if (!override && value.schoolId === "amtech")
       throw new PortalError(403, "VERIFIED_ADMIN_IDENTITY_REQUIRED");
-    const school = SCHOOLS.find((school) => school.id === value.schoolId);
+    const school = SCHOOLS.find(
+      (school) => school.id === (override?.school_id ?? value.schoolId),
+    );
     if (
       !school ||
-      value.eduVerified !== true ||
+      (!override && value.eduVerified !== true) ||
       typeof value.active !== "boolean" ||
       typeof value.displayName !== "string" ||
       !value.displayName.trim() ||
@@ -158,6 +171,75 @@ export class PortalStore {
       throw new PortalError(400, "INVALID_VERIFIED_MEMBER");
     const displayName = value.displayName.trim();
     return this.transaction(async (db) => {
+      let convertedActor: string | undefined;
+      let auditOverride = false;
+      if (override) {
+        const bound = (
+          await db.query<{
+            school_id: string;
+            external_student_id: string | null;
+          }>(
+            "SELECT school_id,external_student_id FROM r2pl_v2.portal_student_overrides WHERE campaign_id=$1 AND email=$2 AND active FOR UPDATE",
+            [this.config.campaignId, email],
+          )
+        ).rows[0];
+        if (!bound || bound.school_id !== school.id)
+          throw new PortalError(409, "STUDENT_OVERRIDE_CHANGED");
+        if (
+          bound.external_student_id &&
+          bound.external_student_id !== value.externalStudentId
+        )
+          throw new PortalError(409, "IDENTITY_ALREADY_BOUND");
+        const admins = (
+          await db.query<{
+            actor_id: string;
+            external_student_id: string;
+            protected_root: boolean;
+            active: boolean;
+          }>(
+            "SELECT actor_id,external_student_id,protected_root,active FROM r2pl_v2.portal_admins WHERE campaign_id=$1 AND (email=$2 OR external_student_id=$3) FOR UPDATE",
+            [this.config.campaignId, email, value.externalStudentId],
+          )
+        ).rows;
+        if (admins.some((a) => a.protected_root))
+          throw new PortalError(403, "ROOT_ADMIN_PROTECTED");
+        if (
+          admins.length > 1 ||
+          admins.some(
+            (a) =>
+              a.external_student_id !== value.externalStudentId &&
+              !a.external_student_id.startsWith("local-admin:") &&
+              !a.external_student_id.startsWith("retired-staff:"),
+          )
+        )
+          throw new PortalError(409, "IDENTITY_ALREADY_BOUND");
+        const admin = admins[0];
+        if (admin) {
+          convertedActor = admin.actor_id;
+          await revokeTestPlay(db, this.config.campaignId, admin.actor_id);
+          await db.query(
+            "DELETE FROM r2pl_v2.portal_admin_sessions WHERE campaign_id=$1 AND actor_id=$2",
+            [this.config.campaignId, admin.actor_id],
+          );
+          await db.query(
+            "DELETE FROM r2pl_v2.portal_admin_launches WHERE campaign_id=$1 AND actor_id=$2",
+            [this.config.campaignId, admin.actor_id],
+          );
+          await db.query(
+            "UPDATE r2pl_v2.portal_admins SET active=false,access_enabled=false,permissions='{}',test_profiles=false,external_student_id=$3,access_revision=access_revision+1 WHERE campaign_id=$1 AND actor_id=$2 AND (active OR access_enabled OR external_student_id<>$3)",
+            [
+              this.config.campaignId,
+              admin.actor_id,
+              `retired-staff:${admin.actor_id}`,
+            ],
+          );
+        }
+        await db.query(
+          "UPDATE r2pl_v2.portal_student_overrides SET external_student_id=$3 WHERE campaign_id=$1 AND email=$2",
+          [this.config.campaignId, email, value.externalStudentId],
+        );
+        auditOverride = !bound.external_student_id || admin?.active === true;
+      }
       if (
         (
           await db.query(
@@ -175,7 +257,7 @@ export class PortalStore {
       ).rows[0];
       if (old && old.school_id !== school.id)
         throw new PortalError(409, "SCHOOL_CHANGE_REQUIRES_REVIEW");
-      const actorId = old?.actor_id ?? randomUUID();
+      const actorId = old?.actor_id ?? convertedActor ?? randomUUID();
       await db.query(
         "INSERT INTO r2pl_v2.portal_members(campaign_id,external_student_id,actor_id,school_id,school_slot,display_name,active) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(campaign_id,external_student_id) DO UPDATE SET display_name=EXCLUDED.display_name,active=EXCLUDED.active",
         [
@@ -198,6 +280,19 @@ export class PortalStore {
           school.id,
         ],
       );
+      if (auditOverride)
+        await db.query(
+          "INSERT INTO r2pl_v2.operator_audit(campaign_id,actor_id,action,detail) VALUES($1,$2,'verified-student-override-bound',$3)",
+          [
+            this.config.campaignId,
+            actorId,
+            {
+              email,
+              externalStudentId: value.externalStudentId,
+              schoolId: school.id,
+            },
+          ],
+        );
       for (const [resource, opening] of [
         ["fixture-credit", GAME_CONFIG.integration.initialPoints],
         ["fixture-crystals", GAME_CONFIG.integration.initialCrystals],
