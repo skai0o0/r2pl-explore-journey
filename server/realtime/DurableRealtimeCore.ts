@@ -223,6 +223,44 @@ export class DurableRealtimeCore {
     this.#publicBatches.clear();
   }
 
+  async pauseForCampaignReset(): Promise<void> {
+    if (this.#relayTimer) clearInterval(this.#relayTimer);
+    this.#relayTimer = undefined;
+    clearInterval(this.#schoolTimer);
+    clearInterval(this.#publicTimer);
+    this.#schoolTimer = undefined;
+    this.#publicTimer = undefined;
+    const deadline = Date.now() + GAME_CONFIG.campaignAdmin.relayPauseTimeoutMs;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        this.#authority.waitForDrain(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("Relay pause timed out")),
+            GAME_CONFIG.campaignAdmin.relayPauseTimeoutMs,
+          );
+          timer.unref();
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    while (this.#flushingSchools || this.#flushingPublic) {
+      if (Date.now() >= deadline) throw new Error("Relay flush timed out");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  /** Called after a committed campaign reset, before accepting fresh sessions. */
+  disconnectForCampaignReset(): void {
+    this.#dirtySchools.clear();
+    this.#schoolSnapshots.clear();
+    this.#publicBatches.clear();
+    for (const session of this.#sessions.values())
+      session.outbound.close("campaign_reset");
+  }
+
   async drainOutbox(): Promise<number> {
     return this.#authority.drain(
       (event) => this.#publish(event),

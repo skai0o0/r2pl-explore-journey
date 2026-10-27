@@ -17,6 +17,7 @@ import type { BotRole } from "../../shared/simulation/schoolBots.ts";
 import { createDurableSyntheticServer } from "../realtime/durableBootstrap.ts";
 import { MapStateBatcher } from "../realtime/MapStateBatcher.ts";
 import { AdminHttp } from "./AdminHttp.ts";
+import type { CampaignBackup } from "./CampaignBackup.ts";
 import type { CampaignProvider } from "./CampaignProvider.ts";
 import { DemoAdminStore } from "./DemoAdminPortal.ts";
 import { DevAccountService } from "./DevAccountService.ts";
@@ -36,6 +37,7 @@ import {
 import { PortalHttp } from "./PortalHttp.ts";
 import { PortalError } from "./PortalSignature.ts";
 import { PortalStore } from "./PortalStore.ts";
+import { RootCampaignStore } from "./RootCampaignStore.ts";
 import {
   SCHOOL_PLAY_CAMPAIGN,
   type SchoolPlayActor,
@@ -52,6 +54,7 @@ interface PlayServerOptions {
   readonly actorsPerSchool?: number;
   readonly portal?: PortalConfig;
   readonly adminPortal?: PortalConfig;
+  readonly campaignBackup?: CampaignBackup;
 }
 
 /** One local dev writer per persistent campaign. Not distributed lease/fencing. */
@@ -144,9 +147,7 @@ async function startSchoolPlayServer(
     ? new DemoAdminStore(pool, options.adminPortal)
     : undefined;
   const authConfig = options.portal ?? options.adminPortal;
-  const adminHttp = authConfig
-    ? new AdminHttp(pool, authConfig, !!portal)
-    : undefined;
+  let adminHttp: AdminHttp | undefined;
   const portalHttp =
     portal || adminPortal
       ? new PortalHttp((portal ?? adminPortal)!)
@@ -206,6 +207,7 @@ async function startSchoolPlayServer(
   );
   await realtime.server.listen(ports.websocket, "127.0.0.1");
   const mapBatcher = new MapStateBatcher();
+  let mapEpoch = 0;
   let mapReading = false,
     stopsDirty = true;
   realtime.core.onCommittedChange = () => {
@@ -215,6 +217,7 @@ async function startSchoolPlayServer(
     const slots = realtime.core.liveSchoolSlots;
     if (mapReading || !slots.length) return;
     mapReading = true;
+    const epoch = mapEpoch;
     void (async () => {
       if (stopsDirty) {
         stopsDirty = false;
@@ -226,6 +229,7 @@ async function startSchoolPlayServer(
         }
       }
       const source = await gameplay.mapState();
+      if (epoch !== mapEpoch) return;
       for (const { slot, batch } of mapBatcher.update(
         source,
         slots,
@@ -245,6 +249,24 @@ async function startSchoolPlayServer(
       });
   }, GAME_CONFIG.realtime.objectPollMs);
   mapTimer.unref();
+  const campaignAdmin = portal
+    ? new RootCampaignStore(pool, fixture.campaignId, options.campaignBackup, {
+        prepare: () => realtime.core.pauseForCampaignReset(),
+        finish: (changed) => {
+          if (changed) {
+            mapEpoch++;
+            mapBatcher.reset();
+            realtime.core.disconnectForCampaignReset();
+            notifications.disconnectForCampaignReset();
+            stopsDirty = true;
+          }
+          realtime.core.startRelay();
+        },
+      })
+    : undefined;
+  adminHttp = authConfig
+    ? new AdminHttp(pool, authConfig, !!portal, campaignAdmin)
+    : undefined;
   const address = realtime.transport.server?.address();
   if (!address || typeof address === "string")
     throw new Error("Missing WebSocket address");

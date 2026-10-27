@@ -540,6 +540,19 @@ export class PortalStore {
         [...scope, snapshot.revision.toString(), hash, JSON.stringify(receipt)],
       );
       await db.query(
+        "INSERT INTO r2pl_v2.student_history_archive(campaign_id,actor_id,kind,detail,occurred_at) VALUES($1,$2,'running-snapshot',$3,clock_timestamp())",
+        [
+          ...scope,
+          JSON.stringify({
+            revision: snapshot.revision.toString(),
+            cumulativeMeters: snapshot.cumulativeMeters.toString(),
+            weeklyMeters: snapshot.weeklyMeters.toString(),
+            observedAtMs: snapshot.observedAtMs,
+            weekStartMs: snapshot.weekStartMs,
+          }),
+        ],
+      );
+      await db.query(
         "INSERT INTO r2pl_v2.game_events(campaign_id,actor_id,title,body) VALUES($1,$2,'Đồng bộ thành tích chạy',$3)",
         [...scope, `Thành tích chạy đã đồng bộ: ${delta} Điểm`],
       );

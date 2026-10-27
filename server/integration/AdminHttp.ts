@@ -18,17 +18,25 @@ import {
   validGameCsrf,
 } from "./PortalCookies.ts";
 import { PortalError } from "./PortalSignature.ts";
+import type { RootCampaignStore } from "./RootCampaignStore.ts";
 
 export class AdminHttp {
   private pool: Pool;
   private config: PortalConfig;
   private store: AdminAccessStore;
   private testProfilesSupported: boolean;
-  constructor(pool: Pool, config: PortalConfig, testProfilesSupported = true) {
+  private campaignAdmin: RootCampaignStore | undefined;
+  constructor(
+    pool: Pool,
+    config: PortalConfig,
+    testProfilesSupported = true,
+    campaignAdmin?: RootCampaignStore,
+  ) {
     this.pool = pool;
     this.config = config;
     this.store = new AdminAccessStore(pool, config.campaignId);
     this.testProfilesSupported = testProfilesSupported;
+    this.campaignAdmin = campaignAdmin;
   }
   async handle(
     request: IncomingMessage,
@@ -45,6 +53,7 @@ export class AdminHttp {
         "/api/admin/audit",
         "/api/admin/rankings",
         "/api/admin/notifications",
+        "/api/admin/campaign",
         "/api/test-profiles/switch",
       ].includes(path)
     )
@@ -122,6 +131,14 @@ export class AdminHttp {
           `${nonceName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${config.mode === "production" ? "; Secure" : ""}`,
         ]);
         result = { signedIn: true };
+      } else if (path === "/api/admin/campaign") {
+        if (!this.campaignAdmin)
+          throw new PortalError(404, "CAMPAIGN_ADMIN_UNAVAILABLE");
+        result = await this.campaignAdmin.handle(
+          admin!.actorId,
+          token!,
+          request.method === "GET" ? undefined : input,
+        );
       } else if (path === "/api/admin/notifications") {
         result = await new NotificationStore(
           this.pool,

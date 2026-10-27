@@ -321,6 +321,15 @@ export const BEACON_BUFF_CONFIG = {
   comeback: { tiles: 10, spins: 1, points: 5 },
 } as const;
 export const GAME_CONFIG = {
+  campaignAdmin: {
+    historyPageSize: 50,
+    historyMaxOffset: 5000,
+    maxPoints: 1_000_000_000,
+    searchLimit: 30,
+    backupTimeoutMs: 120_000,
+    requestTimeoutMs: 300_000,
+    relayPauseTimeoutMs: 10_000,
+  },
   realtime: {
     schoolBatchMs: 100,
     rivalBatchMs: 12_000,

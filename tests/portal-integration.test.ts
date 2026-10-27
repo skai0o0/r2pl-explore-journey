@@ -243,6 +243,12 @@ test("mounted partner API -> PKCE session -> actual WebSocket spend -> restart, 
       receipts.filter((result) => result.body.replay === false).length,
       1,
     );
+    const savedSnapshots = await pool.query(
+      "SELECT detail FROM r2pl_v2.student_history_archive WHERE campaign_id=$1 AND kind='running-snapshot'",
+      [c.campaignId],
+    );
+    assert.equal(savedSnapshots.rowCount, 1);
+    assert.equal(savedSnapshots.rows[0].detail.cumulativeMeters, "1500");
     assert.equal(
       (await signed("running", { ...snapshot, cumulativeMeters: "1600" })).body
         .error,

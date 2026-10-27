@@ -237,6 +237,10 @@ export class M35FixtureAuthority {
     return { chunkId: id, revision: BigInt(row.head_revision), mask: bytes };
   }
 
+  waitForDrain(): Promise<number> {
+    return this.#draining ?? Promise.resolve(0);
+  }
+
   drain(
     publish: (delta: CommittedFixtureDelta) => Promise<void>,
     recoverSubscribers: () => Promise<void>,

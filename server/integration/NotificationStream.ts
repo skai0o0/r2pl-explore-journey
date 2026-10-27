@@ -97,4 +97,9 @@ export class NotificationStream {
     for (const peer of this.peers) peer.response.end();
     this.peers.clear();
   }
+
+  disconnectForCampaignReset(): void {
+    for (const peer of this.peers) peer.response.end();
+    this.peers.clear();
+  }
 }

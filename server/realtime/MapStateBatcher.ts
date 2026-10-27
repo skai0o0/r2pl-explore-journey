@@ -26,6 +26,9 @@ const equal = (a: unknown, b: unknown) =>
 /** Bounded latest-state buffers, shared by every viewer of a school. No per-player DB reads. */
 export class MapStateBatcher {
   readonly #schools = new Map<number, SchoolState>();
+  reset(): void {
+    this.#schools.clear();
+  }
   update(
     source: MapStateSource,
     slots: readonly number[],
@@ -82,11 +85,7 @@ export class MapStateBatcher {
       for (const beacon of beacons) {
         const previous = state.beacons.get(beacon.id);
         if (equal(previous, beacon)) continue;
-        if (
-          rivalDue ||
-          previous?.holder === slot ||
-          beacon.holder === slot
-        ) {
+        if (rivalDue || previous?.holder === slot || beacon.holder === slot) {
           batchBeacons.push(beacon);
           state.beacons.set(beacon.id, beacon);
         }

@@ -27,6 +27,7 @@ export async function migratePortalDatabase(pool: Pool): Promise<void> {
       "011_shared_test_points.sql",
       "012_notifications.sql",
       "013_student_identity_overrides.sql",
+      "014_student_history.sql",
     ];
     for (const [index, file] of files.entries()) {
       const sql = await readFile(

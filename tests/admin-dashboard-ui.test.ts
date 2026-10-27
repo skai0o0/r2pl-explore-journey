@@ -239,6 +239,147 @@ test("admin dashboard hides privileged tabs, protects root and selects the corre
     );
     assert.equal(w.document.querySelector(".admin-content form"), null);
     assert.equal(w.document.querySelector(".admin-content button"), null);
+    w.document.querySelector(".admin-console")!.remove();
+    await mountAdminDashboard(
+      {
+        ...principal,
+        email: "other@amtech.vn",
+        protectedRoot: false,
+        permissions: ALL_ADMIN_PERMISSIONS,
+      },
+      "production",
+      true,
+    );
+    await flush();
+    assert(
+      ![...w.document.querySelectorAll(".admin-nav button")].some(
+        (b) => b.textContent === "Dữ liệu chiến dịch",
+      ),
+    );
+    w.document.querySelector(".admin-console")!.remove();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      if (String(input) !== "/api/admin/campaign")
+        return originalFetch(input, init);
+      if (init?.body) {
+        const body = JSON.parse(String(init.body));
+        submitted.push(body);
+        if (body.action === "search")
+          return new Response(
+            JSON.stringify({
+              students: [
+                {
+                  actorId: "actor",
+                  name: "<b>Student</b>",
+                  externalId: "123",
+                  schoolId: "hcmut",
+                  balance: "10",
+                  email: null,
+                },
+              ],
+            }),
+          );
+        if (body.action === "history")
+          return new Response(
+            JSON.stringify({
+              entries: [
+                {
+                  kind: "note",
+                  occurredAt: "2026-10-27T00:00:00Z",
+                  detail: { note: "<img src=x>" },
+                },
+              ],
+              hasMore: false,
+            }),
+          );
+        return new Response(JSON.stringify({ balance: body.balance }));
+      }
+      return new Response(
+        JSON.stringify({
+          pools: [{ schoolId: "hcmut", schoolName: "Bách khoa", balance: "0" }],
+        }),
+      );
+    };
+    await mountAdminDashboard(
+      {
+        ...principal,
+        email: "admin@amtech.vn",
+        protectedRoot: true,
+        permissions: ALL_ADMIN_PERMISSIONS,
+      },
+      "production",
+      true,
+    );
+    await flush();
+    [...w.document.querySelectorAll<TestButton>(".admin-nav button")]
+      .find((b) => b.textContent === "Dữ liệu chiến dịch")!
+      .click();
+    await flush();
+    const poolForm = w.document.querySelector(".campaign-pools form")!;
+    poolForm.querySelector<TestInput>("input")!.value = "8888";
+    poolForm.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert(
+      submitted.some(
+        (v) =>
+          v.action === "set_pool" &&
+          v.balance === "8888" &&
+          v.expectedBalance === "0",
+      ),
+    );
+    const search = w.document.querySelector(".campaign-search")!;
+    search.querySelector<TestInput>("input")!.value = "123";
+    search.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert.equal(w.document.querySelector(".campaign-students b"), null);
+    const studentForm = w.document.querySelector(".campaign-students form")!;
+    studentForm.querySelector<TestInput>("input")!.value = "42";
+    studentForm.querySelectorAll<TestInput>("input")[1]!.value = "Đối soát";
+    studentForm.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert(
+      submitted.some(
+        (v) =>
+          v.action === "set_student" &&
+          v.balance === "42" &&
+          v.expectedBalance === "10",
+      ),
+    );
+    const reset = w.document.querySelector(".campaign-reset")!;
+    reset.querySelector<TestInput>("input")!.value = "RESET";
+    reset.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert(
+      submitted.some((v) => v.action === "reset" && v.confirmation === "RESET"),
+    );
+    [...w.document.querySelectorAll<TestButton>(".admin-nav button")]
+      .find((b) => b.textContent === "Lịch sử sinh viên")!
+      .click();
+    await flush();
+    const historySearch = w.document.querySelector(".history-search")!;
+    historySearch.querySelector<TestInput>("input")!.value = "123";
+    historySearch.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    w.document.querySelector<TestButton>(".history-results button")!.click();
+    await flush();
+    assert.equal(w.document.querySelector(".history-detail img"), null);
+    assert(
+      w.document
+        .querySelector(".history-detail")!
+        .textContent!.includes("<img src=x>"),
+    );
+    const historyNote = w.document
+      .querySelector(".history-detail textarea")!
+      .closest("form")!;
+    historyNote.querySelector<TestArea>("textarea")!.value =
+      "Kiểm tra đối soát";
+    historyNote.dispatchEvent(new w.Event("submit", { cancelable: true }));
+    await flush();
+    assert(
+      submitted.some(
+        (v) => v.action === "note" && v.note === "Kiểm tra đối soát",
+      ),
+    );
   } finally {
     await vite.close();
     await w.happyDOM.close();

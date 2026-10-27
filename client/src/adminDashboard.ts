@@ -7,15 +7,18 @@ import {
   type AdminRole,
   canAdmin,
   isStaffSsoEmail,
+  ROOT_ADMIN_EMAIL,
 } from "../../shared/integration/adminAccess.ts";
 import type { AdminPrincipal } from "../../shared/integration/identity.ts";
 import {
   NOTIFICATION_LABELS,
   type NotificationRouting,
 } from "../../shared/integration/notifications.ts";
+import { mountCampaignAdmin } from "./adminCampaign.ts";
 import { finishBoot } from "./bootScreen.ts";
 import { gameFetch } from "./gameHttp.ts";
 import { mountGiftPoolEditor } from "./giftPoolEditor.ts";
+import { mountStudentHistory } from "./studentHistory.ts";
 import "./adminDashboard.css";
 
 const errors: Record<string, string> = {
@@ -42,11 +45,22 @@ const errors: Record<string, string> = {
     "Hồ sơ test chỉ có trên máy chủ game dùng đăng nhập tài khoản.",
   ADMIN_REQUIRED: "Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.",
   CSRF_REJECTED: "Phiên đăng nhập đã thay đổi. Vui lòng tải lại trang.",
+  ROOT_ONLY: "Chỉ tài khoản quản trị gốc được thực hiện thao tác này.",
+  BALANCE_CHANGED: "Số dư đã thay đổi. Hãy tải lại dữ liệu trước khi lưu.",
+  BACKUP_FAILED: "Không tạo được bản sao lưu. Dữ liệu chưa được reset.",
+  RESET_IN_PROGRESS: "Đang có thao tác reset khác được thực hiện.",
+  INVALID_FILTER: "Khoảng ngày hoặc loại hoạt động không hợp lệ.",
+  REASON_REQUIRED: "Hãy nhập lý do điều chỉnh từ 3 đến 500 ký tự.",
+  INVALID_NOTE: "Ghi chú cần từ 3 đến 1.000 ký tự.",
 };
-async function api<T>(path: string, body?: unknown): Promise<T> {
+async function api<T>(
+  path: string,
+  body?: unknown,
+  timeoutMs: number = GAME_CONFIG.integration.bootstrapTimeoutMs,
+): Promise<T> {
   const response = await gameFetch(path, {
     cache: "no-store",
-    signal: AbortSignal.timeout(GAME_CONFIG.integration.bootstrapTimeoutMs),
+    signal: AbortSignal.timeout(timeoutMs),
     ...(body === undefined
       ? {}
       : {
@@ -610,6 +624,18 @@ export async function mountAdminDashboard(
       }
     },
   ]);
+  if (principal.protectedRoot && principal.email === ROOT_ADMIN_EMAIL) {
+    tabs.push([
+      "Dữ liệu chiến dịch",
+      "admins.manage",
+      async () => mountCampaignAdmin(content, api),
+    ]);
+    tabs.push([
+      "Lịch sử sinh viên",
+      "admins.manage",
+      async () => mountStudentHistory(content, api),
+    ]);
+  }
   const available = tabs.filter(
     ([, permission]) => !permission || canAdmin(principal, permission),
   );
