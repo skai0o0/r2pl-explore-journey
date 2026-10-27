@@ -14,6 +14,7 @@ import {
   chunkId,
   tileIndex,
 } from "../../shared/world/coordinates.ts";
+import { mountAmbientOverlay } from "./ambientOverlay.ts";
 import { ModelAssetLoader } from "./assetLoader.ts";
 import {
   type AssetMount,
@@ -289,6 +290,9 @@ const markers: readonly WorldMarker[] = [
 ] as const;
 
 export class WorldView {
+  #waterTimer: ReturnType<typeof setTimeout> | undefined;
+  readonly #waterMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  readonly #disposeAtmosphere: () => void;
   readonly #host: HTMLElement;
   readonly #renderer: THREE.WebGLRenderer;
   readonly #scene = new THREE.Scene();
@@ -419,8 +423,10 @@ export class WorldView {
     this.#renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.#renderer.toneMappingExposure = P.exposure;
     this.#renderer.shadowMap.enabled = true;
+    this.#renderer.shadowMap.autoUpdate = false;
     this.#renderer.shadowMap.type = THREE.PCFShadowMap;
     host.append(this.#renderer.domElement);
+    this.#disposeAtmosphere = mountAmbientOverlay(host);
     this.#scene.background = new THREE.Color(P.background);
     this.#scene.fog = new THREE.FogExp2(
       P.distanceFog.color,
@@ -676,11 +682,17 @@ export class WorldView {
     host.addEventListener("wheel", this.#wheel, { passive: false });
     window.addEventListener("resize", this.#render);
     window.addEventListener("blur", this.#cancelCameraInput);
+    document.addEventListener("visibilitychange", this.#waterVisibility);
+    this.#waterMotion.addEventListener("change", this.#waterVisibility);
     this.#render();
   }
 
   dispose(): void {
     this.#disposed = true;
+    clearTimeout(this.#waterTimer);
+    document.removeEventListener("visibilitychange", this.#waterVisibility);
+    this.#waterMotion.removeEventListener("change", this.#waterVisibility);
+    this.#disposeAtmosphere();
     this.#cancelCameraInput();
     this.#clearObjectHover();
     this.#interactiveObjects.length = 0;
@@ -1916,7 +1928,8 @@ export class WorldView {
     this.#inspectedPointers.clear();
     this.#clearObjectHover();
     for (const id of ids)
-      if (this.#host.hasPointerCapture(id)) this.#host.releasePointerCapture(id);
+      if (this.#host.hasPointerCapture(id))
+        this.#host.releasePointerCapture(id);
     this.#hovered = undefined;
     this.#hoverElement.hidden = true;
     this.#onHover?.(undefined);
@@ -2022,11 +2035,18 @@ export class WorldView {
 
   #render = (): void => {
     if (this.#disposed) return;
+    this.#renderer.shadowMap.needsUpdate = true;
     if (this.#renderFrame !== undefined) return;
     this.#renderFrame = requestAnimationFrame(() => {
       this.#renderFrame = undefined;
       this.#draw();
     });
+  };
+
+  #waterVisibility = (): void => {
+    clearTimeout(this.#waterTimer);
+    this.#waterTimer = undefined;
+    if (!document.hidden) this.#render();
   };
 
   #draw = (): void => {
@@ -2039,6 +2059,8 @@ export class WorldView {
     }
     this.#syncCamera(width, height);
     this.#terrainChunks.updateView(this.#camera, this.#span);
+    if (!this.#waterMotion.matches && !document.hidden)
+      this.#terrainChunks.waterTime.value = performance.now() / 1000;
     this.#landscape.updateView(this.#camera, this.#span);
     this.#updateReticles();
 
@@ -2093,5 +2115,26 @@ export class WorldView {
       mesh.visible = this.#isDev || this.#privateObjectIds.has(id);
     }
     this.#renderer.render(this.#scene, this.#camera);
+    if (
+      this.#terrainChunks.hasVisibleRiver &&
+      !this.#waterMotion.matches &&
+      !document.hidden &&
+      this.#waterTimer === undefined
+    ) {
+      this.#waterTimer = setTimeout(() => {
+        this.#waterTimer = undefined;
+        if (
+          this.#disposed ||
+          document.hidden ||
+          this.#waterMotion.matches ||
+          this.#renderFrame !== undefined
+        )
+          return;
+        this.#renderFrame = requestAnimationFrame(() => {
+          this.#renderFrame = undefined;
+          this.#draw();
+        });
+      }, 1000 / P.river.framesPerSecond);
+    }
   };
 }

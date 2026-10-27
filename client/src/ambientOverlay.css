@@ -1,0 +1,228 @@
+.map-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint;
+  --ambient-beam: 255, 223, 159;
+  --ambient-wash: 255, 204, 132;
+  --ambient-leaf: #c5b480;
+}
+.map-atmosphere[data-period="night"] {
+  --ambient-beam: 177, 207, 239;
+  --ambient-wash: 130, 161, 211;
+  --ambient-leaf: #9caeaf;
+}
+.map-atmosphere-light {
+  position: absolute;
+  inset: -8%;
+  background:
+    radial-gradient(
+      ellipse at 88% 4%,
+      rgba(var(--ambient-beam), 0.1),
+      transparent 58%
+    ),
+    linear-gradient(
+      124deg,
+      transparent 46%,
+      rgba(var(--ambient-beam), 0.045) 51%,
+      transparent 59%
+    ),
+    linear-gradient(
+      124deg,
+      transparent 64%,
+      rgba(var(--ambient-beam), 0.025) 69%,
+      transparent 76%
+    ),
+    linear-gradient(
+      rgba(var(--ambient-wash), 0.012),
+      rgba(var(--ambient-wash), 0.012)
+    );
+  animation: map-light-breeze 28s ease-in-out infinite alternate;
+}
+.map-atmosphere-leaf {
+  position: absolute;
+  left: 0;
+  top: 18%;
+  width: 9px;
+  height: 4px;
+  border-radius: 85% 10% 85% 15%;
+  background: var(--ambient-leaf);
+  opacity: 0;
+  animation: map-leaf-drift 37s linear infinite;
+  animation-delay: -6s;
+}
+.map-atmosphere-leaf:nth-child(3) {
+  top: 45%;
+  width: 7px;
+  height: 3px;
+  animation-duration: 43s;
+  animation-delay: -24s;
+}
+.map-atmosphere-leaf:nth-child(4) {
+  top: 69%;
+  width: 8px;
+  animation-duration: 47s;
+  animation-delay: -37s;
+}
+@keyframes map-light-breeze {
+  from {
+    transform: translate3d(-1%, 0, 0) rotate(-0.6deg);
+    opacity: 0.65;
+  }
+  to {
+    transform: translate3d(1%, 1%, 0) rotate(0.6deg);
+    opacity: 1;
+  }
+}
+@keyframes map-leaf-drift {
+  0% {
+    transform: translate3d(-20px, -12px, 0) rotate(-25deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.28;
+  }
+  15% {
+    transform: translate3d(30vw, 18px, 0) rotate(80deg);
+    opacity: 0.24;
+  }
+  25% {
+    transform: translate3d(65vw, -8px, 0) rotate(150deg);
+    opacity: 0.2;
+  }
+  35% {
+    transform: translate3d(100vw, 24px, 0) rotate(230deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate3d(110vw, 24px, 0) rotate(230deg);
+    opacity: 0;
+  }
+}
+.map-atmosphere-tumbleweed {
+  position: absolute;
+  top: 38%;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  animation: map-tumbleweed-roll 57s linear infinite;
+  animation-delay: -7s;
+}
+.map-atmosphere-tumbleweed[data-variant="1"] {
+  top: 67%;
+  width: 18px;
+  height: 18px;
+  animation-name: map-tumbleweed-return;
+  animation-duration: 73s;
+  animation-delay: -39s;
+}
+.map-atmosphere-tumbleweed::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(10, 24, 20, 0.18);
+}
+.map-atmosphere-tumbleweed img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: map-tumbleweed-spin 57s linear infinite;
+  animation-delay: -7s;
+}
+.map-atmosphere-tumbleweed[data-variant="1"] img {
+  animation-duration: 73s;
+  animation-delay: -39s;
+  animation-direction: reverse;
+}
+@keyframes map-tumbleweed-roll {
+  0% {
+    transform: translate3d(-28px, 0, 0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.52;
+  }
+  20% {
+    transform: translate3d(24vw, -6px, 0);
+    opacity: 0.48;
+  }
+  32% {
+    transform: translate3d(48vw, 2px, 0);
+    opacity: 0.5;
+  }
+  42% {
+    transform: translate3d(64vw, -5px, 0);
+    opacity: 0.46;
+  }
+  55% {
+    transform: translate3d(42vw, 4px, 0);
+    opacity: 0.36;
+  }
+  65%,
+  100% {
+    transform: translate3d(28vw, 0, 0);
+    opacity: 0;
+  }
+}
+@keyframes map-tumbleweed-return {
+  0% {
+    transform: translate3d(102vw, 0, 0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.42;
+  }
+  20% {
+    transform: translate3d(78vw, -4px, 0);
+    opacity: 0.4;
+  }
+  32% {
+    transform: translate3d(54vw, 3px, 0);
+    opacity: 0.42;
+  }
+  42% {
+    transform: translate3d(38vw, -4px, 0);
+    opacity: 0.38;
+  }
+  55% {
+    transform: translate3d(60vw, 2px, 0);
+    opacity: 0.28;
+  }
+  65%,
+  100% {
+    transform: translate3d(74vw, 0, 0);
+    opacity: 0;
+  }
+}
+@keyframes map-tumbleweed-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  42% {
+    transform: rotate(720deg);
+  }
+  65%,
+  100% {
+    transform: rotate(310deg);
+  }
+}
+.map-atmosphere[data-paused="true"] * {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-atmosphere-light {
+    animation: none;
+    opacity: 0.75;
+  }
+  .map-atmosphere-leaf,
+  .map-atmosphere-tumbleweed {
+    display: none;
+  }
+}

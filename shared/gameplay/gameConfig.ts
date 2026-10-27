@@ -1,6 +1,7 @@
 /** Signed ruleVersion 1. Reward weights are integer thousandths, never normalized. */
 
 export type RewardProfile = "aspire" | "nitro" | "predator";
+export const PLAYER_TUTORIAL = { activityThreshold: 10 } as const;
 export interface RewardOutcome {
   readonly kind: "points" | "crystals" | "treasure_map" | "key" | "gift";
   readonly quantity: number;
@@ -123,7 +124,7 @@ export const SCHOOLS = [
     accent: "#00E5FF",
     hq: {
       x: 500,
-      z: 280,
+      z: 100,
     },
   },
   {
@@ -135,8 +136,8 @@ export const SCHOOLS = [
     color: "#FF8C00",
     accent: "#FFD700",
     hq: {
-      x: 655,
-      z: 345,
+      x: 800,
+      z: 200,
     },
   },
   {
@@ -148,7 +149,7 @@ export const SCHOOLS = [
     color: "#E60026",
     accent: "#FF4D6D",
     hq: {
-      x: 720,
+      x: 900,
       z: 500,
     },
   },
@@ -161,8 +162,8 @@ export const SCHOOLS = [
     color: "#00A86B",
     accent: "#00FF9D",
     hq: {
-      x: 655,
-      z: 655,
+      x: 800,
+      z: 800,
     },
   },
   {
@@ -175,7 +176,7 @@ export const SCHOOLS = [
     accent: "#FF0080",
     hq: {
       x: 500,
-      z: 720,
+      z: 900,
     },
   },
   {
@@ -187,8 +188,8 @@ export const SCHOOLS = [
     color: "#E7C547",
     accent: "#FFF0A0",
     hq: {
-      x: 345,
-      z: 655,
+      x: 200,
+      z: 800,
     },
   },
   {
@@ -200,7 +201,7 @@ export const SCHOOLS = [
     color: "#00B8D9",
     accent: "#80FFFF",
     hq: {
-      x: 280,
+      x: 100,
       z: 500,
     },
   },
@@ -213,8 +214,8 @@ export const SCHOOLS = [
     color: "#E85D9E",
     accent: "#FFB8DD",
     hq: {
-      x: 345,
-      z: 345,
+      x: 200,
+      z: 200,
     },
   },
 ] as const satisfies readonly SchoolConfig[];

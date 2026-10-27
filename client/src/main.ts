@@ -58,6 +58,7 @@ import {
   objectDisplayName,
   uiModeFromSearch,
 } from "./ui/playerPresentation.ts";
+import { isTutorialEligible, PlayerTutorial } from "./ui/playerTutorial.ts";
 import { SelectedTilePanel } from "./ui/selectedTilePanel.ts";
 import { StatsOverlay } from "./ui/statsOverlay.ts";
 import {
@@ -169,6 +170,7 @@ interface Profile {
   schoolSlot: number;
   balance: string;
   hasSpentPoints: boolean;
+  exploredTiles: number;
   cost: string;
   fixtureOnly: boolean;
   earnedRunningPoints?: string;
@@ -262,17 +264,30 @@ const selectedTilePanel = new SelectedTilePanel(document);
 let profileBalance: string | undefined;
 let profileCost: string | undefined;
 let profileRequest = 0;
+let profileTileCount: number | undefined;
+let tutorialShownFor: string | undefined;
+let tutorialReady = false;
 const pending = new Map<string, PendingAction>();
 let bootComplete = false,
   bootProfile = false;
 const bootChunks = new Set<number>();
 const loadedChunks = new Set<number>();
 function checkBoot(): void {
-  if (bootComplete || !bootProfile || !room || bootChunks.size) return;
+  if (bootComplete) {
+    maybeStartTutorial();
+    return;
+  }
+  if (!bootProfile || !room || bootChunks.size) return;
   bootComplete = true;
   completeStage(3);
   loadingStage(4);
-  requestAnimationFrame(() => requestAnimationFrame(() => finishBoot()));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      finishBoot();
+      tutorialReady = true;
+      maybeStartTutorial();
+    }),
+  );
 }
 let tileContext: TileAction | undefined;
 let contextSignature = "";
@@ -552,6 +567,7 @@ async function refreshProfile(token = player.token): Promise<void> {
     ui.cost.textContent = profile.cost;
     profileBalance = profile.balance;
     selectedTilePanel.updateProfile(profile.hasSpentPoints);
+    profileTileCount = profile.exploredTiles;
     profileCost = profile.cost;
     stats.updateStats({
       studentName: profile.name,
@@ -917,6 +933,48 @@ quickInput.addEventListener("change", () => {
 });
 quickLabel.append(quickInput, "Mở nhanh một chạm");
 get("tools-panel").append(quickLabel);
+const tutorial = new PlayerTutorial({
+  oneTap: () => autoExplore,
+  setOneTap: (enabled) => {
+    quickInput.checked = enabled;
+    quickInput.dispatchEvent(new Event("change"));
+  },
+  focus: (step) => {
+    stats.toggleTools(false);
+    if (step === 0 || step === 4)
+      world.animateFocus(player.home.x, player.home.z, P.homeSpan);
+    if (step === 1) {
+      stats.onExploreRequested?.();
+      get("selected-tile-panel").classList.add("tutorial-highlight");
+      get("hud-tools-toggle").classList.add("tutorial-highlight");
+    }
+    if (step === 3) {
+      const nearest = publicWorld
+        .filter((o) => o.kind === "landmark")
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - player.home.x, a.z - player.home.z) -
+            Math.hypot(b.x - player.home.x, b.z - player.home.z),
+        )[0];
+      if (nearest) world.animateFocus(nearest.x, nearest.z, 120);
+    }
+  },
+  finish: () => world.animateFocus(player.home.x, player.home.z, P.homeSpan),
+});
+function maybeStartTutorial(): void {
+  if (
+    !tutorialReady ||
+    !room ||
+    !loadedChunks.size ||
+    profileTileCount === undefined ||
+    !isTutorialEligible(profileTileCount) ||
+    tutorialShownFor === player.token ||
+    isUiOverlayOpen()
+  )
+    return;
+  tutorialShownFor = player.token;
+  tutorial.start();
+}
 const overviewButton = get<HTMLButtonElement>("overview-button");
 const worldHost = get<HTMLElement>("world-view");
 
@@ -1160,6 +1218,11 @@ async function connect(nextPlayer: Player): Promise<void> {
     player.token !== nextPlayer.token ||
     player.slot !== nextPlayer.slot;
   const attempt = ++generation;
+  if (resetWorld) {
+    tutorial.close();
+    tutorialShownFor = undefined;
+    profileTileCount = undefined;
+  }
   window.clearTimeout(reconnectTimer);
   if (player.token !== nextPlayer.token) {
     ui.activity.replaceChildren();

@@ -1,5 +1,13 @@
 /** Cosmetic settings only. No wallet, discovery, footprints, or terrain-height rules. */
 export const SCENE_PRESENTATION = {
+  river: { framesPerSecond: 20, speed: 1.4, highlight: 0.075 },
+  atmosphere: {
+    dayStartHour: 6,
+    nightStartHour: 18,
+    clockCheckMs: 60_000,
+    leaves: 3,
+    tumbleweeds: 2,
+  },
   exposure: 0.98,
   background: 0x19343d,
   // The production orthographic camera sits ~1,700 units away (mockup ~100).

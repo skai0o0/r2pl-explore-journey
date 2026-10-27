@@ -27,6 +27,7 @@ export function* terrainGeometrySteps(
   const positions: number[] = [],
     colors: number[] = [],
     uvs: number[] = [],
+    riverFlow: number[] = [],
     indices: number[] = [];
   const samples = new Map<string, TerrainSample>();
   const sample = (x: number, z: number): TerrainSample => {
@@ -49,11 +50,16 @@ export function* terrainGeometrySteps(
     hex: number,
     u: number,
     v: number,
+    river = false,
   ) => {
     const offset = positions.length / 3;
     positions.push(...vertices);
     color.setHex(hex);
     for (let i = 0; i < 4; i++) {
+      const flow = river
+        ? field.riverFlow(vertices[i * 3]! + 500, 500 - vertices[i * 3 + 1]!)
+        : [0, 0];
+      riverFlow.push(flow[0]!, flow[1]!, river ? 1 : 0);
       colors.push(color.r, color.g, color.b);
       // Continuous top UVs preserve single-tile fog/ownership at every LOD.
       // Side samples stay just inside their owning column, including seams.
@@ -95,7 +101,13 @@ export function* terrainGeometrySteps(
         b = t - Math.min(step, depth - row);
       const u = (col + Math.min(step, width - col) / 2) / 64,
         v = 1 - (row + Math.min(step, depth - row) / 2) / 64;
-      face([l, t, h, l, b, h, r, b, h, r, t, h], P.terrain[s.biome], u, v);
+      face(
+        [l, t, h, l, b, h, r, b, h, r, t, h],
+        P.terrain[s.biome],
+        u,
+        v,
+        s.biome === "river",
+      );
       const side = P.terrain.cliff;
       // Full perimeter skirts also seal interfaces between coarse and fine LODs.
       let low =
@@ -117,6 +129,13 @@ export function* terrainGeometrySteps(
   );
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute(
+    "riverFlow",
+    new THREE.Float32BufferAttribute(riverFlow, 3),
+  );
+  geometry.userData.hasRiver = riverFlow.some(
+    (value, i) => i % 3 === 2 && value === 1,
+  );
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
@@ -170,6 +189,7 @@ export function terrainTileColor(
 export function terrainMaterial(
   texture: THREE.DataTexture,
   discoveryFog?: DiscoveryFog,
+  waterTime = { value: 0 },
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,
@@ -178,15 +198,16 @@ export function terrainMaterial(
   });
   material.userData.accent = { value: new THREE.Color(SCHOOLS[0].accent) };
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.riverTime = waterTime;
     shader.uniforms.territoryAccent = material.userData.accent;
     shader.vertexShader =
-      "varying float terrainTop;\n" +
+      "attribute vec3 riverFlow;\nvarying vec3 terrainRiverFlow;\nvarying float terrainTop;\n" +
       shader.vertexShader.replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\n terrainTop = step(0.5, normal.z);",
+        "#include <begin_vertex>\n terrainTop = step(0.5, normal.z); terrainRiverFlow = riverFlow;",
       );
     shader.fragmentShader =
-      "varying float terrainTop;\nuniform vec3 territoryAccent;\n" +
+      "varying float terrainTop;\nvarying vec3 terrainRiverFlow;\nuniform float riverTime;\nuniform vec3 territoryAccent;\n" +
       shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -201,6 +222,13 @@ export function terrainMaterial(
         "#include <color_fragment>",
         `
       #include <color_fragment>
+      if (terrainRiverFlow.z > 0.5 && terrainTop > 0.5) {
+        float along = terrainRiverFlow.y - riverTime * ${P.river.speed};
+        float across = terrainRiverFlow.x;
+        float lanes = pow(0.5 + 0.5 * sin(across * 1.5 + sin(along * 0.19) * 0.6), 8.0);
+        float ripples = pow(0.5 + 0.5 * sin(along * 0.85 + sin(across * 0.7)), 10.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.72, 0.74), lanes * ripples * ${P.river.highlight});
+      }
       if (terrainTop > 0.5 && state >= 128.0) diffuseColor.rgb = mix(diffuseColor.rgb, knowledge.rgb, ${P.territoryTint});
       float edges = max(0.0, state - 128.0);
       vec2 cell = fract(vMapUv * 64.0);
@@ -220,7 +248,7 @@ export function terrainMaterial(
     `,
       );
   };
-  material.customProgramCacheKey = () => "dusk-biome-knowledge-v3";
+  material.customProgramCacheKey = () => "dusk-biome-knowledge-river-v4";
   discoveryFog?.apply(material);
   const compile = material.onBeforeCompile;
   const cacheKey = material.customProgramCacheKey();
@@ -248,6 +276,8 @@ export interface TerrainLayer {
 }
 /** Small overview meshes are fixed; detailed chunks build incrementally and have a hard cache cap. */
 export class TerrainChunks {
+  readonly waterTime = { value: 0 };
+  hasVisibleRiver = false;
   readonly group = new THREE.Group();
   readonly layers = new Map<number, TerrainLayer>();
   readonly discoveryFog = new DiscoveryFog();
@@ -275,7 +305,7 @@ export class TerrainChunks {
       const coarse = buildTerrainChunkGeometry(field, id, C.coarseStep);
       const mesh = new THREE.Mesh(
         coarse,
-        terrainMaterial(texture, this.discoveryFog),
+        terrainMaterial(texture, this.discoveryFog, this.waterTime),
       );
       mesh.name = `terrain-${id}`;
       mesh.castShadow = false;
@@ -292,6 +322,7 @@ export class TerrainChunks {
     }
   }
   updateView(camera: THREE.Camera, span: number): void {
+    this.hasVisibleRiver = false;
     this.#matrix.multiplyMatrices(
       camera.projectionMatrix,
       camera.matrixWorldInverse,
@@ -314,6 +345,9 @@ export class TerrainChunks {
     for (const layer of this.layers.values())
       layer.mesh.geometry =
         layer.wanted && layer.detail ? layer.detail : layer.coarse;
+    for (const layer of this.layers.values())
+      if (layer.mesh.visible && layer.mesh.geometry.userData.hasRiver)
+        this.hasVisibleRiver = true;
     this.#queue = visible
       .slice(0, C.detailCacheChunks)
       .map((v) => v.id)

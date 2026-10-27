@@ -8,6 +8,7 @@ import {
   parseBotOptions,
 } from "../scripts/simulation/config.ts";
 import { botMapSvg, mapCoverage } from "../scripts/simulation/report.ts";
+import { schoolPlayLayout } from "../server/integration/SchoolHeadquarters.ts";
 import {
   BotPlanner,
   botSchools,
@@ -18,6 +19,14 @@ import {
 import { tileCoordinates } from "../shared/world/coordinates.ts";
 
 const workspace = fileURLToPath(new URL("../", import.meta.url));
+
+test("outer HQ bot regions include the HQ and central meeting point within the subscription limit", () => {
+  for (const school of schoolPlayLayout().schools) {
+    assert(regionContains(school.region, school.home));
+    assert(regionContains(school.region, school.meeting));
+    assert(regionChunks(school.region).length <= 64);
+  }
+});
 
 test("eight synthetic schools have immutable-format slots, bounded public starts and shared rendezvous", () => {
   for (const layout of ["contact", "spread", "gather"] as const)

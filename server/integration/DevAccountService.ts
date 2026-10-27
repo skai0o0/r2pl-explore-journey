@@ -1,5 +1,8 @@
 import type { Pool } from "pg";
-import { GAME_CONFIG } from "../../shared/gameplay/gameConfig.ts";
+import {
+  GAME_CONFIG,
+  PLAYER_TUTORIAL,
+} from "../../shared/gameplay/gameConfig.ts";
 import { pointWalletTarget } from "../persistence/TestPointWallet.ts";
 export interface DevIdentity {
   readonly token: string;
@@ -26,6 +29,7 @@ export class DevAccountService {
     schoolSlot: number;
     balance: string;
     hasSpentPoints: boolean;
+    exploredTiles: number;
     cost: string;
     fixtureOnly: true;
     resource: "fixture-credit";
@@ -78,12 +82,19 @@ export class DevAccountService {
     const balance = (resource: string) =>
       rows.find((r) => r.resource === resource)?.balance ?? "0";
     if (!row) return null;
+    // One durable world-change receipt per successful tile action. Retries and
+    // wallet corrections are excluded; cap the projection at the tutorial threshold.
+    const explored = await this.#pool.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM (SELECT 1 FROM r2pl_v2.outbox_events WHERE campaign_id=$1 AND actor_id=$2 AND event_type IN ('m3_test_world_changed','m35_fixture_world_changed') LIMIT $3) activity",
+      [this.#campaignId, actor.actorId, PLAYER_TUTORIAL.activityThreshold],
+    );
     return {
       name: actor.name,
       schoolName: actor.schoolName,
       schoolSlot: actor.schoolSlot,
       balance: row.balance,
       hasSpentPoints: row.has_spent_points,
+      exploredTiles: explored.rows[0]!.count,
       cost: String(GAME_CONFIG.knowledge.explorePoints),
       fixtureOnly: true,
       resource: "fixture-credit",

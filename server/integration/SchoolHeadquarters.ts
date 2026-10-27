@@ -41,12 +41,29 @@ export function schoolPlayLayout(): {
     fixtureId: s.id,
     label: s.shortName,
     color: s.color,
-    region: { x: s.hq.x - 128, z: s.hq.z - 128, size: 256 },
+    region: schoolBotRegion(s.hq.x, s.hq.z),
     home: tileIndex(s.hq.x, s.hq.z),
-    meeting: tileIndex(s.hq.x + 60, s.hq.z),
+    meeting: tileIndex(500, 500),
     protectedHeadquarters: headquarters,
   }));
   return { schools, headquarters };
+}
+/** A chunk-aligned 512-square covers the outer HQ and central meeting point. */
+export function schoolBotRegion(
+  x: number,
+  z: number,
+): { x: number; z: number; size: number } {
+  const size = 512;
+  const start = (v: number) =>
+    Math.min(
+      1000 - size,
+      Math.max(
+        0,
+        Math.floor(Math.min(v, 500) / 64) * 64,
+        Math.max(v, 500) - size + 1,
+      ),
+    );
+  return { x: start(x), z: start(z), size };
 }
 export async function seedWorldObjects(
   db: PoolClient,

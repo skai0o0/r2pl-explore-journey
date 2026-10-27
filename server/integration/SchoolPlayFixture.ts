@@ -10,6 +10,7 @@ import { tileCoordinates } from "../../shared/world/coordinates.ts";
 import { SchoolRegistry } from "../../shared/world/registry.ts";
 import type { DevIdentity } from "./DevAccountService.ts";
 import {
+  schoolBotRegion,
   schoolPlayLayout,
   seedHeadquarters,
   seedWorldObjects,
@@ -134,17 +135,9 @@ export async function seedSchoolPlay(
         Object.assign(player.home, { x: h.x, z: h.z });
       const school = schools.find((s) => s.slot === h.schoolSlot);
       if (school) {
-        const minX = Math.min(h.x, 500);
-        const minZ = Math.min(h.z, 500);
-        const rx = Math.max(0, Math.min(1000 - 448, Math.floor(Math.max(0, minX - 64) / 64) * 64));
-        const rz = Math.max(0, Math.min(1000 - 448, Math.floor(Math.max(0, minZ - 64) / 64) * 64));
         Object.assign(school, {
           home: h.z * 1000 + h.x,
-          region: {
-            x: rx,
-            z: rz,
-            size: 448,
-          },
+          region: schoolBotRegion(h.x, h.z),
           meeting: 500 * 1000 + 500,
         });
       }

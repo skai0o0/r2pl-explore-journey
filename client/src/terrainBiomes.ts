@@ -95,6 +95,7 @@ export function getTerrainMoisture(x: number, z: number): number {
 export class TerrainBiomes {
   readonly #zones = new Map<number, Foundation[]>();
   readonly #rivers = [new Float32Array(1001), new Float32Array(1001)];
+  readonly #riverLengths = [new Float32Array(1001), new Float32Array(1001)];
   readonly #riverMinX = new Float32Array(1000);
   readonly #riverMaxX = new Float32Array(1000);
   #foundations: Foundation[] = [];
@@ -190,6 +191,11 @@ export class TerrainBiomes {
               blend;
           }
         this.#rivers[arm]![z] = x;
+        this.#riverLengths[arm]![z] =
+          z === 0
+            ? 0
+            : this.#riverLengths[arm]![z - 1]! +
+              Math.hypot(x - this.#rivers[arm]![z - 1]!, 1);
       }
     const reach = Math.ceil(C.riverHalfWidth + C.shoreWidth);
     for (let row = 0; row < 1000; row++) {
@@ -232,6 +238,21 @@ export class TerrainBiomes {
     // Distance to finite segments keeps banks bounded at sharp bends. An
     // infinite tangent line painted long sand/water streaks across the map.
     return Math.sqrt(squared);
+  }
+
+  /** Continuous coordinates follow the published river bends across chunk/LOD seams. */
+  riverFlow(x: number, z: number): readonly [number, number] {
+    const arm = z < 500 ? 0 : 1;
+    const row = Math.max(0, Math.min(999, Math.floor(z)));
+    const t = Math.max(0, Math.min(1, z - row));
+    const path = this.#rivers[arm]!,
+      lengths = this.#riverLengths[arm]!;
+    const dx = path[row + 1]! - path[row]!;
+    const center = path[row]! + t * dx;
+    return [
+      (x - center) / Math.hypot(dx, 1),
+      lengths[row]! + t * (lengths[row + 1]! - lengths[row]!),
+    ];
   }
 
   isFoundation(x: number, z: number, margin = 0): boolean {
